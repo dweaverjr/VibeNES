@@ -70,14 +70,10 @@
         {
             "type": "shell",
             "label": "Create Build Directories",
-            "command": "New-Item",
+            "command": "powershell",
             "args": [
-                "-ItemType",
-                "Directory",
-                "-Force",
-                "-Path",
-                "${workspaceFolder}/build/debug",
-                "${workspaceFolder}/build/release"
+                "-Command",
+                "New-Item -ItemType Directory -Force -Path '${workspaceFolder}/build/debug', '${workspaceFolder}/build/release'"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
