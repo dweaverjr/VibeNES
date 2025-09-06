@@ -15,6 +15,14 @@ You are helping develop a cycle-accurate Nintendo Entertainment System (NES) emu
 - **Mappers**: Various cartridge mapper implementations
 - **Bus**: Memory mapping and component interconnection
 
+## Communication and Clarification
+- **Question unclear or contradictory requests**: If a request doesn't make technical sense or seems contradictory, ask for clarification before proceeding
+- **Examples of questionable requests**:
+  - Implementing features that conflict with cycle-accurate emulation goals
+  - Using outdated C++ patterns when C++23 alternatives exist
+  - Architecture decisions that break component modularity
+- **When in doubt, ask**: Better to clarify intent than implement something incorrectly
+
 ## Coding Guidelines
 - Use modern C++23 features when appropriate (concepts, ranges, modules, std::expected)
 - Prioritize accuracy over performance shortcuts initially
