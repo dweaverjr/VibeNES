@@ -1,0 +1,98 @@
+{
+    "tasks": [
+        {
+            "type": "cppbuild",
+            "label": "Debug Build",
+            "command": "c:\\msys64\\ucrt64\\bin\\g++.exe",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-g3",
+                "-O0",
+                "-pedantic-errors",
+                "-Werror",
+                "-Wall",
+                "-Weffc++",
+                "-Wextra",
+                "-Wconversion",
+                "-Wsign-conversion",
+                "-Wshadow",
+                "-Wformat=2",
+                "-std=c++23",
+                "${workspaceFolder}/src/**/*.cpp",
+                "-I${workspaceFolder}/include",
+                "-o",
+                "${workspaceFolder}/build/debug/VibeNES.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "Debug build with full optimization disabled and debug symbols"
+        },
+        {
+            "type": "cppbuild",
+            "label": "Release Build",
+            "command": "c:\\msys64\\ucrt64\\bin\\g++.exe",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-O3",
+                "-DNDEBUG",
+                "-march=native",
+                "-flto",
+                "-pedantic-errors",
+                "-Werror",
+                "-Wall",
+                "-Weffc++",
+                "-Wextra",
+                "-Wconversion",
+                "-Wsign-conversion",
+                "-std=c++23",
+                "${workspaceFolder}/src/**/*.cpp",
+                "-I${workspaceFolder}/include",
+                "-o",
+                "${workspaceFolder}/build/release/VibeNES.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build",
+            "detail": "Optimized release build for performance"
+        },
+        {
+            "type": "shell",
+            "label": "Create Build Directories",
+            "command": "New-Item",
+            "args": [
+                "-ItemType",
+                "Directory",
+                "-Force",
+                "-Path",
+                "${workspaceFolder}/build/debug",
+                "${workspaceFolder}/build/release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "detail": "Create necessary build directories"
+        },
+        {
+            "type": "shell",
+            "label": "Run Debug",
+            "command": "${workspaceFolder}/build/debug/VibeNES.exe",
+            "group": "test",
+            "dependsOn": "Debug Build",
+            "detail": "Build and run debug version"
+        }
+    ],
+    "version": "2.0.0"
+}

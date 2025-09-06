@@ -30,3 +30,25 @@
 *.exe
 *.out
 *.app
+
+# Build directories
+build/
+bin/
+
+# VS Code specific
+.vscode/ipch/
+
+# ROM files (optional - you may want to include test ROMs)
+*.nes
+*.chr
+*.prg
+
+# Debug files
+*.pdb
+*.ilk
+
+# Temporary files
+*~
+*.tmp
+*.swp
+*.bak

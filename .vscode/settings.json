@@ -1,0 +1,35 @@
+{
+  "[cpp]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools",
+    "editor.formatOnSave": true,
+    "editor.rulers": [80, 120],
+    "editor.insertSpaces": false,
+    "editor.detectIndentation": false
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "C_Cpp.default.compilerPath": "C:\\msys64\\ucrt64\\bin\\g++.exe",
+  "C_Cpp.default.cppStandard": "c++23",
+  "C_Cpp.default.intelliSenseMode": "windows-gcc-x64",
+  "C_Cpp.clang_format_style": "{ BasedOnStyle: LLVM, UseTab: Always, IndentWidth: 4, TabWidth: 4, ColumnLimit: 120, AllowShortFunctionsOnASingleLine: None, AllowShortIfStatementsOnASingleLine: Never, AllowShortLoopsOnASingleLine: false }",
+  "C_Cpp.errorSquiggles": "enabled",
+  "C_Cpp.inlayHints.autoDeclarationTypes.enabled": true,
+  "C_Cpp.inlayHints.parameterNames.enabled": true,
+  "editor.inlayHints.enabled": "on",
+  "debug.console.fontSize": 12,
+  "editor.minimap.enabled": true,
+  "editor.minimap.maxColumn": 120,
+  "files.associations": {
+    "*.nes": "binary",
+    "*.chr": "binary",
+    "*.prg": "binary"
+  },
+  "search.exclude": {
+    "**/*.exe": true,
+    "**/*.o": true,
+    "**/*.obj": true
+  }
+}
