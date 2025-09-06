@@ -32,7 +32,9 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/VibeNES.exe",
-            "args": ["${input:romFile}"],
+            "args": [
+                "${input:romFile}"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
