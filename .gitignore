@@ -54,3 +54,14 @@ bin/
 *.tmp
 *.swp
 *.bak
+
+# Dependencies/Third-party
+vendor/
+third_party/
+deps/
+
+# ImGui specific
+imgui.ini
+
+# SDL2 specific
+*.log
