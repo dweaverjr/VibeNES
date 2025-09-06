@@ -18,7 +18,7 @@
                 "-Wshadow",
                 "-Wformat=2",
                 "-std=c++23",
-                "${workspaceFolder}/src/**/*.cpp",
+                "${workspaceFolder}/src/main.cpp",
                 "-I${workspaceFolder}/include",
                 "-o",
                 "${workspaceFolder}/build/debug/VibeNES.exe"
@@ -53,7 +53,7 @@
                 "-Wconversion",
                 "-Wsign-conversion",
                 "-std=c++23",
-                "${workspaceFolder}/src/**/*.cpp",
+                "${workspaceFolder}/src/main.cpp",
                 "-I${workspaceFolder}/include",
                 "-o",
                 "${workspaceFolder}/build/release/VibeNES.exe"
