@@ -48,23 +48,15 @@ Byte SystemBus::read(Address address) const {
 
 	// PPU: $2000-$3FFF (TODO: implement when PPU ready)
 	if (is_ppu_address(address)) {
-		std::cout << "PPU read at $" << std::hex << std::uppercase << std::setfill('0') << std::setw(4) << address
-				  << " - not implemented yet\n"
-				  << std::dec;
 		return last_bus_value_; // Open bus
 	}
 
 	// APU/IO: $4000-$401F (TODO: implement when APU ready)
 	if (is_apu_address(address)) {
-		std::cout << "APU/IO read at $" << std::hex << std::uppercase << std::setfill('0') << std::setw(4) << address
-				  << " - not implemented yet\n"
-				  << std::dec;
 		return last_bus_value_; // Open bus
 	}
 
 	// Unmapped region - open bus behavior
-	std::cout << "Open bus read at $" << std::hex << std::uppercase << std::setfill('0') << std::setw(4) << address
-			  << std::dec << "\n";
 	return last_bus_value_;
 }
 
@@ -81,31 +73,19 @@ void SystemBus::write(Address address, Byte value) {
 
 	// PPU: $2000-$3FFF (TODO: implement when PPU ready)
 	if (is_ppu_address(address)) {
-		std::cout << "PPU write $" << std::hex << std::uppercase << std::setfill('0') << std::setw(2)
-				  << static_cast<int>(value) << " to $" << std::setfill('0') << std::setw(4) << address
-				  << " - not implemented yet\n"
-				  << std::dec;
 		return;
 	}
 
 	// APU/IO: $4000-$401F (TODO: implement when APU ready)
 	if (is_apu_address(address)) {
-		std::cout << "APU/IO write $" << std::hex << std::uppercase << std::setfill('0') << std::setw(2)
-				  << static_cast<int>(value) << " to $" << std::setfill('0') << std::setw(4) << address
-				  << " - not implemented yet\n"
-				  << std::dec;
 		return;
 	}
 
 	// Unmapped region - ignore write
-	std::cout << "Open bus write $" << std::hex << std::uppercase << std::setfill('0') << std::setw(2)
-			  << static_cast<int>(value) << " to $" << std::setfill('0') << std::setw(4) << address << std::dec
-			  << " (ignored)\n";
 }
 
 void SystemBus::connect_ram(std::shared_ptr<Ram> ram) {
 	ram_ = std::move(ram);
-	std::cout << "[OK] RAM connected to system bus\n";
 }
 
 void SystemBus::debug_print_memory_map() const {
