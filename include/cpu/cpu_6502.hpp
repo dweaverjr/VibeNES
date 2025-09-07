@@ -130,10 +130,16 @@ class CPU6502 final : public Component {
 	void consume_cycle() noexcept;
 	void consume_cycles(int count) noexcept;
 
+	// Addressing mode helpers
+	[[nodiscard]] bool crosses_page_boundary(Address base_address, Byte offset) const noexcept;
+
 	// Instruction implementations - Start with immediate mode instructions
 	void LDA_immediate(); // Load Accumulator with immediate value
 	void LDX_immediate(); // Load X Register with immediate value
 	void LDY_immediate(); // Load Y Register with immediate value
+
+	// Absolute,X addressing mode instructions (with page boundary crossing)
+	void LDA_absolute_X(); // Load Accumulator from absolute,X address
 
 	// Register transfer instructions
 	void TAX(); // Transfer Accumulator to X

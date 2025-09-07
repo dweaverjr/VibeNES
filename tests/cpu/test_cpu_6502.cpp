@@ -287,3 +287,85 @@ TEST_CASE("CPU Simple Program Execution", "[cpu][program]") {
 		REQUIRE(cpu.get_program_counter() == 0x0205);
 	}
 }
+
+TEST_CASE("CPU Page Boundary Crossing - LDA Absolute,X", "[cpu][instructions][addressing][timing]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("LDA Absolute,X - No page boundary crossing (4 cycles)") {
+		// Set up: LDA $0200,X with X=0x10, no page boundary crossing
+		cpu.set_program_counter(0x0100);
+		cpu.set_x_register(0x10);
+
+		// Store test value at target address $0210
+		bus->write(0x0210, 0x42);
+
+		// LDA $0200,X instruction
+		bus->write(0x0100, 0xBD); // LDA absolute,X opcode
+		bus->write(0x0101, 0x00); // Low byte of base address ($0200)
+		bus->write(0x0102, 0x02); // High byte of base address
+
+		// Give CPU enough cycles and execute
+		cpu.tick(cpu_cycles(4)); // LDA absolute,X takes exactly 4 cycles without page crossing
+
+		REQUIRE(cpu.get_accumulator() == 0x42);
+		REQUIRE(cpu.get_program_counter() == 0x0103);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("LDA Absolute,X - Page boundary crossing (5 cycles)") {
+		// Set up: LDA $00FF,X with X=0x01, crosses page boundary (00FF + 01 = 0100)
+		cpu.set_program_counter(0x0200);
+		cpu.set_x_register(0x01);
+
+		// Store test value at target address $0100 (00FF + 01)
+		bus->write(0x0100, 0x99);
+
+		// LDA $00FF,X instruction at PC 0x0200 
+		bus->write(0x0200, 0xBD); // LDA absolute,X opcode
+		bus->write(0x0201, 0xFF); // Low byte of base address ($00FF)
+		bus->write(0x0202, 0x00); // High byte of base address
+
+		// Give CPU enough cycles and execute
+		cpu.tick(cpu_cycles(5)); // LDA absolute,X takes 5 cycles with page boundary crossing
+
+		REQUIRE(cpu.get_accumulator() == 0x99);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("Page boundary crossing detection edge cases") {
+		// Test various boundary conditions
+		cpu.set_program_counter(0x0200);
+
+		// Case 1: $00FF + $01 = $0100 (page 0 to page 1)
+		cpu.set_x_register(0x01);
+		bus->write(0x0100, 0x77); // Target value at $00FF + $01 = $0100
+		bus->write(0x0200, 0xBD); // LDA absolute,X at PC
+		bus->write(0x0201, 0xFF); // $00FF
+		bus->write(0x0202, 0x00);
+
+		cpu.tick(cpu_cycles(5)); // Page boundary crossing: 5 cycles
+		REQUIRE(cpu.get_accumulator() == 0x77);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+
+		// Reset for next test
+		cpu.set_program_counter(0x0300);
+
+		// Case 2: $01FF + $01 = $0200 (page 1 to page 2, within RAM)
+		cpu.set_x_register(0x01);
+		bus->write(0x0200, 0x33);
+		bus->write(0x0300, 0xBD); // LDA absolute,X
+		bus->write(0x0301, 0xFF); // $01FF
+		bus->write(0x0302, 0x01);
+
+		cpu.tick(cpu_cycles(5)); // Page boundary crossing: 5 cycles
+		REQUIRE(cpu.get_accumulator() == 0x33);
+		REQUIRE(cpu.get_program_counter() == 0x0303);
+	}
+}

@@ -84,6 +84,11 @@ void CPU6502::execute_instruction() {
 		LDY_immediate();
 		break;
 
+	// Load Accumulator - Absolute,X
+	case 0xBD:
+		LDA_absolute_X();
+		break;
+
 	// Transfer instructions
 	case 0xAA:
 		TAX();
@@ -177,6 +182,13 @@ void CPU6502::consume_cycles(int count) noexcept {
 	cycles_remaining_ -= CpuCycle{count};
 }
 
+// Addressing mode helpers
+bool CPU6502::crosses_page_boundary(Address base_address, Byte offset) const noexcept {
+	// Page boundary crossing occurs when the high byte changes
+	// For example: $20FF + $01 = $2100 (crosses from page $20 to page $21)
+	return (base_address & 0xFF00) != ((base_address + offset) & 0xFF00);
+}
+
 // Instruction implementations
 void CPU6502::LDA_immediate() {
 	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
@@ -203,6 +215,33 @@ void CPU6502::LDY_immediate() {
 	program_counter_++;
 	update_zero_and_negative_flags(y_register_);
 	// Total: 2 cycles
+}
+
+void CPU6502::LDA_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	
+	// Assemble base address (little-endian)
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	
+	// Calculate effective address
+	Address effective_address = base_address + x_register_;
+	
+	// Cycle 4: Read from effective address
+	// Page boundary crossing adds 1 cycle (total becomes 5 cycles)
+	if (crosses_page_boundary(base_address, x_register_)) {
+		consume_cycle(); // Additional cycle for page boundary crossing
+	}
+	
+	accumulator_ = read_byte(effective_address);
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
 }
 
 void CPU6502::TAX() {
