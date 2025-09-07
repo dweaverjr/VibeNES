@@ -12,7 +12,7 @@ TEST_CASE("RAM Construction", "[ram][memory]") {
 	Ram ram;
 
 	SECTION("RAM should be properly initialized") {
-		REQUIRE(ram.get_name() == "Work RAM");
+		REQUIRE(std::string(ram.get_name()) == "Work RAM");
 
 		// All memory should be zero after construction
 		for (Address addr = 0x0000; addr <= 0x1FFF; addr += 0x100) {
