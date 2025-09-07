@@ -624,9 +624,9 @@ TEST_CASE("CPU Zero Page,X Addressing - LDA/STA", "[cpu][instructions][addressin
 		// Execute - should take exactly 4 cycles
 		cpu.tick(cpu_cycles(4));
 
-		REQUIRE(bus->read(0x00A0) == 0x55); // Value stored at effective address
+		REQUIRE(bus->read(0x00A0) == 0x55);		// Value stored at effective address
 		REQUIRE(cpu.get_accumulator() == 0x55); // Accumulator unchanged
-		REQUIRE(cpu.get_x_register() == 0x20); // X register unchanged
+		REQUIRE(cpu.get_x_register() == 0x20);	// X register unchanged
 		REQUIRE(cpu.get_program_counter() == 0x0202);
 	}
 
@@ -670,7 +670,7 @@ TEST_CASE("CPU Zero Page,X Addressing - LDA/STA", "[cpu][instructions][addressin
 		cpu.tick(cpu_cycles(10));
 
 		REQUIRE(cpu.get_accumulator() == 0x99); // Original value restored
-		REQUIRE(bus->read(0x0075) == 0x99); // Value preserved in memory
+		REQUIRE(bus->read(0x0075) == 0x99);		// Value preserved in memory
 		REQUIRE(cpu.get_program_counter() == 0x0406);
 	}
 
@@ -795,9 +795,9 @@ TEST_CASE("CPU Absolute,Y Addressing - LDA/STA", "[cpu][instructions][addressing
 		// Execute - should take exactly 5 cycles (STA always takes 5)
 		cpu.tick(cpu_cycles(5));
 
-		REQUIRE(bus->read(0x1820) == 0xCD); // Value stored at effective address
+		REQUIRE(bus->read(0x1820) == 0xCD);		// Value stored at effective address
 		REQUIRE(cpu.get_accumulator() == 0xCD); // Accumulator unchanged
-		REQUIRE(cpu.get_y_register() == 0x20); // Y register unchanged
+		REQUIRE(cpu.get_y_register() == 0x20);	// Y register unchanged
 		REQUIRE(cpu.get_program_counter() == 0x0303);
 	}
 
@@ -815,9 +815,9 @@ TEST_CASE("CPU Absolute,Y Addressing - LDA/STA", "[cpu][instructions][addressing
 		// Execute - should take exactly 5 cycles (STA always takes 5)
 		cpu.tick(cpu_cycles(5));
 
-		REQUIRE(bus->read(0x1901) == 0x99); // Value stored at effective address
+		REQUIRE(bus->read(0x1901) == 0x99);		// Value stored at effective address
 		REQUIRE(cpu.get_accumulator() == 0x99); // Accumulator unchanged
-		REQUIRE(cpu.get_y_register() == 0x02); // Y register unchanged
+		REQUIRE(cpu.get_y_register() == 0x02);	// Y register unchanged
 		REQUIRE(cpu.get_program_counter() == 0x0403);
 	}
 
@@ -873,7 +873,7 @@ TEST_CASE("CPU Absolute,Y Addressing - LDA/STA", "[cpu][instructions][addressing
 		cpu.tick(cpu_cycles(11));
 
 		REQUIRE(cpu.get_accumulator() == 0x77); // Original value restored
-		REQUIRE(bus->read(0x1505) == 0x77); // Value preserved in memory
+		REQUIRE(bus->read(0x1505) == 0x77);		// Value preserved in memory
 		REQUIRE(cpu.get_program_counter() == 0x0608);
 	}
 
@@ -921,5 +921,433 @@ TEST_CASE("CPU Absolute,Y Addressing - LDA/STA", "[cpu][instructions][addressing
 		REQUIRE(cpu.get_accumulator() == 0x80);
 		REQUIRE(cpu.get_zero_flag() == false);
 		REQUIRE(cpu.get_negative_flag() == true);
+	}
+}
+
+TEST_CASE("CPU LDX/LDY Addressing Modes", "[cpu][instructions][ldx][ldy]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("LDX Zero Page") {
+		// Test: LDX $42
+		cpu.set_program_counter(0x0100);
+
+		// Store test value at zero page address
+		bus->write(0x0042, 0x55);
+
+		// LDX $42 instruction
+		bus->write(0x0100, 0xA6); // LDX zero page opcode
+		bus->write(0x0101, 0x42); // Zero page address
+
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(cpu.get_x_register() == 0x55);
+		REQUIRE(cpu.get_program_counter() == 0x0102);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("LDY Zero Page") {
+		// Test: LDY $88
+		cpu.set_program_counter(0x0200);
+
+		// Store test value at zero page address
+		bus->write(0x0088, 0xAA);
+
+		// LDY $88 instruction
+		bus->write(0x0200, 0xA4); // LDY zero page opcode
+		bus->write(0x0201, 0x88); // Zero page address
+
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(cpu.get_y_register() == 0xAA);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true); // 0xAA has bit 7 set
+	}
+
+	SECTION("LDY Zero Page,X") {
+		// Test: LDY $50,X with X=0x10
+		cpu.set_program_counter(0x0300);
+		cpu.set_x_register(0x10);
+
+		// Store test value at effective address $60
+		bus->write(0x0060, 0x77);
+
+		// LDY $50,X instruction
+		bus->write(0x0300, 0xB4); // LDY zero page,X opcode
+		bus->write(0x0301, 0x50); // Base address
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_y_register() == 0x77);
+		REQUIRE(cpu.get_program_counter() == 0x0302);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("LDX Zero Page,Y") {
+		// Test: LDX $30,Y with Y=0x05
+		cpu.set_program_counter(0x0400);
+		cpu.set_y_register(0x05);
+
+		// Store test value at effective address $35
+		bus->write(0x0035, 0x99);
+
+		// LDX $30,Y instruction
+		bus->write(0x0400, 0xB6); // LDX zero page,Y opcode
+		bus->write(0x0401, 0x30); // Base address
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_x_register() == 0x99);
+		REQUIRE(cpu.get_program_counter() == 0x0402);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true); // 0x99 has bit 7 set
+	}
+
+	SECTION("LDX Absolute") {
+		// Test: LDX $1234
+		cpu.set_program_counter(0x0500);
+
+		// Store test value at absolute address
+		bus->write(0x1234, 0x33);
+
+		// LDX $1234 instruction
+		bus->write(0x0500, 0xAE); // LDX absolute opcode
+		bus->write(0x0501, 0x34); // Low byte
+		bus->write(0x0502, 0x12); // High byte
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_x_register() == 0x33);
+		REQUIRE(cpu.get_program_counter() == 0x0503);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("LDY Absolute") {
+		// Test: LDY $1678
+		cpu.set_program_counter(0x0600);
+
+		// Store test value at absolute address
+		bus->write(0x1678, 0x44);
+
+		// LDY $1678 instruction
+		bus->write(0x0600, 0xAC); // LDY absolute opcode
+		bus->write(0x0601, 0x78); // Low byte
+		bus->write(0x0602, 0x16); // High byte
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_y_register() == 0x44);
+		REQUIRE(cpu.get_program_counter() == 0x0603);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("LDY Absolute,X - No page crossing") {
+		// Test: LDY $1200,X with X=0x10
+		cpu.set_program_counter(0x0700);
+		cpu.set_x_register(0x10);
+
+		// Store test value at effective address $1210
+		bus->write(0x1210, 0x66);
+
+		// LDY $1200,X instruction
+		bus->write(0x0700, 0xBC); // LDY absolute,X opcode
+		bus->write(0x0701, 0x00); // Low byte
+		bus->write(0x0702, 0x12); // High byte
+
+		cpu.tick(cpu_cycles(4)); // No page crossing
+
+		REQUIRE(cpu.get_y_register() == 0x66);
+		REQUIRE(cpu.get_program_counter() == 0x0703);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("LDY Absolute,X - Page crossing") {
+		// Test: LDY $12FF,X with X=0x01 (crosses to $1300)
+		cpu.set_program_counter(0x0800);
+		cpu.set_x_register(0x01);
+
+		// Store test value at effective address $1300
+		bus->write(0x1300, 0x88);
+
+		// LDY $12FF,X instruction
+		bus->write(0x0800, 0xBC); // LDY absolute,X opcode
+		bus->write(0x0801, 0xFF); // Low byte
+		bus->write(0x0802, 0x12); // High byte
+
+		cpu.tick(cpu_cycles(5)); // Page crossing adds 1 cycle
+
+		REQUIRE(cpu.get_y_register() == 0x88);
+		REQUIRE(cpu.get_program_counter() == 0x0803);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true); // 0x88 has bit 7 set
+	}
+
+	SECTION("LDX Absolute,Y - No page crossing") {
+		// Test: LDX $1400,Y with Y=0x20
+		cpu.set_program_counter(0x0900);
+		cpu.set_y_register(0x20);
+
+		// Store test value at effective address $1420
+		bus->write(0x1420, 0x11);
+
+		// LDX $1400,Y instruction
+		bus->write(0x0900, 0xBE); // LDX absolute,Y opcode
+		bus->write(0x0901, 0x00); // Low byte
+		bus->write(0x0902, 0x14); // High byte
+
+		cpu.tick(cpu_cycles(4)); // No page crossing
+
+		REQUIRE(cpu.get_x_register() == 0x11);
+		REQUIRE(cpu.get_program_counter() == 0x0903);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("LDX Absolute,Y - Page crossing") {
+		// Test: LDX $14FF,Y with Y=0x01 (crosses to $1500)
+		cpu.set_program_counter(0x0A00);
+		cpu.set_y_register(0x01);
+
+		// Store test value at effective address $1500
+		bus->write(0x1500, 0xCC);
+
+		// LDX $14FF,Y instruction
+		bus->write(0x0A00, 0xBE); // LDX absolute,Y opcode
+		bus->write(0x0A01, 0xFF); // Low byte
+		bus->write(0x0A02, 0x14); // High byte
+
+		cpu.tick(cpu_cycles(5)); // Page crossing adds 1 cycle
+
+		REQUIRE(cpu.get_x_register() == 0xCC);
+		REQUIRE(cpu.get_program_counter() == 0x0A03);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true); // 0xCC has bit 7 set
+	}
+
+	SECTION("Zero and negative flag behavior") {
+		// Test zero flag
+		cpu.set_program_counter(0x0B00);
+		bus->write(0x00FF, 0x00); // Zero value
+		bus->write(0x0B00, 0xA6); // LDX zero page
+		bus->write(0x0B01, 0xFF);
+
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(cpu.get_x_register() == 0x00);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+
+		// Test negative flag
+		cpu.set_program_counter(0x0C00);
+		bus->write(0x00EE, 0x80); // Negative value
+		bus->write(0x0C00, 0xA4); // LDY zero page
+		bus->write(0x0C01, 0xEE);
+
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(cpu.get_y_register() == 0x80);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+}
+
+// STX Instruction Tests
+TEST_CASE("STX Instructions", "[cpu][stx]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("STX Zero Page - Basic functionality") {
+		// Test: STX $55
+		cpu.set_x_register(0x42);
+		cpu.set_program_counter(0x0100);
+
+		// STX $55 instruction
+		bus->write(0x0100, 0x86); // STX zero page opcode
+		bus->write(0x0101, 0x55); // Zero page address
+
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(bus->read(0x0055) == 0x42);	   // Value stored at zero page address
+		REQUIRE(cpu.get_x_register() == 0x42); // X register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0102);
+	}
+
+	SECTION("STX Zero Page,Y - Basic functionality") {
+		// Test: STX $80,Y with Y=0x05
+		cpu.set_x_register(0x33);
+		cpu.set_y_register(0x05);
+		cpu.set_program_counter(0x0200);
+
+		// STX $80,Y instruction
+		bus->write(0x0200, 0x96); // STX zero page,Y opcode
+		bus->write(0x0201, 0x80); // Base address
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x0085) == 0x33);	   // Value stored at effective address (0x80 + 0x05)
+		REQUIRE(cpu.get_x_register() == 0x33); // X register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("STX Zero Page,Y - Wrapping") {
+		// Test: STX $02,Y with Y=0xFF (wraps to 0x01)
+		cpu.set_x_register(0x77);
+		cpu.set_y_register(0xFF);
+		cpu.set_program_counter(0x0300);
+
+		// STX $02,Y instruction
+		bus->write(0x0300, 0x96); // STX zero page,Y opcode
+		bus->write(0x0301, 0x02); // Base address
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x0001) == 0x77);	   // Value stored at wrapped address (0x02 + 0xFF) & 0xFF = 0x01
+		REQUIRE(cpu.get_x_register() == 0x77); // X register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0302);
+	}
+
+	SECTION("STX Absolute - Basic functionality") {
+		// Test: STX $3000
+		cpu.set_x_register(0x99);
+		cpu.set_program_counter(0x0400);
+
+		// STX $3000 instruction
+		bus->write(0x0400, 0x8E); // STX absolute opcode
+		bus->write(0x0401, 0x00); // Low byte
+		bus->write(0x0402, 0x30); // High byte
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x3000) == 0x99);	   // Value stored at absolute address
+		REQUIRE(cpu.get_x_register() == 0x99); // X register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0403);
+	}
+
+	SECTION("STX - No flags affected") {
+		// Test: STX $50 with zero value
+		cpu.set_x_register(0x00); // Zero value
+		cpu.set_zero_flag(false);
+		cpu.set_negative_flag(false);
+		cpu.set_program_counter(0x0500);
+
+		// STX $50 instruction
+		bus->write(0x0500, 0x86); // STX zero page opcode
+		bus->write(0x0501, 0x50); // Zero page address
+
+		cpu.tick(cpu_cycles(3));
+
+		// STX should not affect any flags
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(bus->read(0x0050) == 0x00); // Value stored correctly
+		REQUIRE(cpu.get_program_counter() == 0x0502);
+	}
+}
+
+// STY Instruction Tests
+TEST_CASE("STY Instructions", "[cpu][sty]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("STY Zero Page - Basic functionality") {
+		// Test: STY $55
+		cpu.set_y_register(0x42);
+		cpu.set_program_counter(0x0100);
+
+		// STY $55 instruction
+		bus->write(0x0100, 0x84); // STY zero page opcode
+		bus->write(0x0101, 0x55); // Zero page address
+
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(bus->read(0x0055) == 0x42);	   // Value stored at zero page address
+		REQUIRE(cpu.get_y_register() == 0x42); // Y register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0102);
+	}
+
+	SECTION("STY Zero Page,X - Basic functionality") {
+		// Test: STY $80,X with X=0x05
+		cpu.set_y_register(0x33);
+		cpu.set_x_register(0x05);
+		cpu.set_program_counter(0x0200);
+
+		// STY $80,X instruction
+		bus->write(0x0200, 0x94); // STY zero page,X opcode
+		bus->write(0x0201, 0x80); // Base address
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x0085) == 0x33);	   // Value stored at effective address (0x80 + 0x05)
+		REQUIRE(cpu.get_y_register() == 0x33); // Y register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("STY Zero Page,X - Wrapping") {
+		// Test: STY $02,X with X=0xFF (wraps to 0x01)
+		cpu.set_y_register(0x77);
+		cpu.set_x_register(0xFF);
+		cpu.set_program_counter(0x0300);
+
+		// STY $02,X instruction
+		bus->write(0x0300, 0x94); // STY zero page,X opcode
+		bus->write(0x0301, 0x02); // Base address
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x0001) == 0x77);	   // Value stored at wrapped address (0x02 + 0xFF) & 0xFF = 0x01
+		REQUIRE(cpu.get_y_register() == 0x77); // Y register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0302);
+	}
+
+	SECTION("STY Absolute - Basic functionality") {
+		// Test: STY $3000
+		cpu.set_y_register(0x99);
+		cpu.set_program_counter(0x0400);
+
+		// STY $3000 instruction
+		bus->write(0x0400, 0x8C); // STY absolute opcode
+		bus->write(0x0401, 0x00); // Low byte
+		bus->write(0x0402, 0x30); // High byte
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x3000) == 0x99);	   // Value stored at absolute address
+		REQUIRE(cpu.get_y_register() == 0x99); // Y register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0403);
+	}
+
+	SECTION("STY - No flags affected") {
+		// Test: STY $50 with zero value
+		cpu.set_y_register(0x00); // Zero value
+		cpu.set_zero_flag(false);
+		cpu.set_negative_flag(false);
+		cpu.set_program_counter(0x0500);
+
+		// STY $50 instruction
+		bus->write(0x0500, 0x84); // STY zero page opcode
+		bus->write(0x0501, 0x50); // Zero page address
+
+		cpu.tick(cpu_cycles(3));
+
+		// STY should not affect any flags
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(bus->read(0x0050) == 0x00); // Value stored correctly
+		REQUIRE(cpu.get_program_counter() == 0x0502);
 	}
 }

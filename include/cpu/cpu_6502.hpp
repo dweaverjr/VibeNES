@@ -80,6 +80,12 @@ class CPU6502 final : public Component {
 	void set_program_counter(Address value) noexcept {
 		program_counter_ = value;
 	}
+	void set_zero_flag(bool value) noexcept {
+		zero_flag_ = value;
+	}
+	void set_negative_flag(bool value) noexcept {
+		negative_flag_ = value;
+	}
 
   private:
 	// 6502 Registers
@@ -140,22 +146,38 @@ class CPU6502 final : public Component {
 
 	// Zero Page addressing mode instructions (fast 2-byte instructions)
 	void LDA_zero_page(); // Load Accumulator from zero page address
+	void LDX_zero_page(); // Load X Register from zero page address
+	void LDY_zero_page(); // Load Y Register from zero page address
 	void STA_zero_page(); // Store Accumulator to zero page address
+	void STX_zero_page(); // Store X Register to zero page address
+	void STY_zero_page(); // Store Y Register to zero page address
 
 	// Zero Page,X addressing mode instructions (indexed zero page)
 	void LDA_zero_page_X(); // Load Accumulator from zero page,X address
+	void LDY_zero_page_X(); // Load Y Register from zero page,X address
 	void STA_zero_page_X(); // Store Accumulator to zero page,X address
+	void STY_zero_page_X(); // Store Y Register to zero page,X address
+
+	// Zero Page,Y addressing mode instructions (indexed zero page)
+	void LDX_zero_page_Y(); // Load X Register from zero page,Y address
+	void STX_zero_page_Y(); // Store X Register to zero page,Y address
 
 	// Absolute addressing mode instructions (3-byte instructions)
 	void LDA_absolute(); // Load Accumulator from absolute address
+	void LDX_absolute(); // Load X Register from absolute address
+	void LDY_absolute(); // Load Y Register from absolute address
 	void STA_absolute(); // Store Accumulator to absolute address
+	void STX_absolute(); // Store X Register to absolute address
+	void STY_absolute(); // Store Y Register to absolute address
 
 	// Absolute,X addressing mode instructions (with page boundary crossing)
 	void LDA_absolute_X(); // Load Accumulator from absolute,X address
+	void LDY_absolute_X(); // Load Y Register from absolute,X address
 	void STA_absolute_X(); // Store Accumulator to absolute,X address
 
 	// Absolute,Y addressing mode instructions (with page boundary crossing)
 	void LDA_absolute_Y(); // Load Accumulator from absolute,Y address
+	void LDX_absolute_Y(); // Load X Register from absolute,Y address
 	void STA_absolute_Y(); // Store Accumulator to absolute,Y address
 
 	// Register transfer instructions

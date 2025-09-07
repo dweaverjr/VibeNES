@@ -89,9 +89,29 @@ void CPU6502::execute_instruction() {
 		LDA_zero_page();
 		break;
 
+	// Load X Register - Zero Page
+	case 0xA6:
+		LDX_zero_page();
+		break;
+
+	// Load Y Register - Zero Page
+	case 0xA4:
+		LDY_zero_page();
+		break;
+
 	// Store Accumulator - Zero Page
 	case 0x85:
 		STA_zero_page();
+		break;
+
+	// Store X Register - Zero Page
+	case 0x86:
+		STX_zero_page();
+		break;
+
+	// Store Y Register - Zero Page
+	case 0x84:
+		STY_zero_page();
 		break;
 
 	// Load Accumulator - Zero Page,X
@@ -99,9 +119,29 @@ void CPU6502::execute_instruction() {
 		LDA_zero_page_X();
 		break;
 
+	// Load Y Register - Zero Page,X
+	case 0xB4:
+		LDY_zero_page_X();
+		break;
+
 	// Store Accumulator - Zero Page,X
 	case 0x95:
 		STA_zero_page_X();
+		break;
+
+	// Store Y Register - Zero Page,X
+	case 0x94:
+		STY_zero_page_X();
+		break;
+
+	// Load X Register - Zero Page,Y
+	case 0xB6:
+		LDX_zero_page_Y();
+		break;
+
+	// Store X Register - Zero Page,Y
+	case 0x96:
+		STX_zero_page_Y();
 		break;
 
 	// Load Accumulator - Absolute
@@ -109,14 +149,39 @@ void CPU6502::execute_instruction() {
 		LDA_absolute();
 		break;
 
+	// Load X Register - Absolute
+	case 0xAE:
+		LDX_absolute();
+		break;
+
+	// Load Y Register - Absolute
+	case 0xAC:
+		LDY_absolute();
+		break;
+
 	// Store Accumulator - Absolute
 	case 0x8D:
 		STA_absolute();
 		break;
 
+	// Store X Register - Absolute
+	case 0x8E:
+		STX_absolute();
+		break;
+
+	// Store Y Register - Absolute
+	case 0x8C:
+		STY_absolute();
+		break;
+
 	// Load Accumulator - Absolute,X
 	case 0xBD:
 		LDA_absolute_X();
+		break;
+
+	// Load Y Register - Absolute,X
+	case 0xBC:
+		LDY_absolute_X();
 		break;
 
 	// Store Accumulator - Absolute,X
@@ -127,6 +192,11 @@ void CPU6502::execute_instruction() {
 	// Load Accumulator - Absolute,Y
 	case 0xB9:
 		LDA_absolute_Y();
+		break;
+
+	// Load X Register - Absolute,Y
+	case 0xBE:
+		LDX_absolute_Y();
 		break;
 
 	// Store Accumulator - Absolute,Y
@@ -262,6 +332,226 @@ void CPU6502::LDY_immediate() {
 	// Total: 2 cycles
 }
 
+void CPU6502::LDX_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_address = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Read from zero page address (0x00nn)
+	x_register_ = read_byte(static_cast<Address>(zero_page_address));
+	update_zero_and_negative_flags(x_register_);
+	// Total: 3 cycles
+}
+
+void CPU6502::LDY_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_address = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Read from zero page address (0x00nn)
+	y_register_ = read_byte(static_cast<Address>(zero_page_address));
+	update_zero_and_negative_flags(y_register_);
+	// Total: 3 cycles
+}
+
+void CPU6502::LDY_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Add X register to base address (stays in zero page, wraps around)
+	consume_cycle();									 // Internal operation
+	Byte effective_address = base_address + x_register_; // 8-bit addition, wraps automatically
+
+	// Cycle 4: Read from effective zero page address
+	y_register_ = read_byte(static_cast<Address>(effective_address));
+	update_zero_and_negative_flags(y_register_);
+	// Total: 4 cycles
+}
+
+void CPU6502::LDX_zero_page_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Add Y register to base address (stays in zero page, wraps around)
+	consume_cycle();									 // Internal operation
+	Byte effective_address = base_address + y_register_; // 8-bit addition, wraps automatically
+
+	// Cycle 4: Read from effective zero page address
+	x_register_ = read_byte(static_cast<Address>(effective_address));
+	update_zero_and_negative_flags(x_register_);
+	// Total: 4 cycles
+}
+
+void CPU6502::LDX_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 4: Read from absolute address (little-endian)
+	Address absolute_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	x_register_ = read_byte(absolute_address);
+	update_zero_and_negative_flags(x_register_);
+	// Total: 4 cycles
+}
+
+void CPU6502::LDY_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 4: Read from absolute address (little-endian)
+	Address absolute_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	y_register_ = read_byte(absolute_address);
+	update_zero_and_negative_flags(y_register_);
+	// Total: 4 cycles
+}
+
+void CPU6502::LDY_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+
+	// Assemble base address (little-endian)
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+
+	// Calculate effective address
+	Address effective_address = base_address + x_register_;
+
+	// Cycle 4: Read from effective address
+	// Page boundary crossing adds 1 cycle (total becomes 5 cycles)
+	if (crosses_page_boundary(base_address, x_register_)) {
+		consume_cycle(); // Additional cycle for page boundary crossing
+	}
+
+	y_register_ = read_byte(effective_address);
+	update_zero_and_negative_flags(y_register_);
+	// Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
+}
+
+void CPU6502::LDX_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+
+	// Assemble base address (little-endian)
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+
+	// Calculate effective address
+	Address effective_address = base_address + y_register_;
+
+	// Cycle 4: Read from effective address
+	// Page boundary crossing adds 1 cycle (total becomes 5 cycles)
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Additional cycle for page boundary crossing
+	}
+
+	x_register_ = read_byte(effective_address);
+	update_zero_and_negative_flags(x_register_);
+	// Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
+}
+
+// STX Instructions
+void CPU6502::STX_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Write X register to zero page address
+	write_byte(zero_page_address, x_register_);
+	// Total: 3 cycles
+}
+
+void CPU6502::STX_zero_page_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add Y register to base address (internal operation)
+	consume_cycle();											  // Internal operation
+	Byte effective_address = (base_address + y_register_) & 0xFF; // Wrap within zero page
+	// Cycle 4: Write X register to effective address
+	write_byte(effective_address, x_register_);
+	// Total: 4 cycles
+}
+
+void CPU6502::STX_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte address_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte address_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Write X register to absolute address
+	Address absolute_address = (static_cast<Address>(address_high) << 8) | address_low;
+	write_byte(absolute_address, x_register_);
+	// Total: 4 cycles
+}
+
+// STY Instructions
+void CPU6502::STY_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Write Y register to zero page address
+	write_byte(zero_page_address, y_register_);
+	// Total: 3 cycles
+}
+
+void CPU6502::STY_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address (internal operation)
+	consume_cycle();											  // Internal operation
+	Byte effective_address = (base_address + x_register_) & 0xFF; // Wrap within zero page
+	// Cycle 4: Write Y register to effective address
+	write_byte(effective_address, y_register_);
+	// Total: 4 cycles
+}
+
+void CPU6502::STY_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte address_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte address_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Write Y register to absolute address
+	Address absolute_address = (static_cast<Address>(address_high) << 8) | address_low;
+	write_byte(absolute_address, y_register_);
+	// Total: 4 cycles
+}
+
 void CPU6502::LDA_absolute_X() {
 	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
 	// Cycle 2: Fetch low byte of base address
@@ -392,11 +682,11 @@ void CPU6502::LDA_zero_page_X() {
 	// Cycle 2: Fetch zero page base address
 	Byte base_address = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 3: Add X register to base address (stays in zero page, wraps around)
-	consume_cycle(); // Internal operation
+	consume_cycle();									 // Internal operation
 	Byte effective_address = base_address + x_register_; // 8-bit addition, wraps automatically
-	
+
 	// Cycle 4: Read from effective zero page address
 	accumulator_ = read_byte(static_cast<Address>(effective_address));
 	update_zero_and_negative_flags(accumulator_);
@@ -408,11 +698,11 @@ void CPU6502::STA_zero_page_X() {
 	// Cycle 2: Fetch zero page base address
 	Byte base_address = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 3: Add X register to base address (stays in zero page, wraps around)
-	consume_cycle(); // Internal operation
+	consume_cycle();									 // Internal operation
 	Byte effective_address = base_address + x_register_; // 8-bit addition, wraps automatically
-	
+
 	// Cycle 4: Store accumulator to effective zero page address
 	write_byte(static_cast<Address>(effective_address), accumulator_);
 	// Total: 4 cycles
