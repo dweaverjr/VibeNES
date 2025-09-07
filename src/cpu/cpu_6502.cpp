@@ -222,23 +222,23 @@ void CPU6502::LDA_absolute_X() {
 	// Cycle 2: Fetch low byte of base address
 	Byte low = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 3: Fetch high byte of base address
 	Byte high = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Assemble base address (little-endian)
 	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
-	
+
 	// Calculate effective address
 	Address effective_address = base_address + x_register_;
-	
+
 	// Cycle 4: Read from effective address
 	// Page boundary crossing adds 1 cycle (total becomes 5 cycles)
 	if (crosses_page_boundary(base_address, x_register_)) {
 		consume_cycle(); // Additional cycle for page boundary crossing
 	}
-	
+
 	accumulator_ = read_byte(effective_address);
 	update_zero_and_negative_flags(accumulator_);
 	// Total: 4 cycles (normal) or 5 cycles (page boundary crossed)

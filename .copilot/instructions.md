@@ -153,21 +153,21 @@ void CPU6502::LDA_absolute_X() {
     // Cycle 2: Fetch low byte of base address
     Byte low = read_byte(program_counter_);
     program_counter_++;
-    
+
     // Cycle 3: Fetch high byte of base address
     Byte high = read_byte(program_counter_);
     program_counter_++;
-    
+
     // Assemble address and calculate effective address
     Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
     Address effective_address = base_address + x_register_;
-    
+
     // Cycle 4: Read from effective address
     // Page boundary crossing adds 1 cycle
     if (crosses_page_boundary(base_address, x_register_)) {
         consume_cycle(); // Additional cycle for page boundary crossing
     }
-    
+
     accumulator_ = read_byte(effective_address);
     update_zero_and_negative_flags(accumulator_);
     // Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
@@ -192,18 +192,18 @@ TEST_CASE("CPU Instruction - LDA Absolute,X", "[cpu][instructions][addressing][t
     SECTION("No page boundary crossing (4 cycles)") {
         cpu.set_program_counter(0x0100);
         cpu.set_x_register(0x10);
-        
+
         // Test data in RAM range
         bus->write(0x0210, 0x42);
-        
+
         // Instruction at PC
         bus->write(0x0100, 0xBD); // LDA absolute,X opcode
         bus->write(0x0101, 0x00); // Low byte
         bus->write(0x0102, 0x02); // High byte
-        
+
         // Exact cycle count
         cpu.tick(cpu_cycles(4));
-        
+
         REQUIRE(cpu.get_accumulator() == 0x42);
         REQUIRE(cpu.get_program_counter() == 0x0103);
     }

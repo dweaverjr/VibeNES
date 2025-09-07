@@ -325,7 +325,7 @@ TEST_CASE("CPU Page Boundary Crossing - LDA Absolute,X", "[cpu][instructions][ad
 		// Store test value at target address $0100 (00FF + 01)
 		bus->write(0x0100, 0x99);
 
-		// LDA $00FF,X instruction at PC 0x0200 
+		// LDA $00FF,X instruction at PC 0x0200
 		bus->write(0x0200, 0xBD); // LDA absolute,X opcode
 		bus->write(0x0201, 0xFF); // Low byte of base address ($00FF)
 		bus->write(0x0202, 0x00); // High byte of base address
