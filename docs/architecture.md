@@ -46,6 +46,25 @@ VibeNES is designed as a cycle-accurate NES emulator with modular components tha
 3. **Testability**: Each component can be tested independently
 4. **Extensibility**: Easy to add new mappers and features
 
+## Development Practices
+
+### Testing Strategy
+- Use exact cycle counts in tests to avoid false positives from extra instructions
+- Test memory accesses within appropriate address ranges (RAM: 0x0000-0x1FFF)
+- Comprehensive edge case coverage for boundary conditions
+- Separate test sections for different scenarios (normal operation vs. edge cases)
+
+### CPU Implementation Guidelines
+- Manual PC management for multi-byte instructions (avoid helper functions that auto-increment)
+- Explicit cycle consumption for timing accuracy
+- Helper functions for common operations (e.g., page boundary detection)
+- Clear separation between instruction decode and execution phases
+
+### Memory System Design
+- Open bus behavior for unmapped regions
+- Proper address space partitioning (RAM, PPU, APU, etc.)
+- Component-specific handling of out-of-range accesses
+
 ## Timing Model
 
 The emulator uses a master clock that drives all components. Each component implements the `Clockable` concept and receives clock ticks to advance its state.

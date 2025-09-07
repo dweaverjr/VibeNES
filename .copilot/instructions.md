@@ -23,6 +23,33 @@ You are helping develop a cycle-accurate Nintendo Entertainment System (NES) emu
   - Architecture decisions that break component modularity
 - **When in doubt, ask**: Better to clarify intent than implement something incorrectly
 
+## Current Development Status
+- **CPU (6502)**: ✅ 10/10 timing accuracy achieved with page boundary crossing detection
+- **Memory System**: ✅ System bus with RAM and open bus behavior implemented
+- **Testing Framework**: ✅ Comprehensive test suite with Catch2
+- **Build System**: ✅ VS Code tasks for debug/release builds
+
+## Established Development Patterns
+
+### CPU Implementation Best Practices
+- **Manual PC management**: For multi-byte instructions, read bytes individually and increment PC explicitly
+- **Avoid helper functions that auto-increment**: Use `read_byte()` + manual PC increment instead of `read_word()`
+- **Page boundary detection**: Use bitwise operations `(base_address & 0xFF00) != ((base_address + offset) & 0xFF00)`
+- **Explicit cycle consumption**: Call `consume_cycle()` for each hardware cycle consumed
+- **Instruction structure**: Cycle 1 is opcode fetch (handled by `execute_instruction()`), subsequent cycles are operand/execution
+
+### Testing Best Practices
+- **Exact cycle counts**: Use precise cycle counts in tests (4 cycles for LDA absolute,X normal, 5 for page crossing)
+- **RAM address testing**: Use addresses 0x0000-0x1FFF in tests to avoid PPU/APU bus conflicts
+- **Separate instruction and data**: Don't place test data at the same address as the instruction
+- **Test structure**: Separate sections for normal operation, edge cases, and boundary conditions
+- **PC validation**: Check program counter after instruction execution to verify correct advancement
+
+### Memory System Patterns
+- **Address space partitioning**: RAM (0x0000-0x1FFF), PPU (0x2000-0x3FFF), APU (0x4000-0x401F), Open bus elsewhere
+- **Open bus behavior**: Return `last_bus_value_` for unmapped regions with appropriate debug messages
+- **Component isolation**: Each memory component handles its own address range and mirroring
+
 ## Coding Guidelines
 - Use modern C++23 features when appropriate (concepts, ranges, modules, std::expected)
 - Prioritize accuracy over performance shortcuts initially
@@ -118,5 +145,68 @@ concept Readable = requires(T t, Address addr) {
 ```cpp
 std::expected<Cartridge, LoadError> load_rom(const std::filesystem::path& path);
 ```
+
+### CPU Instruction Implementation Pattern
+```cpp
+void CPU6502::LDA_absolute_X() {
+    // Cycle 1: Fetch opcode (already consumed in execute_instruction)
+    // Cycle 2: Fetch low byte of base address
+    Byte low = read_byte(program_counter_);
+    program_counter_++;
+    
+    // Cycle 3: Fetch high byte of base address
+    Byte high = read_byte(program_counter_);
+    program_counter_++;
+    
+    // Assemble address and calculate effective address
+    Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+    Address effective_address = base_address + x_register_;
+    
+    // Cycle 4: Read from effective address
+    // Page boundary crossing adds 1 cycle
+    if (crosses_page_boundary(base_address, x_register_)) {
+        consume_cycle(); // Additional cycle for page boundary crossing
+    }
+    
+    accumulator_ = read_byte(effective_address);
+    update_zero_and_negative_flags(accumulator_);
+    // Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
+}
+```
+
+### Page Boundary Detection Helper
+```cpp
+bool CPU6502::crosses_page_boundary(Address base_address, Byte offset) const {
+    return (base_address & 0xFF00) != ((base_address + offset) & 0xFF00);
+}
+```
+
+### Test Structure Example
+```cpp
+TEST_CASE("CPU Instruction - LDA Absolute,X", "[cpu][instructions][addressing][timing]") {
+    auto bus = std::make_unique<SystemBus>();
+    auto ram = std::make_shared<Ram>();
+    bus->connect_ram(ram);
+    CPU6502 cpu(bus.get());
+
+    SECTION("No page boundary crossing (4 cycles)") {
+        cpu.set_program_counter(0x0100);
+        cpu.set_x_register(0x10);
+        
+        // Test data in RAM range
+        bus->write(0x0210, 0x42);
+        
+        // Instruction at PC
+        bus->write(0x0100, 0xBD); // LDA absolute,X opcode
+        bus->write(0x0101, 0x00); // Low byte
+        bus->write(0x0102, 0x02); // High byte
+        
+        // Exact cycle count
+        cpu.tick(cpu_cycles(4));
+        
+        REQUIRE(cpu.get_accumulator() == 0x42);
+        REQUIRE(cpu.get_program_counter() == 0x0103);
+    }
+}
 
 When suggesting code, emphasize correctness and maintainability for emulation-specific challenges. Always consider the hardware behavior first, then optimize if needed.

@@ -10,9 +10,12 @@ This document contains detailed timing information for NES hardware components.
 - Memory access adds cycles
 
 ### Page Boundary Crossing
-- Occurs when low byte of address overflows
+- Occurs when low byte of address overflows (high byte changes)
+- Detection: `(base_address & 0xFF00) != ((base_address + offset) & 0xFF00)`
 - Adds 1 cycle to certain addressing modes
 - Affects: absolute,X; absolute,Y; indirect,Y
+- Implementation note: Use bitwise operations for efficient detection
+- Testing: Ensure tests use RAM addresses (0x0000-0x1FFF) to avoid bus conflicts
 
 ### Interrupt Timing
 - IRQ: 7 cycles to service

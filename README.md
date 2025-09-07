@@ -8,6 +8,40 @@ A cycle-accurate Nintendo Entertainment System (NES) emulator written in C++23, 
 - **Clean architecture**: Modular design with separate CPU, PPU, APU, and mapper components
 - **Performance**: Maintain real-time performance while achieving hardware accuracy
 
+## Current Status
+
+### ✅ CPU (6502) - **10/10 Timing Accuracy**
+- [x] Basic instruction execution framework
+- [x] Core addressing modes (immediate, absolute)
+- [x] Page boundary crossing detection and penalties
+- [x] Cycle-accurate timing for indexed addressing modes
+- [x] Comprehensive test coverage with edge case validation
+- [ ] Complete instruction set (in progress)
+- [ ] Interrupt handling (IRQ/NMI)
+
+### 🚧 Memory System
+- [x] System bus with proper address decoding
+- [x] RAM with mirroring (0x0000-0x1FFF)
+- [x] Open bus behavior for unmapped regions
+- [ ] PPU memory integration
+- [ ] Cartridge memory mapping
+
+### 📋 PPU (2C02) - Planned
+- [ ] Basic register interface
+- [ ] Dot-based rendering pipeline
+- [ ] Sprite evaluation and rendering
+- [ ] Background tile rendering
+
+### 📋 APU (2A03) - Planned
+- [ ] Audio channel implementations
+- [ ] Frame counter and sequencing
+- [ ] Audio mixing and output
+
+### 📋 Cartridge System - Planned
+- [ ] ROM loading (iNES format)
+- [ ] Basic mappers (000, 001, 002, 003, 004)
+- [ ] Bank switching mechanics
+
 ## Architecture Components
 - **CPU (6502)**: Cycle-accurate 6502 processor emulation
 - **PPU (Picture Processing Unit)**: Pixel-perfect graphics rendering
