@@ -208,5 +208,5 @@ TEST_CASE("CPU Instruction - LDA Absolute,X", "[cpu][instructions][addressing][t
         REQUIRE(cpu.get_program_counter() == 0x0103);
     }
 }
-
+```
 When suggesting code, emphasize correctness and maintainability for emulation-specific challenges. Always consider the hardware behavior first, then optimize if needed.
