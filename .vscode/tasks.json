@@ -90,6 +90,63 @@
             "group": "test",
             "dependsOn": "Debug Build",
             "detail": "Build and run debug version"
+        },
+        {
+            "type": "cppbuild",
+            "label": "Build Tests",
+            "command": "c:\\msys64\\ucrt64\\bin\\g++.exe",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-g3",
+                "-O0",
+                "-std=c++23",
+                "-Wall",
+                "-Wextra",
+                "-Wconversion",
+                "-Wsign-conversion",
+                "${workspaceFolder}/tests/test_main.cpp",
+                "${workspaceFolder}/tests/catch2/catch_amalgamated.cpp",
+                "${workspaceFolder}/tests/core/test_types.cpp",
+                "${workspaceFolder}/tests/memory/test_ram.cpp",
+                "${workspaceFolder}/tests/core/test_bus.cpp",
+                "${workspaceFolder}/src/core/bus.cpp",
+                "-I${workspaceFolder}/include",
+                "-I${workspaceFolder}/tests",
+                "-o",
+                "${workspaceFolder}/build/debug/VibeNES_Tests.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "detail": "Build all unit tests with Catch2 framework"
+        },
+        {
+            "type": "shell",
+            "label": "Run Tests",
+            "command": "${workspaceFolder}/build/debug/VibeNES_Tests.exe",
+            "group": "test",
+            "dependsOn": "Build Tests",
+            "detail": "Build and run all unit tests"
+        },
+        {
+            "type": "shell",
+            "label": "Run Tests Verbose",
+            "command": "${workspaceFolder}/build/debug/VibeNES_Tests.exe",
+            "args": [
+                "-s",
+                "--use-colour",
+                "yes"
+            ],
+            "group": "test",
+            "dependsOn": "Build Tests",
+            "detail": "Build and run all unit tests with verbose output"
         }
     ],
     "version": "2.0.0"
