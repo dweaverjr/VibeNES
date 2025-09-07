@@ -142,12 +142,21 @@ class CPU6502 final : public Component {
 	void LDA_zero_page(); // Load Accumulator from zero page address
 	void STA_zero_page(); // Store Accumulator to zero page address
 
+	// Zero Page,X addressing mode instructions (indexed zero page)
+	void LDA_zero_page_X(); // Load Accumulator from zero page,X address
+	void STA_zero_page_X(); // Store Accumulator to zero page,X address
+
 	// Absolute addressing mode instructions (3-byte instructions)
 	void LDA_absolute(); // Load Accumulator from absolute address
 	void STA_absolute(); // Store Accumulator to absolute address
 
 	// Absolute,X addressing mode instructions (with page boundary crossing)
 	void LDA_absolute_X(); // Load Accumulator from absolute,X address
+	void STA_absolute_X(); // Store Accumulator to absolute,X address
+
+	// Absolute,Y addressing mode instructions (with page boundary crossing)
+	void LDA_absolute_Y(); // Load Accumulator from absolute,Y address
+	void STA_absolute_Y(); // Store Accumulator to absolute,Y address
 
 	// Register transfer instructions
 	void TAX(); // Transfer Accumulator to X

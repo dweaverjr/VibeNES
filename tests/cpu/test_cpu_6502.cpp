@@ -581,3 +581,345 @@ TEST_CASE("CPU Absolute Addressing - LDA/STA", "[cpu][instructions][addressing][
 		REQUIRE(cpu.get_program_counter() == 0x0503);
 	}
 }
+
+TEST_CASE("CPU Zero Page,X Addressing - LDA/STA", "[cpu][instructions][addressing][zero_page_x]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("LDA Zero Page,X - Basic indexed access") {
+		// Set up: LDA $50,X with X=0x10, so effective address = $60
+		cpu.set_program_counter(0x0100);
+		cpu.set_x_register(0x10);
+
+		// Store test value at effective address $0060
+		bus->write(0x0060, 0xAB);
+
+		// LDA $50,X instruction
+		bus->write(0x0100, 0xB5); // LDA zero page,X opcode
+		bus->write(0x0101, 0x50); // Base address
+
+		// Execute - should take exactly 4 cycles
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0xAB);
+		REQUIRE(cpu.get_x_register() == 0x10); // X register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0102);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true); // 0xAB has bit 7 set
+	}
+
+	SECTION("STA Zero Page,X - Basic indexed store") {
+		// Set up: STA $80,X with X=0x20, so effective address = $A0
+		cpu.set_program_counter(0x0200);
+		cpu.set_x_register(0x20);
+		cpu.set_accumulator(0x55);
+
+		// STA $80,X instruction
+		bus->write(0x0200, 0x95); // STA zero page,X opcode
+		bus->write(0x0201, 0x80); // Base address
+
+		// Execute - should take exactly 4 cycles
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x00A0) == 0x55); // Value stored at effective address
+		REQUIRE(cpu.get_accumulator() == 0x55); // Accumulator unchanged
+		REQUIRE(cpu.get_x_register() == 0x20); // X register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("Zero Page,X wrap-around behavior") {
+		// When base + X > 0xFF, it wraps around within zero page
+		cpu.set_program_counter(0x0300);
+		cpu.set_x_register(0x80); // Large X value
+		cpu.set_accumulator(0xCD);
+
+		// Test: STA $A0,X -> effective address = ($A0 + $80) & $FF = $20
+		bus->write(0x0300, 0x95); // STA zero page,X
+		bus->write(0x0301, 0xA0); // Base address
+
+		cpu.tick(cpu_cycles(4));
+
+		// Should store at $0020, not $0120
+		REQUIRE(bus->read(0x0020) == 0xCD);
+		REQUIRE(bus->read(0x0120) == 0x00); // Should be unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0302);
+	}
+
+	SECTION("LDA/STA Zero Page,X - Round trip test") {
+		// Test storing and loading back with indexing
+		cpu.set_program_counter(0x0400);
+		cpu.set_x_register(0x05);
+		cpu.set_accumulator(0x99);
+
+		// First: STA $70,X (store 0x99 to $75)
+		bus->write(0x0400, 0x95); // STA zero page,X
+		bus->write(0x0401, 0x70); // Base address
+
+		// Second: LDA #$00 (clear accumulator)
+		bus->write(0x0402, 0xA9); // LDA immediate
+		bus->write(0x0403, 0x00); // Load 0
+
+		// Third: LDA $70,X (load back from $75)
+		bus->write(0x0404, 0xB5); // LDA zero page,X
+		bus->write(0x0405, 0x70); // Base address
+
+		// Execute all instructions: 4 + 2 + 4 = 10 cycles
+		cpu.tick(cpu_cycles(10));
+
+		REQUIRE(cpu.get_accumulator() == 0x99); // Original value restored
+		REQUIRE(bus->read(0x0075) == 0x99); // Value preserved in memory
+		REQUIRE(cpu.get_program_counter() == 0x0406);
+	}
+
+	SECTION("Zero Page,X boundary cases") {
+		cpu.set_program_counter(0x0500);
+
+		// Test with X=0 (no indexing)
+		cpu.set_x_register(0x00);
+		bus->write(0x0030, 0x42); // Store test value
+		bus->write(0x0500, 0xB5); // LDA zero page,X
+		bus->write(0x0501, 0x30); // Base address
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0x42);
+		REQUIRE(cpu.get_program_counter() == 0x0502);
+
+		// Test with maximum wrap-around: $FF + $01 = $00
+		cpu.set_x_register(0x01);
+		cpu.set_accumulator(0x88);
+		bus->write(0x0502, 0x95); // STA zero page,X
+		bus->write(0x0503, 0xFF); // Base address $FF
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x0000) == 0x88); // Stored at $00 (wrapped)
+		REQUIRE(cpu.get_program_counter() == 0x0504);
+	}
+
+	SECTION("Zero Page,X flag behavior") {
+		// Test zero flag
+		cpu.set_program_counter(0x0600);
+		cpu.set_x_register(0x05);
+		bus->write(0x0025, 0x00); // Store zero value
+		bus->write(0x0600, 0xB5); // LDA zero page,X
+		bus->write(0x0601, 0x20); // Base address
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+
+		// Test negative flag
+		cpu.set_program_counter(0x0602);
+		bus->write(0x0026, 0x80); // Store negative value
+		bus->write(0x0602, 0xB5); // LDA zero page,X
+		bus->write(0x0603, 0x21); // Base address (21 + 05 = 26)
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0x80);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+}
+
+TEST_CASE("CPU Absolute,Y Addressing - LDA/STA", "[cpu][instructions][addressing][absolute_y]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("LDA Absolute,Y - No page boundary crossing (4 cycles)") {
+		// Set up: LDA $1234,Y with Y=0x10, effective address = $1244
+		cpu.set_program_counter(0x0100);
+		cpu.set_y_register(0x10);
+
+		// Store test value at effective address
+		bus->write(0x1244, 0xAB);
+
+		// LDA $1234,Y instruction
+		bus->write(0x0100, 0xB9); // LDA absolute,Y opcode
+		bus->write(0x0101, 0x34); // Low byte of base address
+		bus->write(0x0102, 0x12); // High byte of base address
+
+		// Execute - should take exactly 4 cycles (no page boundary crossing)
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0xAB);
+		REQUIRE(cpu.get_y_register() == 0x10); // Y register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0103);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true); // 0xAB has bit 7 set
+	}
+
+	SECTION("LDA Absolute,Y - Page boundary crossing (5 cycles)") {
+		// Set up: LDA $12FF,Y with Y=0x01, effective address = $1300 (crosses page boundary)
+		cpu.set_program_counter(0x0200);
+		cpu.set_y_register(0x01);
+
+		// Store test value at effective address
+		bus->write(0x1300, 0x55);
+
+		// LDA $12FF,Y instruction
+		bus->write(0x0200, 0xB9); // LDA absolute,Y opcode
+		bus->write(0x0201, 0xFF); // Low byte of base address
+		bus->write(0x0202, 0x12); // High byte of base address
+
+		// Execute - should take exactly 5 cycles (page boundary crossed)
+		cpu.tick(cpu_cycles(5));
+
+		REQUIRE(cpu.get_accumulator() == 0x55);
+		REQUIRE(cpu.get_y_register() == 0x01); // Y register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false); // 0x55 has bit 7 clear
+	}
+
+	SECTION("STA Absolute,Y - Always 5 cycles regardless of page boundary") {
+		// Set up: STA $1800,Y with Y=0x20, effective address = $1820
+		cpu.set_program_counter(0x0300);
+		cpu.set_y_register(0x20);
+		cpu.set_accumulator(0xCD);
+
+		// STA $1800,Y instruction
+		bus->write(0x0300, 0x99); // STA absolute,Y opcode
+		bus->write(0x0301, 0x00); // Low byte of base address
+		bus->write(0x0302, 0x18); // High byte of base address
+
+		// Execute - should take exactly 5 cycles (STA always takes 5)
+		cpu.tick(cpu_cycles(5));
+
+		REQUIRE(bus->read(0x1820) == 0xCD); // Value stored at effective address
+		REQUIRE(cpu.get_accumulator() == 0xCD); // Accumulator unchanged
+		REQUIRE(cpu.get_y_register() == 0x20); // Y register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0303);
+	}
+
+	SECTION("STA Absolute,Y - Page boundary crossing still 5 cycles") {
+		// Set up: STA $18FF,Y with Y=0x02, effective address = $1901 (crosses page boundary)
+		cpu.set_program_counter(0x0400);
+		cpu.set_y_register(0x02);
+		cpu.set_accumulator(0x99);
+
+		// STA $18FF,Y instruction
+		bus->write(0x0400, 0x99); // STA absolute,Y opcode
+		bus->write(0x0401, 0xFF); // Low byte of base address
+		bus->write(0x0402, 0x18); // High byte of base address
+
+		// Execute - should take exactly 5 cycles (STA always takes 5)
+		cpu.tick(cpu_cycles(5));
+
+		REQUIRE(bus->read(0x1901) == 0x99); // Value stored at effective address
+		REQUIRE(cpu.get_accumulator() == 0x99); // Accumulator unchanged
+		REQUIRE(cpu.get_y_register() == 0x02); // Y register unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0403);
+	}
+
+	SECTION("Absolute,Y page boundary detection edge cases") {
+		cpu.set_program_counter(0x0500);
+
+		// Test exact page boundary: $12FF + $01 = $1300
+		cpu.set_y_register(0x01);
+		bus->write(0x1300, 0x42);
+		bus->write(0x0500, 0xB9); // LDA absolute,Y
+		bus->write(0x0501, 0xFF); // Low byte
+		bus->write(0x0502, 0x12); // High byte
+
+		cpu.tick(cpu_cycles(5)); // Should take 5 cycles (page boundary crossed)
+
+		REQUIRE(cpu.get_accumulator() == 0x42);
+		REQUIRE(cpu.get_program_counter() == 0x0503);
+
+		// Test no page boundary: $1200 + $FE = $12FE (same page)
+		cpu.set_y_register(0xFE);
+		bus->write(0x12FE, 0x88);
+		bus->write(0x0503, 0xB9); // LDA absolute,Y
+		bus->write(0x0504, 0x00); // Low byte
+		bus->write(0x0505, 0x12); // High byte
+
+		cpu.tick(cpu_cycles(4)); // Should take 4 cycles (no page boundary crossing)
+
+		REQUIRE(cpu.get_accumulator() == 0x88);
+		REQUIRE(cpu.get_program_counter() == 0x0506);
+	}
+
+	SECTION("LDA/STA Absolute,Y - Round trip test") {
+		// Test storing and loading back with Y indexing
+		cpu.set_program_counter(0x0600);
+		cpu.set_y_register(0x05);
+		cpu.set_accumulator(0x77);
+
+		// First: STA $1500,Y (store 0x77 to $1505)
+		bus->write(0x0600, 0x99); // STA absolute,Y
+		bus->write(0x0601, 0x00); // Low byte
+		bus->write(0x0602, 0x15); // High byte
+
+		// Second: LDA #$00 (clear accumulator)
+		bus->write(0x0603, 0xA9); // LDA immediate
+		bus->write(0x0604, 0x00); // Load 0
+
+		// Third: LDA $1500,Y (load back from $1505)
+		bus->write(0x0605, 0xB9); // LDA absolute,Y
+		bus->write(0x0606, 0x00); // Low byte
+		bus->write(0x0607, 0x15); // High byte
+
+		// Execute all instructions: 5 + 2 + 4 = 11 cycles
+		cpu.tick(cpu_cycles(11));
+
+		REQUIRE(cpu.get_accumulator() == 0x77); // Original value restored
+		REQUIRE(bus->read(0x1505) == 0x77); // Value preserved in memory
+		REQUIRE(cpu.get_program_counter() == 0x0608);
+	}
+
+	SECTION("Absolute,Y with Y=0 (no indexing)") {
+		// Test that Absolute,Y works correctly with Y=0
+		cpu.set_program_counter(0x0700);
+		cpu.set_y_register(0x00);
+
+		bus->write(0x1234, 0x33); // Store test value
+		bus->write(0x0700, 0xB9); // LDA absolute,Y
+		bus->write(0x0701, 0x34); // Low byte
+		bus->write(0x0702, 0x12); // High byte
+
+		cpu.tick(cpu_cycles(4)); // No page boundary crossing
+
+		REQUIRE(cpu.get_accumulator() == 0x33);
+		REQUIRE(cpu.get_program_counter() == 0x0703);
+	}
+
+	SECTION("Absolute,Y flag behavior") {
+		cpu.set_program_counter(0x0800);
+		cpu.set_y_register(0x10);
+
+		// Test zero flag
+		bus->write(0x1310, 0x00); // Store zero value
+		bus->write(0x0800, 0xB9); // LDA absolute,Y
+		bus->write(0x0801, 0x00); // Low byte
+		bus->write(0x0802, 0x13); // High byte
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+
+		// Test negative flag
+		cpu.set_program_counter(0x0803);
+		bus->write(0x1311, 0x80); // Store negative value
+		bus->write(0x0803, 0xB9); // LDA absolute,Y
+		bus->write(0x0804, 0x01); // Low byte
+		bus->write(0x0805, 0x13); // High byte
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0x80);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+}
