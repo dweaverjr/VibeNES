@@ -126,6 +126,10 @@ class CPU6502 final : public Component {
 	void update_negative_flag(Byte value) noexcept;
 	void update_zero_and_negative_flags(Byte value) noexcept;
 
+	// Cycle management helpers
+	void consume_cycle() noexcept;
+	void consume_cycles(int count) noexcept;
+
 	// Instruction implementations - Start with immediate mode instructions
 	void LDA_immediate(); // Load Accumulator with immediate value
 	void LDX_immediate(); // Load X Register with immediate value

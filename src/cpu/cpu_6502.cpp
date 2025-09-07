@@ -64,7 +64,8 @@ const char *CPU6502::get_name() const noexcept {
 
 void CPU6502::execute_instruction() {
 	// Fetch opcode
-	Byte opcode = read_byte(program_counter_++);
+	Byte opcode = read_byte(program_counter_);
+	program_counter_++;
 
 	// Decode and execute
 	switch (opcode) {
@@ -113,12 +114,12 @@ void CPU6502::execute_instruction() {
 
 // Memory access methods
 Byte CPU6502::read_byte(Address address) {
-	cycles_remaining_ -= CpuCycle{1}; // Memory reads take 1 cycle
+	consume_cycle(); // Memory reads take 1 cycle
 	return bus_->read(address);
 }
 
 void CPU6502::write_byte(Address address, Byte value) {
-	cycles_remaining_ -= CpuCycle{1}; // Memory writes take 1 cycle
+	consume_cycle(); // Memory writes take 1 cycle
 	bus_->write(address, value);
 }
 
@@ -167,51 +168,84 @@ void CPU6502::update_zero_and_negative_flags(Byte value) noexcept {
 	update_negative_flag(value);
 }
 
+// Cycle management helpers
+void CPU6502::consume_cycle() noexcept {
+	cycles_remaining_ -= CpuCycle{1};
+}
+
+void CPU6502::consume_cycles(int count) noexcept {
+	cycles_remaining_ -= CpuCycle{count};
+}
+
 // Instruction implementations
 void CPU6502::LDA_immediate() {
-	accumulator_ = read_byte(program_counter_++);
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch operand
+	accumulator_ = read_byte(program_counter_);
+	program_counter_++;
 	update_zero_and_negative_flags(accumulator_);
-	cycles_remaining_ -= CpuCycle{2}; // LDA immediate takes 2 cycles total
+	// Total: 2 cycles (1 for opcode fetch + 1 for operand fetch)
 }
 
 void CPU6502::LDX_immediate() {
-	x_register_ = read_byte(program_counter_++);
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch operand
+	x_register_ = read_byte(program_counter_);
+	program_counter_++;
 	update_zero_and_negative_flags(x_register_);
-	cycles_remaining_ -= CpuCycle{2}; // LDX immediate takes 2 cycles total
+	// Total: 2 cycles
 }
 
 void CPU6502::LDY_immediate() {
-	y_register_ = read_byte(program_counter_++);
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch operand
+	y_register_ = read_byte(program_counter_);
+	program_counter_++;
 	update_zero_and_negative_flags(y_register_);
-	cycles_remaining_ -= CpuCycle{2}; // LDY immediate takes 2 cycles total
+	// Total: 2 cycles
 }
 
 void CPU6502::TAX() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Transfer and update flags
+	consume_cycle(); // Internal operation takes 1 cycle
 	x_register_ = accumulator_;
 	update_zero_and_negative_flags(x_register_);
-	cycles_remaining_ -= CpuCycle{2}; // TAX takes 2 cycles
+	// Total: 2 cycles
 }
 
 void CPU6502::TAY() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Transfer and update flags
+	consume_cycle(); // Internal operation takes 1 cycle
 	y_register_ = accumulator_;
 	update_zero_and_negative_flags(y_register_);
-	cycles_remaining_ -= CpuCycle{2}; // TAY takes 2 cycles
+	// Total: 2 cycles
 }
 
 void CPU6502::TXA() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Transfer and update flags
+	consume_cycle(); // Internal operation takes 1 cycle
 	accumulator_ = x_register_;
 	update_zero_and_negative_flags(accumulator_);
-	cycles_remaining_ -= CpuCycle{2}; // TXA takes 2 cycles
+	// Total: 2 cycles
 }
 
 void CPU6502::TYA() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Transfer and update flags
+	consume_cycle(); // Internal operation takes 1 cycle
 	accumulator_ = y_register_;
 	update_zero_and_negative_flags(accumulator_);
-	cycles_remaining_ -= CpuCycle{2}; // TYA takes 2 cycles
+	// Total: 2 cycles
 }
 
 void CPU6502::NOP() {
-	cycles_remaining_ -= CpuCycle{2}; // NOP takes 2 cycles
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Do nothing
+	consume_cycle(); // NOP still takes 1 cycle to execute
+					 // Total: 2 cycles
 }
 
 } // namespace nes
