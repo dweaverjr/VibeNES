@@ -506,7 +506,7 @@ TEST_CASE("CPU Absolute Addressing - LDA/STA", "[cpu][instructions][addressing][
 		// Execute - should take exactly 4 cycles
 		cpu.tick(cpu_cycles(4));
 
-		REQUIRE(bus->read(0x1800) == 0x55); // Value stored at absolute address
+		REQUIRE(bus->read(0x1800) == 0x55);		// Value stored at absolute address
 		REQUIRE(cpu.get_accumulator() == 0x55); // Accumulator unchanged
 		REQUIRE(cpu.get_program_counter() == 0x0203);
 	}
@@ -534,7 +534,7 @@ TEST_CASE("CPU Absolute Addressing - LDA/STA", "[cpu][instructions][addressing][
 		cpu.tick(cpu_cycles(10));
 
 		REQUIRE(cpu.get_accumulator() == 0xCD); // Original value restored
-		REQUIRE(bus->read(0x1999) == 0xCD); // Value preserved in memory
+		REQUIRE(bus->read(0x1999) == 0xCD);		// Value preserved in memory
 		REQUIRE(cpu.get_program_counter() == 0x0308);
 	}
 

@@ -292,11 +292,11 @@ void CPU6502::LDA_absolute() {
 	// Cycle 2: Fetch low byte of address
 	Byte low = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 3: Fetch high byte of address
 	Byte high = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 4: Read from absolute address (little-endian)
 	Address absolute_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
 	accumulator_ = read_byte(absolute_address);
@@ -309,11 +309,11 @@ void CPU6502::STA_absolute() {
 	// Cycle 2: Fetch low byte of address
 	Byte low = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 3: Fetch high byte of address
 	Byte high = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 4: Store accumulator to absolute address (little-endian)
 	Address absolute_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
 	write_byte(absolute_address, accumulator_);
