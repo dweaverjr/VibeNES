@@ -138,6 +138,10 @@ class CPU6502 final : public Component {
 	void LDX_immediate(); // Load X Register with immediate value
 	void LDY_immediate(); // Load Y Register with immediate value
 
+	// Zero Page addressing mode instructions (fast 2-byte instructions)
+	void LDA_zero_page(); // Load Accumulator from zero page address
+	void STA_zero_page(); // Store Accumulator to zero page address
+
 	// Absolute,X addressing mode instructions (with page boundary crossing)
 	void LDA_absolute_X(); // Load Accumulator from absolute,X address
 

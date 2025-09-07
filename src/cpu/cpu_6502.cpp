@@ -84,6 +84,16 @@ void CPU6502::execute_instruction() {
 		LDY_immediate();
 		break;
 
+	// Load Accumulator - Zero Page
+	case 0xA5:
+		LDA_zero_page();
+		break;
+
+	// Store Accumulator - Zero Page
+	case 0x85:
+		STA_zero_page();
+		break;
+
 	// Load Accumulator - Absolute,X
 	case 0xBD:
 		LDA_absolute_X();
@@ -242,6 +252,29 @@ void CPU6502::LDA_absolute_X() {
 	accumulator_ = read_byte(effective_address);
 	update_zero_and_negative_flags(accumulator_);
 	// Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
+}
+
+void CPU6502::LDA_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_address = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Read from zero page address (0x00nn)
+	accumulator_ = read_byte(static_cast<Address>(zero_page_address));
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 3 cycles
+}
+
+void CPU6502::STA_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_address = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Store accumulator to zero page address (0x00nn)
+	write_byte(static_cast<Address>(zero_page_address), accumulator_);
+	// Total: 3 cycles
 }
 
 void CPU6502::TAX() {

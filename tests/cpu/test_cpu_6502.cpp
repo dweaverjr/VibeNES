@@ -369,3 +369,98 @@ TEST_CASE("CPU Page Boundary Crossing - LDA Absolute,X", "[cpu][instructions][ad
 		REQUIRE(cpu.get_program_counter() == 0x0303);
 	}
 }
+
+TEST_CASE("CPU Zero Page Addressing - LDA/STA", "[cpu][instructions][addressing][zero_page]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("LDA Zero Page - Load from zero page address") {
+		// Set up: LDA $42 (zero page)
+		cpu.set_program_counter(0x0100);
+
+		// Store test value at zero page address $0042
+		bus->write(0x0042, 0x99);
+
+		// LDA $42 instruction
+		bus->write(0x0100, 0xA5); // LDA zero page opcode
+		bus->write(0x0101, 0x42); // Zero page address
+
+		// Execute - should take exactly 3 cycles
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(cpu.get_accumulator() == 0x99);
+		REQUIRE(cpu.get_program_counter() == 0x0102);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true); // 0x99 has bit 7 set
+	}
+
+	SECTION("STA Zero Page - Store to zero page address") {
+		// Set up: STA $55 (zero page)
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x77);
+
+		// STA $55 instruction
+		bus->write(0x0200, 0x85); // STA zero page opcode
+		bus->write(0x0201, 0x55); // Zero page address
+
+		// Execute - should take exactly 3 cycles
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(bus->read(0x0055) == 0x77);		// Value stored at zero page address
+		REQUIRE(cpu.get_accumulator() == 0x77); // Accumulator unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("LDA/STA Zero Page - Round trip test") {
+		// Test that we can store and load back the same value
+		cpu.set_program_counter(0x0300);
+		cpu.set_accumulator(0xAB);
+
+		// First: STA $88 (store 0xAB to zero page $88)
+		bus->write(0x0300, 0x85); // STA zero page
+		bus->write(0x0301, 0x88); // Zero page address
+
+		// Second: LDA #$00 (clear accumulator)
+		bus->write(0x0302, 0xA9); // LDA immediate
+		bus->write(0x0303, 0x00); // Load 0
+
+		// Third: LDA $88 (load back from zero page)
+		bus->write(0x0304, 0xA5); // LDA zero page
+		bus->write(0x0305, 0x88); // Zero page address
+
+		// Execute all instructions
+		cpu.tick(cpu_cycles(8)); // 3 + 2 + 3 cycles
+
+		REQUIRE(cpu.get_accumulator() == 0xAB); // Original value restored
+		REQUIRE(bus->read(0x0088) == 0xAB);		// Value preserved in memory
+		REQUIRE(cpu.get_program_counter() == 0x0306);
+	}
+
+	SECTION("Zero Page boundary behavior") {
+		// Test edge cases with zero page addressing
+		cpu.set_program_counter(0x0400);
+
+		// Test accessing address $00FF (highest zero page address)
+		bus->write(0x00FF, 0x33);
+		bus->write(0x0400, 0xA5); // LDA zero page
+		bus->write(0x0401, 0xFF); // Address $FF
+
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(cpu.get_accumulator() == 0x33);
+		REQUIRE(cpu.get_program_counter() == 0x0402);
+
+		// Test accessing address $0000 (lowest zero page address)
+		cpu.set_accumulator(0x44);
+		bus->write(0x0402, 0x85); // STA zero page
+		bus->write(0x0403, 0x00); // Address $00
+
+		cpu.tick(cpu_cycles(3));
+
+		REQUIRE(bus->read(0x0000) == 0x44);
+		REQUIRE(cpu.get_program_counter() == 0x0404);
+	}
+}
