@@ -70,14 +70,16 @@ class Ram final : public Component {
 
 	/// Print RAM contents for debugging
 	void debug_print(Address start = 0x0000, std::size_t length = 256) const {
-		std::cout << "RAM Dump (starting at $" << std::hex << std::uppercase << std::setfill('0') << std::setw(4) << start << "):\n";
+		std::cout << "RAM Dump (starting at $" << std::hex << std::uppercase << std::setfill('0') << std::setw(4)
+				  << start << "):\n";
 
 		for (std::size_t i = 0; i < length && (start + i) < RAM_SIZE; ++i) {
 			if (i % 16 == 0) {
 				std::cout << std::hex << std::uppercase << std::setfill('0') << std::setw(4) << (start + i) << ": ";
 			}
 
-			std::cout << std::hex << std::uppercase << std::setfill('0') << std::setw(2) << static_cast<int>(memory_[start + i]) << " ";
+			std::cout << std::hex << std::uppercase << std::setfill('0') << std::setw(2)
+					  << static_cast<int>(memory_[start + i]) << " ";
 
 			if ((i + 1) % 16 == 0) {
 				std::cout << "\n";
