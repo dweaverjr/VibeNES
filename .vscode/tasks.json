@@ -19,6 +19,7 @@
                 "-Wformat=2",
                 "-std=c++23",
                 "${workspaceFolder}/src/main.cpp",
+                "${workspaceFolder}/src/core/bus.cpp",
                 "-I${workspaceFolder}/include",
                 "-o",
                 "${workspaceFolder}/build/debug/VibeNES.exe"
@@ -54,6 +55,7 @@
                 "-Wsign-conversion",
                 "-std=c++23",
                 "${workspaceFolder}/src/main.cpp",
+                "${workspaceFolder}/src/core/bus.cpp",
                 "-I${workspaceFolder}/include",
                 "-o",
                 "${workspaceFolder}/build/release/VibeNES.exe"
