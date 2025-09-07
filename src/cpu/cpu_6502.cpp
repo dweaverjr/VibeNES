@@ -1,0 +1,217 @@
+#include "cpu/cpu_6502.hpp"
+#include "core/bus.hpp"
+#include <format>
+#include <iostream>
+
+namespace nes {
+
+CPU6502::CPU6502(SystemBus *bus)
+	: accumulator_(0), x_register_(0), y_register_(0), stack_pointer_(0xFF) // Stack starts at top
+	  ,
+	  program_counter_(0), status_register_(0x20) // Unused flag always set
+	  ,
+	  bus_(bus), cycles_remaining_(0) {
+
+	// Ensure unused flag is always set
+	unused_flag_ = true;
+}
+
+void CPU6502::tick(CpuCycle cycles) {
+	cycles_remaining_ += cycles;
+
+	// Execute instructions while we have cycles
+	while (cycles_remaining_ > CpuCycle{0}) {
+		execute_instruction();
+	}
+}
+void CPU6502::reset() {
+	// For testing, use a known reset vector
+	// In a real NES, this would read from cartridge ROM at $FFFC-$FFFD
+	program_counter_ = 0x8000;
+
+	// Reset registers to known state
+	accumulator_ = 0;
+	x_register_ = 0;
+	y_register_ = 0;
+	stack_pointer_ = 0xFD; // Stack pointer decremented by 3 on reset
+
+	// Set status flags
+	status_register_ = 0x20; // Unused flag set
+	interrupt_flag_ = true;	 // Interrupts disabled
+
+	cycles_remaining_ = CpuCycle{7}; // Reset takes 7 cycles
+}
+
+void CPU6502::power_on() {
+	// Power-on reset
+	accumulator_ = 0;
+	x_register_ = 0;
+	y_register_ = 0;
+	stack_pointer_ = 0xFF;
+
+	// Status register power-on state
+	status_register_ = 0x20; // Only unused flag set
+	interrupt_flag_ = true;	 // Interrupts disabled
+
+	// Program counter will be set by reset
+	program_counter_ = 0;
+	cycles_remaining_ = CpuCycle{0};
+}
+
+const char *CPU6502::get_name() const noexcept {
+	return "6502 CPU";
+}
+
+void CPU6502::execute_instruction() {
+	// Fetch opcode
+	Byte opcode = read_byte(program_counter_++);
+
+	// Decode and execute
+	switch (opcode) {
+	// Load Accumulator - Immediate
+	case 0xA9:
+		LDA_immediate();
+		break;
+
+	// Load X Register - Immediate
+	case 0xA2:
+		LDX_immediate();
+		break;
+
+	// Load Y Register - Immediate
+	case 0xA0:
+		LDY_immediate();
+		break;
+
+	// Transfer instructions
+	case 0xAA:
+		TAX();
+		break;
+	case 0xA8:
+		TAY();
+		break;
+	case 0x8A:
+		TXA();
+		break;
+	case 0x98:
+		TYA();
+		break;
+
+	// No Operation
+	case 0xEA:
+		NOP();
+		break;
+
+	default:
+		std::cerr << std::format("Unknown opcode: 0x{:02X} at PC: 0x{:04X}\n", static_cast<int>(opcode),
+								 static_cast<int>(program_counter_ - 1));
+		// For now, treat unknown opcodes as NOP
+		cycles_remaining_ -= CpuCycle{2};
+		break;
+	}
+}
+
+// Memory access methods
+Byte CPU6502::read_byte(Address address) {
+	cycles_remaining_ -= CpuCycle{1}; // Memory reads take 1 cycle
+	return bus_->read(address);
+}
+
+void CPU6502::write_byte(Address address, Byte value) {
+	cycles_remaining_ -= CpuCycle{1}; // Memory writes take 1 cycle
+	bus_->write(address, value);
+}
+
+Address CPU6502::read_word(Address address) {
+	// 6502 is little-endian
+	Byte low = read_byte(address);
+	Byte high = read_byte(address + 1);
+	return static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+}
+
+// Stack operations
+void CPU6502::push_byte(Byte value) {
+	write_byte(0x0100 + stack_pointer_, value);
+	stack_pointer_--;
+}
+
+Byte CPU6502::pull_byte() {
+	stack_pointer_++;
+	return read_byte(0x0100 + stack_pointer_);
+}
+
+void CPU6502::push_word(Address value) {
+	// Push high byte first (little-endian)
+	push_byte(static_cast<Byte>(value >> 8));
+	push_byte(static_cast<Byte>(value & 0xFF));
+}
+
+Address CPU6502::pull_word() {
+	// Pull low byte first (little-endian)
+	Byte low = pull_byte();
+	Byte high = pull_byte();
+	return static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+}
+
+// Flag update helpers
+void CPU6502::update_zero_flag(Byte value) noexcept {
+	zero_flag_ = (value == 0);
+}
+
+void CPU6502::update_negative_flag(Byte value) noexcept {
+	negative_flag_ = (value & 0x80) != 0;
+}
+
+void CPU6502::update_zero_and_negative_flags(Byte value) noexcept {
+	update_zero_flag(value);
+	update_negative_flag(value);
+}
+
+// Instruction implementations
+void CPU6502::LDA_immediate() {
+	accumulator_ = read_byte(program_counter_++);
+	update_zero_and_negative_flags(accumulator_);
+	cycles_remaining_ -= CpuCycle{2}; // LDA immediate takes 2 cycles total
+}
+
+void CPU6502::LDX_immediate() {
+	x_register_ = read_byte(program_counter_++);
+	update_zero_and_negative_flags(x_register_);
+	cycles_remaining_ -= CpuCycle{2}; // LDX immediate takes 2 cycles total
+}
+
+void CPU6502::LDY_immediate() {
+	y_register_ = read_byte(program_counter_++);
+	update_zero_and_negative_flags(y_register_);
+	cycles_remaining_ -= CpuCycle{2}; // LDY immediate takes 2 cycles total
+}
+
+void CPU6502::TAX() {
+	x_register_ = accumulator_;
+	update_zero_and_negative_flags(x_register_);
+	cycles_remaining_ -= CpuCycle{2}; // TAX takes 2 cycles
+}
+
+void CPU6502::TAY() {
+	y_register_ = accumulator_;
+	update_zero_and_negative_flags(y_register_);
+	cycles_remaining_ -= CpuCycle{2}; // TAY takes 2 cycles
+}
+
+void CPU6502::TXA() {
+	accumulator_ = x_register_;
+	update_zero_and_negative_flags(accumulator_);
+	cycles_remaining_ -= CpuCycle{2}; // TXA takes 2 cycles
+}
+
+void CPU6502::TYA() {
+	accumulator_ = y_register_;
+	update_zero_and_negative_flags(accumulator_);
+	cycles_remaining_ -= CpuCycle{2}; // TYA takes 2 cycles
+}
+
+void CPU6502::NOP() {
+	cycles_remaining_ -= CpuCycle{2}; // NOP takes 2 cycles
+}
+
+} // namespace nes
