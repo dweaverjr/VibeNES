@@ -20,7 +20,7 @@ void CPU6502::tick(CpuCycle cycles) {
 	cycles_remaining_ += cycles;
 
 	// Execute instructions while we have cycles
-	while (cycles_remaining_ > CpuCycle{0}) {
+	while (cycles_remaining_.count() > 0) {
 		execute_instruction();
 	}
 }
@@ -92,6 +92,16 @@ void CPU6502::execute_instruction() {
 	// Store Accumulator - Zero Page
 	case 0x85:
 		STA_zero_page();
+		break;
+
+	// Load Accumulator - Absolute
+	case 0xAD:
+		LDA_absolute();
+		break;
+
+	// Store Accumulator - Absolute
+	case 0x8D:
+		STA_absolute();
 		break;
 
 	// Load Accumulator - Absolute,X
@@ -275,6 +285,39 @@ void CPU6502::STA_zero_page() {
 	// Cycle 3: Store accumulator to zero page address (0x00nn)
 	write_byte(static_cast<Address>(zero_page_address), accumulator_);
 	// Total: 3 cycles
+}
+
+void CPU6502::LDA_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	
+	// Cycle 4: Read from absolute address (little-endian)
+	Address absolute_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	accumulator_ = read_byte(absolute_address);
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles
+}
+
+void CPU6502::STA_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	
+	// Cycle 4: Store accumulator to absolute address (little-endian)
+	Address absolute_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	write_byte(absolute_address, accumulator_);
+	// Total: 4 cycles
 }
 
 void CPU6502::TAX() {

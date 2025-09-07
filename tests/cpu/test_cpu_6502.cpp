@@ -464,3 +464,120 @@ TEST_CASE("CPU Zero Page Addressing - LDA/STA", "[cpu][instructions][addressing]
 		REQUIRE(cpu.get_program_counter() == 0x0404);
 	}
 }
+
+TEST_CASE("CPU Absolute Addressing - LDA/STA", "[cpu][instructions][addressing][absolute]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("LDA Absolute - Load from absolute address") {
+		// Set up: LDA $1234 (absolute)
+		cpu.set_program_counter(0x0100);
+
+		// Store test value at absolute address $1234
+		bus->write(0x1234, 0xAB);
+
+		// LDA $1234 instruction
+		bus->write(0x0100, 0xAD); // LDA absolute opcode
+		bus->write(0x0101, 0x34); // Low byte of address (little-endian)
+		bus->write(0x0102, 0x12); // High byte of address
+
+		// Execute - should take exactly 4 cycles
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0xAB);
+		REQUIRE(cpu.get_program_counter() == 0x0103);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true); // 0xAB has bit 7 set
+	}
+
+	SECTION("STA Absolute - Store to absolute address") {
+		// Set up: STA $1800 (absolute)
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x55);
+
+		// STA $1800 instruction
+		bus->write(0x0200, 0x8D); // STA absolute opcode
+		bus->write(0x0201, 0x00); // Low byte of address (little-endian)
+		bus->write(0x0202, 0x18); // High byte of address
+
+		// Execute - should take exactly 4 cycles
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x1800) == 0x55); // Value stored at absolute address
+		REQUIRE(cpu.get_accumulator() == 0x55); // Accumulator unchanged
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("LDA/STA Absolute - Round trip test") {
+		// Test that we can store and load back the same value across full address space
+		cpu.set_program_counter(0x0300);
+		cpu.set_accumulator(0xCD);
+
+		// First: STA $1999 (store 0xCD to absolute $1999)
+		bus->write(0x0300, 0x8D); // STA absolute
+		bus->write(0x0301, 0x99); // Low byte
+		bus->write(0x0302, 0x19); // High byte
+
+		// Second: LDA #$00 (clear accumulator)
+		bus->write(0x0303, 0xA9); // LDA immediate
+		bus->write(0x0304, 0x00); // Load 0
+
+		// Third: LDA $1999 (load back from absolute)
+		bus->write(0x0305, 0xAD); // LDA absolute
+		bus->write(0x0306, 0x99); // Low byte
+		bus->write(0x0307, 0x19); // High byte
+
+		// Execute all instructions: 4 + 2 + 4 = 10 cycles
+		cpu.tick(cpu_cycles(10));
+
+		REQUIRE(cpu.get_accumulator() == 0xCD); // Original value restored
+		REQUIRE(bus->read(0x1999) == 0xCD); // Value preserved in memory
+		REQUIRE(cpu.get_program_counter() == 0x0308);
+	}
+
+	SECTION("Absolute addressing full range test") {
+		// Test accessing various addresses across the memory map
+		cpu.set_program_counter(0x0400);
+
+		// Test high RAM address (but still in RAM range)
+		bus->write(0x1FFF, 0x77); // Highest RAM address
+		bus->write(0x0400, 0xAD); // LDA absolute
+		bus->write(0x0401, 0xFF); // Low byte
+		bus->write(0x0402, 0x1F); // High byte
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0x77);
+		REQUIRE(cpu.get_program_counter() == 0x0403);
+
+		// Test storing to different high address
+		cpu.set_accumulator(0x88);
+		bus->write(0x0403, 0x8D); // STA absolute
+		bus->write(0x0404, 0x00); // Low byte
+		bus->write(0x0405, 0x1E); // High byte ($1E00)
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(bus->read(0x1E00) == 0x88);
+		REQUIRE(cpu.get_program_counter() == 0x0406);
+	}
+
+	SECTION("Little-endian address handling") {
+		// Verify that little-endian address encoding works correctly
+		cpu.set_program_counter(0x0500);
+
+		// Test address $ABCD encoded as $CD $AB (little-endian)
+		bus->write(0x1ACD, 0x42); // Note: using $1ACD instead of $ABCD to stay in RAM
+		bus->write(0x0500, 0xAD); // LDA absolute
+		bus->write(0x0501, 0xCD); // Low byte first
+		bus->write(0x0502, 0x1A); // High byte second
+
+		cpu.tick(cpu_cycles(4));
+
+		REQUIRE(cpu.get_accumulator() == 0x42);
+		REQUIRE(cpu.get_program_counter() == 0x0503);
+	}
+}
