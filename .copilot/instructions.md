@@ -57,6 +57,34 @@ You are helping develop a cycle-accurate Nintendo Entertainment System (NES) emu
 - **Test structure**: Separate sections for normal operation, edge cases, and boundary conditions
 - **PC validation**: Check program counter after instruction execution to verify correct advancement
 
+### Test Debugging - Memory Address Validation
+When tests fail with unexpected behavior (wrong values, "unknown opcode" errors):
+
+1. **Verify Memory Address Ranges**: First check if test addresses are within valid memory ranges
+   - **Work RAM**: 0x0000-0x07FF (actual RAM), 0x0800-0x1FFF (mirrored)
+
+2. **Red Herring Symptoms**: "Unknown opcode" or wrong accumulator values often indicate memory mapping issues, not instruction logic problems
+   - Example: Test writes 0x42 to 0x3000, but 0x3000 is open bus → returns last bus value instead of 0x42
+   - This can make a working instruction appear broken
+
+3. **Valid Test Address Ranges Only Specifically for Work RAM**:
+   - **Preferred**: 0x0500-0x07FF (avoids zero page and stack conflicts)
+   - **Acceptable**: 0x0800-0x1FFF (mirrored RAM)
+
+4. **Debugging Process**:
+   - If instruction tests fail mysteriously, check memory addresses first
+   - Use SystemBus read/write to verify test data is stored/retrieved correctly
+   - Remember: NES memory map is not linear - large gaps exist between valid regions
+
+5. **Address Correction Examples**:
+   ```cpp
+   // BAD - Outside RAM range
+   bus->write(0x3000, 0x42);  // Open bus - won't store value
+
+   // GOOD - Within RAM range
+   bus->write(0x0500, 0x42);  // Stored in actual RAM
+   ```
+
 ### Memory System Patterns
 - **Address space partitioning**: RAM (0x0000-0x1FFF), PPU (0x2000-0x3FFF), APU (0x4000-0x401F), Open bus elsewhere
 - **Open bus behavior**: Return `last_bus_value_` for unmapped regions with appropriate debug messages
