@@ -158,6 +158,7 @@ class CPU6502 final : public Component {
 	// Arithmetic operation helpers
 	void perform_adc(Byte value) noexcept;
 	void perform_sbc(Byte value) noexcept;
+	void perform_compare(Byte register_value, Byte memory_value) noexcept;
 
 	// Cycle management helpers
 	void consume_cycle() noexcept;
@@ -240,6 +241,26 @@ class CPU6502 final : public Component {
 	void SBC_absolute_Y();		 // SBC abs,Y
 	void SBC_indexed_indirect(); // SBC (zp,X)
 	void SBC_indirect_indexed(); // SBC (zp),Y
+
+	// Compare instructions - CMP (Compare with Accumulator)
+	void CMP_immediate();		 // CMP #value
+	void CMP_zero_page();		 // CMP zp
+	void CMP_zero_page_X();		 // CMP zp,X
+	void CMP_absolute();		 // CMP abs
+	void CMP_absolute_X();		 // CMP abs,X
+	void CMP_absolute_Y();		 // CMP abs,Y
+	void CMP_indexed_indirect(); // CMP (zp,X)
+	void CMP_indirect_indexed(); // CMP (zp),Y
+
+	// Compare instructions - CPX (Compare with X Register)
+	void CPX_immediate(); // CPX #value
+	void CPX_zero_page(); // CPX zp
+	void CPX_absolute();  // CPX abs
+
+	// Compare instructions - CPY (Compare with Y Register)
+	void CPY_immediate(); // CPY #value
+	void CPY_zero_page(); // CPY zp
+	void CPY_absolute();  // CPY abs
 
 	// Increment/Decrement instructions - Register operations
 	void INX(); // Increment X Register

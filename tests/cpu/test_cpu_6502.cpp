@@ -1982,3 +1982,383 @@ TEST_CASE("CPU ADC/SBC - All Addressing Modes", "[cpu][instructions][arithmetic]
 		REQUIRE(cpu.get_program_counter() == 0x0202);
 	}
 }
+
+TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("CMP Immediate - Equal values") {
+		// Set up: CMP #$42 with A = $42
+		cpu.set_accumulator(0x42);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC9); // CMP immediate opcode
+		bus->write(0x0201, 0x42); // Compare value
+
+		cpu.execute_instruction();
+
+		// Equal: C=1, Z=1, N=0
+		REQUIRE(cpu.get_carry_flag() == true); // A >= memory
+		REQUIRE(cpu.get_zero_flag() == true);  // A == memory
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+		REQUIRE(cpu.get_accumulator() == 0x42); // A unchanged
+	}
+
+	SECTION("CMP Immediate - Accumulator greater") {
+		// Set up: CMP #$30 with A = $40
+		cpu.set_accumulator(0x40);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC9); // CMP immediate opcode
+		bus->write(0x0201, 0x30); // Compare value
+
+		cpu.execute_instruction();
+
+		// Greater: C=1, Z=0, N=0 (positive result)
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("CMP Immediate - Accumulator less") {
+		// Set up: CMP #$50 with A = $30
+		cpu.set_accumulator(0x30);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC9); // CMP immediate opcode
+		bus->write(0x0201, 0x50); // Compare value
+
+		cpu.execute_instruction();
+
+		// Less: C=0, Z=0, N=1 (negative result)
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("CMP Immediate - Edge case $00 vs $FF") {
+		// Set up: CMP #$FF with A = $00
+		cpu.set_accumulator(0x00);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC9); // CMP immediate opcode
+		bus->write(0x0201, 0xFF); // Compare value
+
+		cpu.execute_instruction();
+
+		// 0x00 - 0xFF = 0x01 (with borrow), so C=0, Z=0, N=0
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("CMP Zero Page") {
+		// Set up: CMP $80 with value $25 in zero page
+		cpu.set_accumulator(0x30);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC5); // CMP zero page opcode
+		bus->write(0x0201, 0x80); // Zero page address
+		bus->write(0x0080, 0x25); // Value to compare
+
+		cpu.execute_instruction();
+
+		// 0x30 > 0x25, so C=1, Z=0, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("CMP Zero Page,X") {
+		// Set up: CMP $80,X with X=$05
+		cpu.set_accumulator(0x20);
+		cpu.set_x_register(0x05);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xD5); // CMP zero page,X opcode
+		bus->write(0x0201, 0x80); // Base zero page address
+		bus->write(0x0085, 0x20); // Value at $80+$05 = $85
+
+		cpu.execute_instruction();
+
+		// Equal values, so C=1, Z=1, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("CMP Absolute") {
+		// Set up: CMP $1234
+		cpu.set_accumulator(0x40);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xCD); // CMP absolute opcode
+		bus->write(0x0201, 0x34); // Low byte of address
+		bus->write(0x0202, 0x12); // High byte of address
+		bus->write(0x1234, 0x50); // Value to compare
+
+		cpu.execute_instruction();
+
+		// 0x40 < 0x50, so C=0, Z=0, N=1
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("CMP Absolute,X") {
+		// Set up: CMP $1200,X with X=$34
+		cpu.set_accumulator(0x60);
+		cpu.set_x_register(0x34);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xDD); // CMP absolute,X opcode
+		bus->write(0x0201, 0x00); // Low byte of base address
+		bus->write(0x0202, 0x12); // High byte of base address
+		bus->write(0x1234, 0x40); // Value at $1200+$34 = $1234
+
+		cpu.execute_instruction();
+
+		// 0x60 > 0x40, so C=1, Z=0, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("CMP Absolute,Y") {
+		// Set up: CMP $1200,Y with Y=$44
+		cpu.set_accumulator(0x35);
+		cpu.set_y_register(0x44);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xD9); // CMP absolute,Y opcode
+		bus->write(0x0201, 0x00); // Low byte of base address
+		bus->write(0x0202, 0x12); // High byte of base address
+		bus->write(0x1244, 0x35); // Value at $1200+$44 = $1244
+
+		cpu.execute_instruction();
+
+		// Equal values, so C=1, Z=1, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("CMP (Indirect,X)") {
+		// Set up: CMP ($80,X) with X=$04
+		cpu.set_accumulator(0x25);
+		cpu.set_x_register(0x04);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC1); // CMP (indirect,X) opcode
+		bus->write(0x0201, 0x80); // Base pointer address
+
+		// Indirect address at $80+$04 = $84 points to $1500
+		bus->write(0x0084, 0x00); // Low byte of target address
+		bus->write(0x0085, 0x15); // High byte of target address
+		bus->write(0x1500, 0x30); // Value to compare
+
+		cpu.execute_instruction();
+
+		// 0x25 < 0x30, so C=0, Z=0, N=1
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("CMP (Indirect),Y") {
+		// Set up: CMP ($90),Y with Y=$10
+		cpu.set_accumulator(0x45);
+		cpu.set_y_register(0x10);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xD1); // CMP (indirect),Y opcode
+		bus->write(0x0201, 0x90); // Pointer address
+
+		// Indirect address at $90 points to $1600, add Y=$10 = $1610
+		bus->write(0x0090, 0x00); // Low byte of base address
+		bus->write(0x0091, 0x16); // High byte of base address
+		bus->write(0x1610, 0x35); // Value to compare at $1600+$10
+
+		cpu.execute_instruction();
+
+		// 0x45 > 0x35, so C=1, Z=0, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+}
+
+TEST_CASE("CPU Compare Instructions - CPX", "[cpu][instructions][compare][CPX]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("CPX Immediate - Equal values") {
+		// Set up: CPX #$55 with X = $55
+		cpu.set_x_register(0x55);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xE0); // CPX immediate opcode
+		bus->write(0x0201, 0x55); // Compare value
+
+		cpu.execute_instruction();
+
+		// Equal: C=1, Z=1, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+		REQUIRE(cpu.get_x_register() == 0x55); // X unchanged
+	}
+
+	SECTION("CPX Immediate - X register greater") {
+		// Set up: CPX #$40 with X = $60
+		cpu.set_x_register(0x60);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xE0); // CPX immediate opcode
+		bus->write(0x0201, 0x40); // Compare value
+
+		cpu.execute_instruction();
+
+		// Greater: C=1, Z=0, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("CPX Immediate - X register less") {
+		// Set up: CPX #$80 with X = $50
+		cpu.set_x_register(0x50);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xE0); // CPX immediate opcode
+		bus->write(0x0201, 0x80); // Compare value
+
+		cpu.execute_instruction();
+
+		// Less: C=0, Z=0, N=1
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("CPX Zero Page") {
+		// Set up: CPX $A0 with value $33 in zero page
+		cpu.set_x_register(0x33);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xE4); // CPX zero page opcode
+		bus->write(0x0201, 0xA0); // Zero page address
+		bus->write(0x00A0, 0x33); // Value to compare
+
+		cpu.execute_instruction();
+
+		// Equal values, so C=1, Z=1, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("CPX Absolute") {
+		// Set up: CPX $2000
+		cpu.set_x_register(0x70);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xEC); // CPX absolute opcode
+		bus->write(0x0201, 0x00); // Low byte of address
+		bus->write(0x0202, 0x20); // High byte of address
+		bus->write(0x2000, 0x60); // Value to compare
+
+		cpu.execute_instruction();
+
+		// 0x70 > 0x60, so C=1, Z=0, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+}
+
+TEST_CASE("CPU Compare Instructions - CPY", "[cpu][instructions][compare][CPY]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+
+	SECTION("CPY Immediate - Equal values") {
+		// Set up: CPY #$AA with Y = $AA
+		cpu.set_y_register(0xAA);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC0); // CPY immediate opcode
+		bus->write(0x0201, 0xAA); // Compare value
+
+		cpu.execute_instruction();
+
+		// Equal: C=1, Z=1, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+		REQUIRE(cpu.get_y_register() == 0xAA); // Y unchanged
+	}
+
+	SECTION("CPY Immediate - Y register greater") {
+		// Set up: CPY #$80 with Y = $90
+		cpu.set_y_register(0x90);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC0); // CPY immediate opcode
+		bus->write(0x0201, 0x80); // Compare value
+
+		cpu.execute_instruction();
+
+		// Greater: C=1, Z=0, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("CPY Immediate - Y register less") {
+		// Set up: CPY #$C0 with Y = $A0
+		cpu.set_y_register(0xA0);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC0); // CPY immediate opcode
+		bus->write(0x0201, 0xC0); // Compare value
+
+		cpu.execute_instruction();
+
+		// Less: C=0, Z=0, N=1
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("CPY Zero Page") {
+		// Set up: CPY $B0 with value $77 in zero page
+		cpu.set_y_register(0x88);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xC4); // CPY zero page opcode
+		bus->write(0x0201, 0xB0); // Zero page address
+		bus->write(0x00B0, 0x77); // Value to compare
+
+		cpu.execute_instruction();
+
+		// 0x88 > 0x77, so C=1, Z=0, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("CPY Absolute") {
+		// Set up: CPY $1500 (using working RAM address)
+		cpu.set_y_register(0x40);
+		cpu.set_program_counter(0x0200);
+		bus->write(0x0200, 0xCC); // CPY absolute opcode
+		bus->write(0x0201, 0x00); // Low byte of address
+		bus->write(0x0202, 0x15); // High byte of address
+		bus->write(0x1500, 0x40); // Value to compare
+
+		cpu.execute_instruction();
+
+		// Equal values, so C=1, Z=1, N=0
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+}

@@ -290,6 +290,54 @@ void CPU6502::execute_instruction() {
 		SBC_indirect_indexed();
 		break;
 
+	// Compare Instructions - CMP (Compare with Accumulator)
+	case 0xC9: // CMP - Immediate
+		CMP_immediate();
+		break;
+	case 0xC5: // CMP - Zero Page
+		CMP_zero_page();
+		break;
+	case 0xD5: // CMP - Zero Page,X
+		CMP_zero_page_X();
+		break;
+	case 0xCD: // CMP - Absolute
+		CMP_absolute();
+		break;
+	case 0xDD: // CMP - Absolute,X
+		CMP_absolute_X();
+		break;
+	case 0xD9: // CMP - Absolute,Y
+		CMP_absolute_Y();
+		break;
+	case 0xC1: // CMP - (Indirect,X)
+		CMP_indexed_indirect();
+		break;
+	case 0xD1: // CMP - (Indirect),Y
+		CMP_indirect_indexed();
+		break;
+
+	// Compare Instructions - CPX (Compare with X Register)
+	case 0xE0: // CPX - Immediate
+		CPX_immediate();
+		break;
+	case 0xE4: // CPX - Zero Page
+		CPX_zero_page();
+		break;
+	case 0xEC: // CPX - Absolute
+		CPX_absolute();
+		break;
+
+	// Compare Instructions - CPY (Compare with Y Register)
+	case 0xC0: // CPY - Immediate
+		CPY_immediate();
+		break;
+	case 0xC4: // CPY - Zero Page
+		CPY_zero_page();
+		break;
+	case 0xCC: // CPY - Absolute
+		CPY_absolute();
+		break;
+
 	// Increment/Decrement Instructions - Register Operations
 	case 0xE8: // INX - Increment X Register
 		INX();
@@ -429,6 +477,27 @@ void CPU6502::perform_sbc(Byte value) noexcept {
 	// This is equivalent to: A = A + (~value) + carry
 	// In other words, SBC is implemented as ADC with the one's complement of the value
 	perform_adc(static_cast<Byte>(~value));
+}
+
+void CPU6502::perform_compare(Byte register_value, Byte memory_value) noexcept {
+	// Compare performs subtraction without storing the result
+	// It sets flags as if we did: register_value - memory_value
+	// This is equivalent to register_value + (~memory_value) + 1 (two's complement)
+	Word reg_val = static_cast<Word>(register_value);
+	Word mem_val_complement = static_cast<Word>(~memory_value);
+	Word result = static_cast<Word>(static_cast<Word>(reg_val + mem_val_complement) + static_cast<Word>(1));
+
+	// Set carry flag if register_value >= memory_value (no borrow needed)
+	// In subtraction, carry is set when there's NO borrow
+	status_.flags.carry_flag_ = (register_value >= memory_value);
+
+	// Set zero flag if register_value == memory_value
+	status_.flags.zero_flag_ = (register_value == memory_value);
+
+	// Set negative flag based on bit 7 of the result
+	status_.flags.negative_flag_ = (result & 0x80) != 0;
+
+	// Note: Compare instructions do NOT affect the overflow flag
 }
 
 // Cycle management helpers
@@ -1291,6 +1360,206 @@ void CPU6502::SBC_indirect_indexed() {
 	Byte value = read_byte(final_address);
 	perform_sbc(value);
 	// Total: 5-6 cycles (5 normally, 6 if page boundary crossed)
+}
+
+// Compare Instructions - CMP (Compare with Accumulator)
+void CPU6502::CMP_immediate() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch operand
+	Byte value = read_byte(program_counter_);
+	program_counter_++;
+	perform_compare(accumulator_, value);
+	// Total: 2 cycles
+}
+
+void CPU6502::CMP_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(address);
+	perform_compare(accumulator_, value);
+	// Total: 3 cycles
+}
+
+void CPU6502::CMP_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X to address (wraps within zero page)
+	address = static_cast<Byte>(address + x_register_);
+	// Cycle 4: Read value from calculated address
+	Byte value = read_byte(address);
+	perform_compare(accumulator_, value);
+	// Total: 4 cycles
+}
+
+void CPU6502::CMP_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(high) << 8) | low;
+	Byte value = read_byte(address);
+	perform_compare(accumulator_, value);
+	// Total: 4 cycles
+}
+
+void CPU6502::CMP_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X to low byte and check for page crossing
+	Word base_address = (static_cast<Word>(high) << 8) | low;
+	Word final_address = base_address + x_register_;
+	if ((base_address & 0xFF00) != (final_address & 0xFF00)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+	// Cycle 4-5: Read value from final address
+	Byte value = read_byte(final_address);
+	perform_compare(accumulator_, value);
+	// Total: 4-5 cycles (4 normally, 5 if page boundary crossed)
+}
+
+void CPU6502::CMP_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y to low byte and check for page crossing
+	Word base_address = (static_cast<Word>(high) << 8) | low;
+	Word final_address = base_address + y_register_;
+	if ((base_address & 0xFF00) != (final_address & 0xFF00)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+	// Cycle 4-5: Read value from final address
+	Byte value = read_byte(final_address);
+	perform_compare(accumulator_, value);
+	// Total: 4-5 cycles (4 normally, 5 if page boundary crossed)
+}
+
+void CPU6502::CMP_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zp_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X to zero page address (wraps within zero page)
+	zp_address = static_cast<Byte>(zp_address + x_register_);
+	// Cycle 4: Fetch low byte of indirect address
+	Byte low = read_byte(zp_address);
+	// Cycle 5: Fetch high byte of indirect address
+	Byte high = read_byte((zp_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 6: Read value from final address
+	Word final_address = (static_cast<Word>(high) << 8) | low;
+	Byte value = read_byte(final_address);
+	perform_compare(accumulator_, value);
+	// Total: 6 cycles
+}
+
+void CPU6502::CMP_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zp_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(zp_address);
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte((zp_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 5: Add Y to base address and check for page crossing
+	Word base_address = (static_cast<Word>(high) << 8) | low;
+	Word final_address = base_address + y_register_;
+	if ((base_address & 0xFF00) != (final_address & 0xFF00)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+	// Cycle 5-6: Read value from final address
+	Byte value = read_byte(final_address);
+	perform_compare(accumulator_, value);
+	// Total: 5-6 cycles (5 normally, 6 if page boundary crossed)
+}
+
+// Compare Instructions - CPX (Compare with X Register)
+void CPU6502::CPX_immediate() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch operand
+	Byte value = read_byte(program_counter_);
+	program_counter_++;
+	perform_compare(x_register_, value);
+	// Total: 2 cycles
+}
+
+void CPU6502::CPX_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(address);
+	perform_compare(x_register_, value);
+	// Total: 3 cycles
+}
+
+void CPU6502::CPX_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(high) << 8) | low;
+	Byte value = read_byte(address);
+	perform_compare(x_register_, value);
+	// Total: 4 cycles
+}
+
+// Compare Instructions - CPY (Compare with Y Register)
+void CPU6502::CPY_immediate() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch operand
+	Byte value = read_byte(program_counter_);
+	program_counter_++;
+	perform_compare(y_register_, value);
+	// Total: 2 cycles
+}
+
+void CPU6502::CPY_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(address);
+	perform_compare(y_register_, value);
+	// Total: 3 cycles
+}
+
+void CPU6502::CPY_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(high) << 8) | low;
+	Byte value = read_byte(address);
+	perform_compare(y_register_, value);
+	// Total: 4 cycles
 }
 
 // Increment/Decrement Instructions - Register Operations
