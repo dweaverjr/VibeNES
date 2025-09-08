@@ -142,7 +142,7 @@
                 "$gcc"
             ],
             "group": {
-                "kind": "test",
+                "kind": "build",
                 "isDefault": true
             },
             "detail": "Build all unit tests including CPU tests with Catch2 framework. NOTE: Add new test and source .cpp files to the args list when created (exclude main.cpp from src)"
