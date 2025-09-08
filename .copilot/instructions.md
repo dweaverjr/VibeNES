@@ -60,8 +60,13 @@ You are helping develop a cycle-accurate Nintendo Entertainment System (NES) emu
 ### Test Debugging - Memory Address Validation
 When tests fail with unexpected behavior (wrong values, "unknown opcode" errors):
 
-1. **Verify Memory Address Ranges**: First check if test addresses are within valid memory ranges
-   - **Work RAM**: 0x0000-0x07FF (actual RAM), 0x0800-0x1FFF (mirrored)
+1. **Verify Memory Address Ranges**: First check if test addresses are within valid CPU memory ranges
+    - **Work RAM**: 0x0000-0x07FF (actual RAM), 0x0800-0x1FFF (mirrored)
+    - **PPU Registers**: 0x2000-0x2007 (8 registers, repeated every 8 bytes through 0x3FFF)
+    - **APU and I/O Registers**: 0x4000-0x4017
+    - **APU and I/O Disabled**: 0x4018-0x401F
+    - **Cartridge Space**: 0x4020-0xFFFF (PRG ROM, PRG RAM, mapper registers)
+    - **Note**: PPU has its own separate memory space not directly accessible by CPU
 
 2. **Red Herring Symptoms**: "Unknown opcode" or wrong accumulator values often indicate memory mapping issues, not instruction logic problems
    - Example: Test writes 0x42 to 0x3000, but 0x3000 is open bus → returns last bus value instead of 0x42
