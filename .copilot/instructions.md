@@ -32,12 +32,13 @@ You are helping develop a cycle-accurate Nintendo Entertainment System (NES) emu
 ## Established Development Patterns
 
 ### Build and Testing Commands
-- **Test Suite Build Command**:
-  ```bash
-  c:\msys64\ucrt64\bin\g++.exe -fdiagnostics-color=always -g3 -O0 -std=c++23 -Wall -Wextra -Wconversion -Wsign-conversion tests/test_main.cpp tests/catch2/catch_amalgamated.cpp tests/core/test_types.cpp tests/memory/test_ram.cpp tests/core/test_bus.cpp tests/cpu/test_cpu_6502.cpp src/memory/ram.cpp src/core/bus.cpp src/cpu/cpu_6502.cpp -Iinclude -Itests -o build/debug/VibeNES_All_Tests.exe
-  ```
+- **VS Code Tasks** (Preferred method):
+  - **Build Tests**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Build Tests"
+  - **Run All Tests**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Tests"
+  - **Run Tests Verbose**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Tests Verbose"
+  - **Debug Build**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Debug Build"
 
-  Note: Add more test and source files as development progresses. The pattern is:
+  Note: The VS Code task system automatically includes all necessary test and source files:
   - All test files: `tests/test_main.cpp tests/catch2/catch_amalgamated.cpp tests/**/*.cpp`
   - All required source files: `src/**/*.cpp` (exclude main.cpp for tests)
   - Include paths: `-Iinclude -Itests`

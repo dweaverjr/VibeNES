@@ -20,6 +20,11 @@
                 "-std=c++23",
                 "${workspaceFolder}/src/main.cpp",
                 "${workspaceFolder}/src/core/bus.cpp",
+                "${workspaceFolder}/src/cpu/cpu_6502.cpp",
+                "${workspaceFolder}/src/cpu/addressing_modes.cpp",
+                "${workspaceFolder}/src/cpu/instructions.cpp",
+                "${workspaceFolder}/src/cpu/interrupts.cpp",
+                "${workspaceFolder}/src/cpu/registers.cpp",
                 "-I${workspaceFolder}/include",
                 "-o",
                 "${workspaceFolder}/build/debug/VibeNES.exe"
@@ -56,6 +61,11 @@
                 "-std=c++23",
                 "${workspaceFolder}/src/main.cpp",
                 "${workspaceFolder}/src/core/bus.cpp",
+                "${workspaceFolder}/src/cpu/cpu_6502.cpp",
+                "${workspaceFolder}/src/cpu/addressing_modes.cpp",
+                "${workspaceFolder}/src/cpu/instructions.cpp",
+                "${workspaceFolder}/src/cpu/interrupts.cpp",
+                "${workspaceFolder}/src/cpu/registers.cpp",
                 "-I${workspaceFolder}/include",
                 "-o",
                 "${workspaceFolder}/build/release/VibeNES.exe"
@@ -109,11 +119,21 @@
                 "${workspaceFolder}/tests/core/test_types.cpp",
                 "${workspaceFolder}/tests/memory/test_ram.cpp",
                 "${workspaceFolder}/tests/core/test_bus.cpp",
+                "${workspaceFolder}/tests/cpu/test_cpu_6502.cpp",
+                "${workspaceFolder}/tests/cpu/instruction_tests.cpp",
+                "${workspaceFolder}/tests/cpu/timing_tests.cpp",
+                "${workspaceFolder}/tests/cpu/nestest_validation.cpp",
                 "${workspaceFolder}/src/core/bus.cpp",
+                "${workspaceFolder}/src/memory/ram.cpp",
+                "${workspaceFolder}/src/cpu/cpu_6502.cpp",
+                "${workspaceFolder}/src/cpu/addressing_modes.cpp",
+                "${workspaceFolder}/src/cpu/instructions.cpp",
+                "${workspaceFolder}/src/cpu/interrupts.cpp",
+                "${workspaceFolder}/src/cpu/registers.cpp",
                 "-I${workspaceFolder}/include",
                 "-I${workspaceFolder}/tests",
                 "-o",
-                "${workspaceFolder}/build/debug/VibeNES_Tests.exe"
+                "${workspaceFolder}/build/debug/VibeNES_All_Tests.exe"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -125,12 +145,12 @@
                 "kind": "test",
                 "isDefault": true
             },
-            "detail": "Build all unit tests with Catch2 framework"
+            "detail": "Build all unit tests including CPU tests with Catch2 framework"
         },
         {
             "type": "shell",
             "label": "Run Tests",
-            "command": "${workspaceFolder}/build/debug/VibeNES_Tests.exe",
+            "command": "${workspaceFolder}/build/debug/VibeNES_All_Tests.exe",
             "group": "test",
             "dependsOn": "Build Tests",
             "detail": "Build and run all unit tests"
@@ -138,7 +158,7 @@
         {
             "type": "shell",
             "label": "Run Tests Verbose",
-            "command": "${workspaceFolder}/build/debug/VibeNES_Tests.exe",
+            "command": "${workspaceFolder}/build/debug/VibeNES_All_Tests.exe",
             "args": [
                 "-s",
                 "--use-colour",
