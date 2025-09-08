@@ -2842,3 +2842,413 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		REQUIRE(cpu.get_program_counter() == 0x0202);
 	}
 }
+
+TEST_CASE("CPU Shift/Rotate Instructions - ASL", "[cpu][asl]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+
+	SECTION("ASL Accumulator - Normal shift") {
+		cpu.set_accumulator(0x55); // 01010101
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x0A); // ASL A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xAA); // 10101010
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0201);
+	}
+
+	SECTION("ASL Accumulator - Carry set") {
+		cpu.set_accumulator(0x80); // 10000000
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x0A); // ASL A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("ASL Zero Page") {
+		bus->write(0x0050, 0x40); // Value to shift
+		bus->write(0x0200, 0x06); // ASL zp opcode
+		bus->write(0x0201, 0x50); // Zero page address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x0050) == 0x80);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ASL Zero Page,X") {
+		cpu.set_x_register(0x05);
+		bus->write(0x0055, 0x7F); // Value to shift at 0x50 + 0x05
+		bus->write(0x0200, 0x16); // ASL zp,X opcode
+		bus->write(0x0201, 0x50); // Zero page base address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x0055) == 0xFE);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("ASL Absolute") {
+		bus->write(0x1234, 0x01); // Value to shift
+		bus->write(0x0200, 0x0E); // ASL abs opcode
+		bus->write(0x0201, 0x34); // Low byte of address
+		bus->write(0x0202, 0x12); // High byte of address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x1234) == 0x02);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("ASL Absolute,X") {
+		cpu.set_x_register(0x10);
+		bus->write(0x1244, 0xFF); // Value to shift at 0x1234 + 0x10
+		bus->write(0x0200, 0x1E); // ASL abs,X opcode
+		bus->write(0x0201, 0x34); // Low byte of base address
+		bus->write(0x0202, 0x12); // High byte of base address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x1244) == 0xFE);
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+}
+
+TEST_CASE("CPU Shift/Rotate Instructions - LSR", "[cpu][lsr]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+
+	SECTION("LSR Accumulator - Normal shift") {
+		cpu.set_accumulator(0xAA); // 10101010
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x4A); // LSR A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x55); // 01010101
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0201);
+	}
+
+	SECTION("LSR Accumulator - Carry set") {
+		cpu.set_accumulator(0x01); // 00000001
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x4A); // LSR A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("LSR Zero Page") {
+		bus->write(0x0050, 0x80); // Value to shift
+		bus->write(0x0200, 0x46); // LSR zp opcode
+		bus->write(0x0201, 0x50); // Zero page address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x0050) == 0x40);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("LSR Zero Page,X") {
+		cpu.set_x_register(0x05);
+		bus->write(0x0055, 0xFE); // Value to shift at 0x50 + 0x05
+		bus->write(0x0200, 0x56); // LSR zp,X opcode
+		bus->write(0x0201, 0x50); // Zero page base address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x0055) == 0x7F);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("LSR Absolute") {
+		bus->write(0x1234, 0x02); // Value to shift
+		bus->write(0x0200, 0x4E); // LSR abs opcode
+		bus->write(0x0201, 0x34); // Low byte of address
+		bus->write(0x0202, 0x12); // High byte of address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x1234) == 0x01);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("LSR Absolute,X") {
+		cpu.set_x_register(0x10);
+		bus->write(0x1244, 0xFF); // Value to shift at 0x1234 + 0x10
+		bus->write(0x0200, 0x5E); // LSR abs,X opcode
+		bus->write(0x0201, 0x34); // Low byte of base address
+		bus->write(0x0202, 0x12); // High byte of base address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x1244) == 0x7F);
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+}
+
+TEST_CASE("CPU Shift/Rotate Instructions - ROL", "[cpu][rol]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+
+	SECTION("ROL Accumulator - Normal rotate") {
+		cpu.set_accumulator(0x55); // 01010101
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x2A); // ROL A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xAA); // 10101010
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0201);
+	}
+
+	SECTION("ROL Accumulator - With carry in") {
+		cpu.set_accumulator(0x40); // 01000000
+		cpu.set_carry_flag(true);
+		bus->write(0x0200, 0x2A); // ROL A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x81); // 10000001
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("ROL Accumulator - Carry out") {
+		cpu.set_accumulator(0x80); // 10000000
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x2A); // ROL A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("ROL Zero Page") {
+		bus->write(0x0050, 0x40); // Value to rotate
+		cpu.set_carry_flag(true);
+		bus->write(0x0200, 0x26); // ROL zp opcode
+		bus->write(0x0201, 0x50); // Zero page address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x0050) == 0x81);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ROL Zero Page,X") {
+		cpu.set_x_register(0x05);
+		bus->write(0x0055, 0x7F); // Value to rotate at 0x50 + 0x05
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x36); // ROL zp,X opcode
+		bus->write(0x0201, 0x50); // Zero page base address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x0055) == 0xFE);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("ROL Absolute") {
+		bus->write(0x1234, 0xFF); // Value to rotate
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x2E); // ROL abs opcode
+		bus->write(0x0201, 0x34); // Low byte of address
+		bus->write(0x0202, 0x12); // High byte of address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x1234) == 0xFE);
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("ROL Absolute,X") {
+		cpu.set_x_register(0x10);
+		bus->write(0x1244, 0x01); // Value to rotate at 0x1234 + 0x10
+		cpu.set_carry_flag(true);
+		bus->write(0x0200, 0x3E); // ROL abs,X opcode
+		bus->write(0x0201, 0x34); // Low byte of base address
+		bus->write(0x0202, 0x12); // High byte of base address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x1244) == 0x03);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+}
+
+TEST_CASE("CPU Shift/Rotate Instructions - ROR", "[cpu][ror]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+
+	SECTION("ROR Accumulator - Normal rotate") {
+		cpu.set_accumulator(0xAA); // 10101010
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x6A); // ROR A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x55); // 01010101
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0201);
+	}
+
+	SECTION("ROR Accumulator - With carry in") {
+		cpu.set_accumulator(0x02); // 00000010
+		cpu.set_carry_flag(true);
+		bus->write(0x0200, 0x6A); // ROR A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x81); // 10000001
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("ROR Accumulator - Carry out") {
+		cpu.set_accumulator(0x01); // 00000001
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x6A); // ROR A opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("ROR Zero Page") {
+		bus->write(0x0050, 0x02); // Value to rotate
+		cpu.set_carry_flag(true);
+		bus->write(0x0200, 0x66); // ROR zp opcode
+		bus->write(0x0201, 0x50); // Zero page address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x0050) == 0x81);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ROR Zero Page,X") {
+		cpu.set_x_register(0x05);
+		bus->write(0x0055, 0xFE); // Value to rotate at 0x50 + 0x05
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x76); // ROR zp,X opcode
+		bus->write(0x0201, 0x50); // Zero page base address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x0055) == 0x7F);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+
+	SECTION("ROR Absolute") {
+		bus->write(0x1234, 0xFF); // Value to rotate
+		cpu.set_carry_flag(false);
+		bus->write(0x0200, 0x6E); // ROR abs opcode
+		bus->write(0x0201, 0x34); // Low byte of address
+		bus->write(0x0202, 0x12); // High byte of address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x1234) == 0x7F);
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("ROR Absolute,X") {
+		cpu.set_x_register(0x10);
+		bus->write(0x1244, 0x80); // Value to rotate at 0x1234 + 0x10
+		cpu.set_carry_flag(true);
+		bus->write(0x0200, 0x7E); // ROR abs,X opcode
+		bus->write(0x0201, 0x34); // Low byte of base address
+		bus->write(0x0202, 0x12); // High byte of base address
+
+		cpu.execute_instruction();
+
+		REQUIRE(bus->read(0x1244) == 0xC0);
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+}

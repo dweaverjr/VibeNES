@@ -292,6 +292,34 @@ class CPU6502 final : public Component {
 	void EOR_indexed_indirect(); // EOR (zp,X)
 	void EOR_indirect_indexed(); // EOR (zp),Y
 
+	// Shift/Rotate instructions - ASL (Arithmetic Shift Left)
+	void ASL_accumulator(); // ASL A
+	void ASL_zero_page();	// ASL zp
+	void ASL_zero_page_X(); // ASL zp,X
+	void ASL_absolute();	// ASL abs
+	void ASL_absolute_X();	// ASL abs,X
+
+	// Shift/Rotate instructions - LSR (Logical Shift Right)
+	void LSR_accumulator(); // LSR A
+	void LSR_zero_page();	// LSR zp
+	void LSR_zero_page_X(); // LSR zp,X
+	void LSR_absolute();	// LSR abs
+	void LSR_absolute_X();	// LSR abs,X
+
+	// Shift/Rotate instructions - ROL (Rotate Left)
+	void ROL_accumulator(); // ROL A
+	void ROL_zero_page();	// ROL zp
+	void ROL_zero_page_X(); // ROL zp,X
+	void ROL_absolute();	// ROL abs
+	void ROL_absolute_X();	// ROL abs,X
+
+	// Shift/Rotate instructions - ROR (Rotate Right)
+	void ROR_accumulator(); // ROR A
+	void ROR_zero_page();	// ROR zp
+	void ROR_zero_page_X(); // ROR zp,X
+	void ROR_absolute();	// ROR abs
+	void ROR_absolute_X();	// ROR abs,X
+
 	// Increment/Decrement instructions - Register operations
 	void INX(); // Increment X Register
 	void INY(); // Increment Y Register

@@ -416,6 +416,74 @@ void CPU6502::execute_instruction() {
 		EOR_indirect_indexed();
 		break;
 
+	// Shift/Rotate Instructions - ASL (Arithmetic Shift Left)
+	case 0x0A: // ASL - Accumulator
+		ASL_accumulator();
+		break;
+	case 0x06: // ASL - Zero Page
+		ASL_zero_page();
+		break;
+	case 0x16: // ASL - Zero Page,X
+		ASL_zero_page_X();
+		break;
+	case 0x0E: // ASL - Absolute
+		ASL_absolute();
+		break;
+	case 0x1E: // ASL - Absolute,X
+		ASL_absolute_X();
+		break;
+
+	// Shift/Rotate Instructions - LSR (Logical Shift Right)
+	case 0x4A: // LSR - Accumulator
+		LSR_accumulator();
+		break;
+	case 0x46: // LSR - Zero Page
+		LSR_zero_page();
+		break;
+	case 0x56: // LSR - Zero Page,X
+		LSR_zero_page_X();
+		break;
+	case 0x4E: // LSR - Absolute
+		LSR_absolute();
+		break;
+	case 0x5E: // LSR - Absolute,X
+		LSR_absolute_X();
+		break;
+
+	// Shift/Rotate Instructions - ROL (Rotate Left)
+	case 0x2A: // ROL - Accumulator
+		ROL_accumulator();
+		break;
+	case 0x26: // ROL - Zero Page
+		ROL_zero_page();
+		break;
+	case 0x36: // ROL - Zero Page,X
+		ROL_zero_page_X();
+		break;
+	case 0x2E: // ROL - Absolute
+		ROL_absolute();
+		break;
+	case 0x3E: // ROL - Absolute,X
+		ROL_absolute_X();
+		break;
+
+	// Shift/Rotate Instructions - ROR (Rotate Right)
+	case 0x6A: // ROR - Accumulator
+		ROR_accumulator();
+		break;
+	case 0x66: // ROR - Zero Page
+		ROR_zero_page();
+		break;
+	case 0x76: // ROR - Zero Page,X
+		ROR_zero_page_X();
+		break;
+	case 0x6E: // ROR - Absolute
+		ROR_absolute();
+		break;
+	case 0x7E: // ROR - Absolute,X
+		ROR_absolute_X();
+		break;
+
 	// Increment/Decrement Instructions - Register Operations
 	case 0xE8: // INX - Increment X Register
 		INX();
@@ -2070,6 +2138,508 @@ void CPU6502::EOR_indirect_indexed() {
 	accumulator_ ^= value;
 	update_zero_and_negative_flags(accumulator_);
 	// Total: 5 cycles (6 if page boundary crossed)
+}
+
+// Shift/Rotate Instructions - ASL (Arithmetic Shift Left)
+void CPU6502::ASL_accumulator() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+
+	// Set carry flag to bit 7 before shifting
+	status_.flags.carry_flag_ = (accumulator_ & 0x80) != 0;
+
+	// Shift left (multiply by 2)
+	accumulator_ = static_cast<Byte>(accumulator_ << 1);
+
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 2 cycles
+}
+
+void CPU6502::ASL_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(zero_page_addr);
+	// Cycle 4: Write original value back (during operation)
+	write_byte(zero_page_addr, value);
+	// Cycle 5: Write modified value
+
+	// Set carry flag to bit 7 before shifting
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+
+	// Shift left (multiply by 2)
+	value = static_cast<Byte>(value << 1);
+
+	write_byte(zero_page_addr, value);
+	update_zero_and_negative_flags(value);
+	// Total: 5 cycles
+}
+
+void CPU6502::ASL_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to zero page address
+	consume_cycle();
+	Byte final_addr = static_cast<Byte>(zero_page_addr + x_register_);
+	// Cycle 4: Read value from final address
+	Byte value = read_byte(final_addr);
+	// Cycle 5: Write original value back (during operation)
+	write_byte(final_addr, value);
+	// Cycle 6: Write modified value
+
+	// Set carry flag to bit 7 before shifting
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+
+	// Shift left (multiply by 2)
+	value = static_cast<Byte>(value << 1);
+
+	write_byte(final_addr, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::ASL_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte addr_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte addr_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(addr_high) << 8) | addr_low;
+	Byte value = read_byte(address);
+	// Cycle 5: Write original value back (during operation)
+	write_byte(address, value);
+	// Cycle 6: Write modified value
+
+	// Set carry flag to bit 7 before shifting
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+
+	// Shift left (multiply by 2)
+	value = static_cast<Byte>(value << 1);
+
+	write_byte(address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::ASL_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte addr_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte addr_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X register to address
+	Word base_address = (static_cast<Word>(addr_high) << 8) | addr_low;
+	Word final_address = base_address + x_register_;
+	consume_cycle(); // Always takes extra cycle for indexing
+	// Cycle 5: Read value from final address
+	Byte value = read_byte(final_address);
+	// Cycle 6: Write original value back (during operation)
+	write_byte(final_address, value);
+	// Cycle 7: Write modified value
+
+	// Set carry flag to bit 7 before shifting
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+
+	// Shift left (multiply by 2)
+	value = static_cast<Byte>(value << 1);
+
+	write_byte(final_address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 7 cycles
+}
+
+// Shift/Rotate Instructions - LSR (Logical Shift Right)
+void CPU6502::LSR_accumulator() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+
+	// Set carry flag to bit 0 before shifting
+	status_.flags.carry_flag_ = (accumulator_ & 0x01) != 0;
+
+	// Shift right (divide by 2)
+	accumulator_ = static_cast<Byte>(accumulator_ >> 1);
+
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 2 cycles
+}
+
+void CPU6502::LSR_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(zero_page_addr);
+	// Cycle 4: Write original value back (during operation)
+	write_byte(zero_page_addr, value);
+	// Cycle 5: Write modified value
+
+	// Set carry flag to bit 0 before shifting
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+
+	// Shift right (divide by 2)
+	value = static_cast<Byte>(value >> 1);
+
+	write_byte(zero_page_addr, value);
+	update_zero_and_negative_flags(value);
+	// Total: 5 cycles
+}
+
+void CPU6502::LSR_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to zero page address
+	consume_cycle();
+	Byte final_addr = static_cast<Byte>(zero_page_addr + x_register_);
+	// Cycle 4: Read value from final address
+	Byte value = read_byte(final_addr);
+	// Cycle 5: Write original value back (during operation)
+	write_byte(final_addr, value);
+	// Cycle 6: Write modified value
+
+	// Set carry flag to bit 0 before shifting
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+
+	// Shift right (divide by 2)
+	value = static_cast<Byte>(value >> 1);
+
+	write_byte(final_addr, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::LSR_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte addr_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte addr_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(addr_high) << 8) | addr_low;
+	Byte value = read_byte(address);
+	// Cycle 5: Write original value back (during operation)
+	write_byte(address, value);
+	// Cycle 6: Write modified value
+
+	// Set carry flag to bit 0 before shifting
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+
+	// Shift right (divide by 2)
+	value = static_cast<Byte>(value >> 1);
+
+	write_byte(address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::LSR_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte addr_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte addr_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X register to address
+	Word base_address = (static_cast<Word>(addr_high) << 8) | addr_low;
+	Word final_address = base_address + x_register_;
+	consume_cycle(); // Always takes extra cycle for indexing
+	// Cycle 5: Read value from final address
+	Byte value = read_byte(final_address);
+	// Cycle 6: Write original value back (during operation)
+	write_byte(final_address, value);
+	// Cycle 7: Write modified value
+
+	// Set carry flag to bit 0 before shifting
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+
+	// Shift right (divide by 2)
+	value = static_cast<Byte>(value >> 1);
+
+	write_byte(final_address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 7 cycles
+}
+
+// Shift/Rotate Instructions - ROL (Rotate Left)
+void CPU6502::ROL_accumulator() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+
+	// Save bit 7 for carry flag
+	bool new_carry = (accumulator_ & 0x80) != 0;
+
+	// Rotate left: shift left and add old carry to bit 0
+	accumulator_ = static_cast<Byte>((accumulator_ << 1) | (status_.flags.carry_flag_ ? 1 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 2 cycles
+}
+
+void CPU6502::ROL_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(zero_page_addr);
+	// Cycle 4: Write original value back (during operation)
+	write_byte(zero_page_addr, value);
+	// Cycle 5: Write modified value
+
+	// Save bit 7 for carry flag
+	bool new_carry = (value & 0x80) != 0;
+
+	// Rotate left: shift left and add old carry to bit 0
+	value = static_cast<Byte>((value << 1) | (status_.flags.carry_flag_ ? 1 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	write_byte(zero_page_addr, value);
+	update_zero_and_negative_flags(value);
+	// Total: 5 cycles
+}
+
+void CPU6502::ROL_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to zero page address
+	consume_cycle();
+	Byte final_addr = static_cast<Byte>(zero_page_addr + x_register_);
+	// Cycle 4: Read value from final address
+	Byte value = read_byte(final_addr);
+	// Cycle 5: Write original value back (during operation)
+	write_byte(final_addr, value);
+	// Cycle 6: Write modified value
+
+	// Save bit 7 for carry flag
+	bool new_carry = (value & 0x80) != 0;
+
+	// Rotate left: shift left and add old carry to bit 0
+	value = static_cast<Byte>((value << 1) | (status_.flags.carry_flag_ ? 1 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	write_byte(final_addr, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::ROL_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte addr_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte addr_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(addr_high) << 8) | addr_low;
+	Byte value = read_byte(address);
+	// Cycle 5: Write original value back (during operation)
+	write_byte(address, value);
+	// Cycle 6: Write modified value
+
+	// Save bit 7 for carry flag
+	bool new_carry = (value & 0x80) != 0;
+
+	// Rotate left: shift left and add old carry to bit 0
+	value = static_cast<Byte>((value << 1) | (status_.flags.carry_flag_ ? 1 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	write_byte(address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::ROL_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte addr_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte addr_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X register to address
+	Word base_address = (static_cast<Word>(addr_high) << 8) | addr_low;
+	Word final_address = base_address + x_register_;
+	consume_cycle(); // Always takes extra cycle for indexing
+	// Cycle 5: Read value from final address
+	Byte value = read_byte(final_address);
+	// Cycle 6: Write original value back (during operation)
+	write_byte(final_address, value);
+	// Cycle 7: Write modified value
+
+	// Save bit 7 for carry flag
+	bool new_carry = (value & 0x80) != 0;
+
+	// Rotate left: shift left and add old carry to bit 0
+	value = static_cast<Byte>((value << 1) | (status_.flags.carry_flag_ ? 1 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	write_byte(final_address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 7 cycles
+}
+
+// Shift/Rotate Instructions - ROR (Rotate Right)
+void CPU6502::ROR_accumulator() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+
+	// Save bit 0 for carry flag
+	bool new_carry = (accumulator_ & 0x01) != 0;
+
+	// Rotate right: shift right and add old carry to bit 7
+	accumulator_ = static_cast<Byte>((accumulator_ >> 1) | (status_.flags.carry_flag_ ? 0x80 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 2 cycles
+}
+
+void CPU6502::ROR_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(zero_page_addr);
+	// Cycle 4: Write original value back (during operation)
+	write_byte(zero_page_addr, value);
+	// Cycle 5: Write modified value
+
+	// Save bit 0 for carry flag
+	bool new_carry = (value & 0x01) != 0;
+
+	// Rotate right: shift right and add old carry to bit 7
+	value = static_cast<Byte>((value >> 1) | (status_.flags.carry_flag_ ? 0x80 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	write_byte(zero_page_addr, value);
+	update_zero_and_negative_flags(value);
+	// Total: 5 cycles
+}
+
+void CPU6502::ROR_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to zero page address
+	consume_cycle();
+	Byte final_addr = static_cast<Byte>(zero_page_addr + x_register_);
+	// Cycle 4: Read value from final address
+	Byte value = read_byte(final_addr);
+	// Cycle 5: Write original value back (during operation)
+	write_byte(final_addr, value);
+	// Cycle 6: Write modified value
+
+	// Save bit 0 for carry flag
+	bool new_carry = (value & 0x01) != 0;
+
+	// Rotate right: shift right and add old carry to bit 7
+	value = static_cast<Byte>((value >> 1) | (status_.flags.carry_flag_ ? 0x80 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	write_byte(final_addr, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::ROR_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte addr_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte addr_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(addr_high) << 8) | addr_low;
+	Byte value = read_byte(address);
+	// Cycle 5: Write original value back (during operation)
+	write_byte(address, value);
+	// Cycle 6: Write modified value
+
+	// Save bit 0 for carry flag
+	bool new_carry = (value & 0x01) != 0;
+
+	// Rotate right: shift right and add old carry to bit 7
+	value = static_cast<Byte>((value >> 1) | (status_.flags.carry_flag_ ? 0x80 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	write_byte(address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::ROR_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte addr_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte addr_high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X register to address
+	Word base_address = (static_cast<Word>(addr_high) << 8) | addr_low;
+	Word final_address = base_address + x_register_;
+	consume_cycle(); // Always takes extra cycle for indexing
+	// Cycle 5: Read value from final address
+	Byte value = read_byte(final_address);
+	// Cycle 6: Write original value back (during operation)
+	write_byte(final_address, value);
+	// Cycle 7: Write modified value
+
+	// Save bit 0 for carry flag
+	bool new_carry = (value & 0x01) != 0;
+
+	// Rotate right: shift right and add old carry to bit 7
+	value = static_cast<Byte>((value >> 1) | (status_.flags.carry_flag_ ? 0x80 : 0));
+
+	// Set new carry flag
+	status_.flags.carry_flag_ = new_carry;
+
+	write_byte(final_address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 7 cycles
 }
 
 // Increment/Decrement Instructions - Register Operations
