@@ -8,12 +8,12 @@ namespace nes {
 CPU6502::CPU6502(SystemBus *bus)
 	: accumulator_(0), x_register_(0), y_register_(0), stack_pointer_(0xFF) // Stack starts at top
 	  ,
-	  program_counter_(0), status_register_(0x20) // Unused flag always set
+	  program_counter_(0), status_({.status_register_ = 0x20}) // Unused flag always set
 	  ,
 	  bus_(bus), cycles_remaining_(0) {
 
 	// Ensure unused flag is always set
-	unused_flag_ = true;
+	status_.flags.unused_flag_ = true;
 }
 
 void CPU6502::tick(CpuCycle cycles) {
@@ -36,8 +36,8 @@ void CPU6502::reset() {
 	stack_pointer_ = 0xFD; // Stack pointer decremented by 3 on reset
 
 	// Set status flags
-	status_register_ = 0x20; // Unused flag set
-	interrupt_flag_ = true;	 // Interrupts disabled
+	status_.status_register_ = 0x20;	  // Unused flag set
+	status_.flags.interrupt_flag_ = true; // Interrupts disabled
 
 	cycles_remaining_ = CpuCycle{7}; // Reset takes 7 cycles
 }
@@ -50,8 +50,8 @@ void CPU6502::power_on() {
 	stack_pointer_ = 0xFF;
 
 	// Status register power-on state
-	status_register_ = 0x20; // Only unused flag set
-	interrupt_flag_ = true;	 // Interrupts disabled
+	status_.status_register_ = 0x20;	  // Only unused flag set
+	status_.flags.interrupt_flag_ = true; // Interrupts disabled
 
 	// Program counter will be set by reset
 	program_counter_ = 0;
@@ -238,6 +238,98 @@ void CPU6502::execute_instruction() {
 		TYA();
 		break;
 
+	// ADC - Add with Carry
+	case 0x69:
+		ADC_immediate();
+		break;
+	case 0x65:
+		ADC_zero_page();
+		break;
+	case 0x75:
+		ADC_zero_page_X();
+		break;
+	case 0x6D:
+		ADC_absolute();
+		break;
+	case 0x7D:
+		ADC_absolute_X();
+		break;
+	case 0x79:
+		ADC_absolute_Y();
+		break;
+	case 0x61:
+		ADC_indexed_indirect();
+		break;
+	case 0x71:
+		ADC_indirect_indexed();
+		break;
+
+	// SBC - Subtract with Carry
+	case 0xE9:
+		SBC_immediate();
+		break;
+	case 0xE5:
+		SBC_zero_page();
+		break;
+	case 0xF5:
+		SBC_zero_page_X();
+		break;
+	case 0xED:
+		SBC_absolute();
+		break;
+	case 0xFD:
+		SBC_absolute_X();
+		break;
+	case 0xF9:
+		SBC_absolute_Y();
+		break;
+	case 0xE1:
+		SBC_indexed_indirect();
+		break;
+	case 0xF1:
+		SBC_indirect_indexed();
+		break;
+
+	// Increment/Decrement Instructions - Register Operations
+	case 0xE8: // INX - Increment X Register
+		INX();
+		break;
+	case 0xC8: // INY - Increment Y Register
+		INY();
+		break;
+	case 0xCA: // DEX - Decrement X Register
+		DEX();
+		break;
+	case 0x88: // DEY - Decrement Y Register
+		DEY();
+		break;
+
+	// Increment/Decrement Instructions - Memory Operations
+	case 0xE6: // INC Zero Page
+		INC_zero_page();
+		break;
+	case 0xF6: // INC Zero Page,X
+		INC_zero_page_X();
+		break;
+	case 0xEE: // INC Absolute
+		INC_absolute();
+		break;
+	case 0xFE: // INC Absolute,X
+		INC_absolute_X();
+		break;
+	case 0xC6: // DEC Zero Page
+		DEC_zero_page();
+		break;
+	case 0xD6: // DEC Zero Page,X
+		DEC_zero_page_X();
+		break;
+	case 0xCE: // DEC Absolute
+		DEC_absolute();
+		break;
+	case 0xDE: // DEC Absolute,X
+		DEC_absolute_X();
+		break;
+
 	// No Operation
 	case 0xEA:
 		NOP();
@@ -296,16 +388,47 @@ Address CPU6502::pull_word() {
 
 // Flag update helpers
 void CPU6502::update_zero_flag(Byte value) noexcept {
-	zero_flag_ = (value == 0);
+	status_.flags.zero_flag_ = (value == 0);
 }
 
 void CPU6502::update_negative_flag(Byte value) noexcept {
-	negative_flag_ = (value & 0x80) != 0;
+	status_.flags.negative_flag_ = (value & 0x80) != 0;
 }
 
 void CPU6502::update_zero_and_negative_flags(Byte value) noexcept {
 	update_zero_flag(value);
 	update_negative_flag(value);
+}
+
+// Arithmetic operation helpers
+void CPU6502::perform_adc(Byte value) noexcept {
+	// ADC adds the value to the accumulator along with the carry flag
+	Word carry_value = status_.flags.carry_flag_ ? Word{1} : Word{0};
+	// Perform addition with explicit casting to avoid integer promotion warnings
+	Word accumulator_word = static_cast<Word>(accumulator_);
+	Word value_word = static_cast<Word>(value);
+	Word result = static_cast<Word>(accumulator_word + value_word + carry_value);
+
+	// Set carry flag if result exceeds 8 bits
+	status_.flags.carry_flag_ = (result > 0xFF);
+
+	// Set overflow flag if signed addition overflowed
+	// Overflow occurs when both operands have the same sign, but the result has a different sign
+	bool accumulator_sign = (accumulator_ & 0x80) != 0;
+	bool value_sign = (value & 0x80) != 0;
+	bool result_sign = (result & 0x80) != 0;
+	status_.flags.overflow_flag_ = (accumulator_sign == value_sign) && (accumulator_sign != result_sign);
+
+	// Update accumulator and flags
+	accumulator_ = static_cast<Byte>(result & 0xFF);
+	update_zero_and_negative_flags(accumulator_);
+}
+
+void CPU6502::perform_sbc(Byte value) noexcept {
+	// SBC subtracts the value from the accumulator with borrow (inverted carry)
+	// This is equivalent to: A = A + (~value) + carry
+	// In other words, SBC is implemented as ADC with the one's complement of the value
+	perform_adc(static_cast<Byte>(~value));
 }
 
 // Cycle management helpers
@@ -880,6 +1003,488 @@ void CPU6502::STA_indirect_indexed() {
 	// Cycle 6: Store accumulator to final address
 	write_byte(final_address, accumulator_);
 	// Total: 6 cycles (store always takes extra cycle for indexing)
+}
+
+// ADC - Add with Carry implementations
+void CPU6502::ADC_immediate() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch immediate value
+	Byte value = read_byte(program_counter_);
+	program_counter_++;
+
+	// Perform addition with carry
+	perform_adc(value);
+	// Total: 2 cycles
+}
+
+void CPU6502::ADC_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(address);
+
+	perform_adc(value);
+	// Total: 3 cycles
+}
+
+void CPU6502::ADC_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register (with zero page wrap)
+	consume_cycle(); // Internal indexing operation
+	Byte final_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(final_address);
+
+	perform_adc(value);
+	// Total: 4 cycles
+}
+
+void CPU6502::ADC_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+
+	perform_adc(value);
+	// Total: 4 cycles
+}
+
+void CPU6502::ADC_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+
+	// Cycle 4: Read from effective address
+	// Page boundary crossing adds 1 cycle
+	if (crosses_page_boundary(base_address, x_register_)) {
+		consume_cycle(); // Additional cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(effective_address);
+	perform_adc(value);
+	// Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
+}
+
+void CPU6502::ADC_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+
+	// Cycle 4: Read from effective address
+	// Page boundary crossing adds 1 cycle
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Additional cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(effective_address);
+	perform_adc(value);
+	// Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
+}
+
+void CPU6502::ADC_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address (internal operation)
+	consume_cycle();											// Internal indexing operation
+	Byte indexed_address = (base_address + x_register_) & 0xFF; // Wrap within zero page
+	// Cycle 4: Fetch low byte of indirect address
+	Byte low = read_byte(indexed_address);
+	// Cycle 5: Fetch high byte of indirect address
+	Byte high = read_byte((indexed_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 6: Read value from final address
+	Address final_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(final_address);
+
+	perform_adc(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::ADC_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zp_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(zp_address);
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte((zp_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 5: Add Y register to base address and read
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address final_address = base_address + y_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	perform_adc(value);
+	// Total: 5-6 cycles (5 normally, 6 if page boundary crossed)
+}
+
+// SBC - Subtract with Carry implementations
+void CPU6502::SBC_immediate() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch immediate value
+	Byte value = read_byte(program_counter_);
+	program_counter_++;
+
+	// Perform subtraction with carry
+	perform_sbc(value);
+	// Total: 2 cycles
+}
+
+void CPU6502::SBC_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(address);
+
+	perform_sbc(value);
+	// Total: 3 cycles
+}
+
+void CPU6502::SBC_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register (with zero page wrap)
+	consume_cycle(); // Internal indexing operation
+	Byte final_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(final_address);
+
+	perform_sbc(value);
+	// Total: 4 cycles
+}
+
+void CPU6502::SBC_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+
+	perform_sbc(value);
+	// Total: 4 cycles
+}
+
+void CPU6502::SBC_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+
+	// Cycle 4: Read from effective address
+	// Page boundary crossing adds 1 cycle
+	if (crosses_page_boundary(base_address, x_register_)) {
+		consume_cycle(); // Additional cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(effective_address);
+	perform_sbc(value);
+	// Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
+}
+
+void CPU6502::SBC_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+
+	// Cycle 4: Read from effective address
+	// Page boundary crossing adds 1 cycle
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Additional cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(effective_address);
+	perform_sbc(value);
+	// Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
+}
+
+void CPU6502::SBC_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address (internal operation)
+	consume_cycle();											// Internal indexing operation
+	Byte indexed_address = (base_address + x_register_) & 0xFF; // Wrap within zero page
+	// Cycle 4: Fetch low byte of indirect address
+	Byte low = read_byte(indexed_address);
+	// Cycle 5: Fetch high byte of indirect address
+	Byte high = read_byte((indexed_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 6: Read value from final address
+	Address final_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(final_address);
+
+	perform_sbc(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::SBC_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zp_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(zp_address);
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte((zp_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 5: Add Y register to base address and read
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address final_address = base_address + y_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	perform_sbc(value);
+	// Total: 5-6 cycles (5 normally, 6 if page boundary crossed)
+}
+
+// Increment/Decrement Instructions - Register Operations
+void CPU6502::INX() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+	x_register_++;
+	update_zero_and_negative_flags(x_register_);
+	// Total: 2 cycles
+}
+
+void CPU6502::INY() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+	y_register_++;
+	update_zero_and_negative_flags(y_register_);
+	// Total: 2 cycles
+}
+
+void CPU6502::DEX() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+	x_register_--;
+	update_zero_and_negative_flags(x_register_);
+	// Total: 2 cycles
+}
+
+void CPU6502::DEY() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+	y_register_--;
+	update_zero_and_negative_flags(y_register_);
+	// Total: 2 cycles
+}
+
+// Increment/Decrement Instructions - Memory Operations
+void CPU6502::INC_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(address);
+	// Cycle 4: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 5: Write incremented value back
+	write_byte(address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 5 cycles
+}
+
+void CPU6502::INC_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register (with zero page wrap)
+	consume_cycle(); // Internal indexing operation
+	Byte final_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(final_address);
+	// Cycle 5: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 6: Write incremented value back
+	write_byte(final_address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::INC_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+	// Cycle 5: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 6: Write incremented value back
+	write_byte(address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::INC_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 7: Write incremented value back
+	write_byte(effective_address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 7 cycles (RMW instructions always take extra cycle)
+}
+
+void CPU6502::DEC_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(address);
+	// Cycle 4: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 5: Write decremented value back
+	write_byte(address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 5 cycles
+}
+
+void CPU6502::DEC_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register (with zero page wrap)
+	consume_cycle(); // Internal indexing operation
+	Byte final_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(final_address);
+	// Cycle 5: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 6: Write decremented value back
+	write_byte(final_address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::DEC_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+	// Cycle 5: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 6: Write decremented value back
+	write_byte(address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::DEC_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 7: Write decremented value back
+	write_byte(effective_address, value);
+	update_zero_and_negative_flags(value);
+	// Total: 7 cycles (RMW instructions always take extra cycle)
 }
 
 } // namespace nes

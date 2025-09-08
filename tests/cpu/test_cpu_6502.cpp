@@ -1664,3 +1664,321 @@ TEST_CASE("CPU 6502 - STA Indirect Indexed (zp),Y", "[STA][indirect]") {
 		REQUIRE(cpu.get_program_counter() == 0x0302);
 	}
 }
+
+TEST_CASE("CPU ADC - Add with Carry", "[cpu][instructions][arithmetic]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("ADC Immediate - Basic addition") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x10);
+		cpu.set_carry_flag(false);
+
+		// Write instruction: ADC #$20 = 0x69 0x20
+		bus->write(0x0200, 0x69);
+		bus->write(0x0201, 0x20);
+
+		cpu.tick(CpuCycle{2});
+
+		REQUIRE(cpu.get_accumulator() == 0x30);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+		REQUIRE(!cpu.get_carry_flag());
+		REQUIRE(!cpu.get_zero_flag());
+		REQUIRE(!cpu.get_negative_flag());
+		REQUIRE(!cpu.get_overflow_flag());
+	}
+
+	SECTION("ADC Immediate - Addition with carry") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x50);
+		cpu.set_carry_flag(true);
+
+		// Write instruction: ADC #$30 = 0x69 0x30
+		bus->write(0x0200, 0x69);
+		bus->write(0x0201, 0x30);
+
+		cpu.tick(CpuCycle{2});
+
+		REQUIRE(cpu.get_accumulator() == 0x81); // 0x50 + 0x30 + 1 = 0x81
+		REQUIRE(!cpu.get_carry_flag());
+		REQUIRE(!cpu.get_zero_flag());
+		REQUIRE(cpu.get_negative_flag()); // Result is negative (bit 7 set)
+		REQUIRE(cpu.get_overflow_flag()); // Positive + Positive = Negative (overflow)
+	}
+
+	SECTION("ADC Immediate - Carry flag set") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0xFF);
+		cpu.set_carry_flag(false);
+
+		// Write instruction: ADC #$01 = 0x69 0x01
+		bus->write(0x0200, 0x69);
+		bus->write(0x0201, 0x01);
+
+		cpu.tick(CpuCycle{2});
+
+		REQUIRE(cpu.get_accumulator() == 0x00); // 0xFF + 0x01 = 0x100, wraps to 0x00
+		REQUIRE(cpu.get_carry_flag());			// Carry set due to overflow
+		REQUIRE(cpu.get_zero_flag());			// Result is zero
+		REQUIRE(!cpu.get_negative_flag());
+		REQUIRE(!cpu.get_overflow_flag()); // Negative + Positive = Positive (no overflow)
+	}
+
+	SECTION("ADC Zero Page") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x40);
+		cpu.set_carry_flag(false);
+
+		// Write instruction: ADC $80 = 0x65 0x80
+		bus->write(0x0200, 0x65);
+		bus->write(0x0201, 0x80);
+		bus->write(0x0080, 0x25); // Value at zero page $80
+
+		cpu.tick(CpuCycle{3});
+
+		REQUIRE(cpu.get_accumulator() == 0x65); // 0x40 + 0x25 = 0x65
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ADC Absolute,X with page crossing") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x10);
+		cpu.set_x_register(0x01); // Small offset to cross page boundary
+		cpu.set_carry_flag(false);
+
+		// Write instruction: ADC $06FF,X = 0x7D 0xFF 0x06
+		// $06FF + $01 = $0700 (crosses from page $06 to page $07)
+		bus->write(0x0200, 0x7D);
+		bus->write(0x0201, 0xFF);
+		bus->write(0x0202, 0x06);
+		// Add a valid instruction after our ADC to prevent unknown opcode error
+		bus->write(0x0203, 0xA9); // LDA #$00
+		bus->write(0x0204, 0x00);
+		bus->write(0x0700, 0x30); // Value at $06FF + $01 = $0700 (page boundary crossed)
+
+		cpu.tick(CpuCycle{5}); // 5 cycles due to page boundary crossing
+
+		REQUIRE(cpu.get_accumulator() == 0x40); // 0x10 + 0x30 = 0x40
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("ADC Absolute,X without page crossing") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x20);
+		cpu.set_x_register(0x10); // Small offset, no page crossing
+		cpu.set_carry_flag(false);
+
+		// Write instruction: ADC $0600,X = 0x7D 0x00 0x06
+		// $0600 + $10 = $0610 (stays within page $06)
+		bus->write(0x0200, 0x7D);
+		bus->write(0x0201, 0x00);
+		bus->write(0x0202, 0x06);
+		// Add a valid instruction after our ADC to prevent unknown opcode error
+		bus->write(0x0203, 0xA9); // LDA #$00
+		bus->write(0x0204, 0x00);
+		bus->write(0x0610, 0x25); // Value at $0600 + $10 = $0610 (no page crossing)
+
+		cpu.tick(CpuCycle{4}); // 4 cycles - no page boundary crossing
+
+		REQUIRE(cpu.get_accumulator() == 0x45); // 0x20 + 0x25 = 0x45
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+}
+
+TEST_CASE("CPU SBC - Subtract with Carry", "[cpu][instructions][arithmetic]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("SBC Immediate - Basic subtraction") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x50);
+		cpu.set_carry_flag(true); // Carry set means no borrow
+
+		// Write instruction: SBC #$30 = 0xE9 0x30
+		bus->write(0x0200, 0xE9);
+		bus->write(0x0201, 0x30);
+
+		cpu.tick(CpuCycle{2});
+
+		REQUIRE(cpu.get_accumulator() == 0x20); // 0x50 - 0x30 = 0x20
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+		REQUIRE(cpu.get_carry_flag()); // No borrow needed
+		REQUIRE(!cpu.get_zero_flag());
+		REQUIRE(!cpu.get_negative_flag());
+		REQUIRE(!cpu.get_overflow_flag());
+	}
+
+	SECTION("SBC Immediate - Subtraction with borrow") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x50);
+		cpu.set_carry_flag(false); // Carry clear means borrow
+
+		// Write instruction: SBC #$30 = 0xE9 0x30
+		bus->write(0x0200, 0xE9);
+		bus->write(0x0201, 0x30);
+
+		cpu.tick(CpuCycle{2});
+
+		REQUIRE(cpu.get_accumulator() == 0x1F); // 0x50 - 0x30 - 1 = 0x1F
+		REQUIRE(cpu.get_carry_flag());			// No borrow needed for result
+		REQUIRE(!cpu.get_zero_flag());
+		REQUIRE(!cpu.get_negative_flag());
+		REQUIRE(!cpu.get_overflow_flag());
+	}
+
+	SECTION("SBC Immediate - Result goes negative") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x30);
+		cpu.set_carry_flag(true);
+
+		// Write instruction: SBC #$50 = 0xE9 0x50
+		bus->write(0x0200, 0xE9);
+		bus->write(0x0201, 0x50);
+
+		cpu.tick(CpuCycle{2});
+
+		REQUIRE(cpu.get_accumulator() == 0xE0); // 0x30 - 0x50 = 0xE0 (two's complement)
+		REQUIRE(!cpu.get_carry_flag());			// Borrow needed
+		REQUIRE(!cpu.get_zero_flag());
+		REQUIRE(cpu.get_negative_flag()); // Result is negative
+	}
+
+	SECTION("SBC Immediate - Result is zero") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x50);
+		cpu.set_carry_flag(true);
+
+		// Write instruction: SBC #$50 = 0xE9 0x50
+		bus->write(0x0200, 0xE9);
+		bus->write(0x0201, 0x50);
+
+		cpu.tick(CpuCycle{2});
+
+		REQUIRE(cpu.get_accumulator() == 0x00); // 0x50 - 0x50 = 0x00
+		REQUIRE(cpu.get_carry_flag());			// No borrow needed
+		REQUIRE(cpu.get_zero_flag());			// Result is zero
+		REQUIRE(!cpu.get_negative_flag());
+		REQUIRE(!cpu.get_overflow_flag());
+	}
+
+	SECTION("SBC Zero Page") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x80);
+		cpu.set_carry_flag(true);
+
+		// Write instruction: SBC $90 = 0xE5 0x90
+		bus->write(0x0200, 0xE5);
+		bus->write(0x0201, 0x90);
+		bus->write(0x0090, 0x20); // Value at zero page $90
+
+		cpu.tick(CpuCycle{3});
+
+		REQUIRE(cpu.get_accumulator() == 0x60); // 0x80 - 0x20 = 0x60
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("SBC Overflow flag test") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x80); // -128 in signed
+		cpu.set_carry_flag(true);
+
+		// Write instruction: SBC #$01 = 0xE9 0x01
+		bus->write(0x0200, 0xE9);
+		bus->write(0x0201, 0x01);
+
+		cpu.tick(CpuCycle{2});
+
+		REQUIRE(cpu.get_accumulator() == 0x7F); // -128 - 1 = 127 (overflow)
+		REQUIRE(cpu.get_carry_flag());
+		REQUIRE(!cpu.get_zero_flag());
+		REQUIRE(!cpu.get_negative_flag());
+		REQUIRE(cpu.get_overflow_flag()); // Negative - Positive = Positive (overflow)
+	}
+}
+
+TEST_CASE("CPU ADC/SBC - All Addressing Modes", "[cpu][instructions][arithmetic][addressing]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("ADC Zero Page,X") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x10);
+		cpu.set_x_register(0x05);
+		cpu.set_carry_flag(false);
+
+		// Write instruction: ADC $80,X = 0x75 0x80
+		bus->write(0x0200, 0x75);
+		bus->write(0x0201, 0x80);
+		bus->write(0x0085, 0x25); // Value at $80 + $05 = $85
+
+		cpu.tick(CpuCycle{4});
+
+		REQUIRE(cpu.get_accumulator() == 0x35); // 0x10 + 0x25 = 0x35
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ADC Absolute") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x20);
+		cpu.set_carry_flag(false);
+
+		// Write instruction: ADC $0600 = 0x6D 0x00 0x06
+		bus->write(0x0200, 0x6D);
+		bus->write(0x0201, 0x00);
+		bus->write(0x0202, 0x06);
+		bus->write(0x0600, 0x30); // Value at $0600
+
+		cpu.tick(CpuCycle{4});
+
+		REQUIRE(cpu.get_accumulator() == 0x50); // 0x20 + 0x30 = 0x50
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("ADC Indexed Indirect") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x40);
+		cpu.set_x_register(0x04);
+		cpu.set_carry_flag(false);
+
+		// Write instruction: ADC ($20,X) = 0x61 0x20
+		bus->write(0x0200, 0x61);
+		bus->write(0x0201, 0x20);
+
+		// Setup pointer at $20 + $04 = $24
+		bus->write(0x0024, 0x00); // Low byte of target address
+		bus->write(0x0025, 0x07); // High byte of target address
+		bus->write(0x0700, 0x15); // Value at target address $0700
+
+		cpu.tick(CpuCycle{6});
+
+		REQUIRE(cpu.get_accumulator() == 0x55); // 0x40 + 0x15 = 0x55
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("SBC Indirect Indexed") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_accumulator(0x80);
+		cpu.set_y_register(0x10);
+		cpu.set_carry_flag(true);
+
+		// Write instruction: SBC ($30),Y = 0xF1 0x30
+		bus->write(0x0200, 0xF1);
+		bus->write(0x0201, 0x30);
+
+		// Setup pointer at $30
+		bus->write(0x0030, 0x00); // Low byte of base address
+		bus->write(0x0031, 0x05); // High byte of base address
+		bus->write(0x0510, 0x20); // Value at $0500 + $10 = $0510
+
+		cpu.tick(CpuCycle{5}); // 5 cycles, no page crossing
+
+		REQUIRE(cpu.get_accumulator() == 0x60); // 0x80 - 0x20 = 0x60
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+}

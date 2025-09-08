@@ -15,6 +15,14 @@ class CPU6502 final : public Component {
 	explicit CPU6502(SystemBus *bus);
 	~CPU6502() = default;
 
+	// Disable copy constructor and copy assignment operator (non-copyable)
+	CPU6502(const CPU6502 &) = delete;
+	CPU6502 &operator=(const CPU6502 &) = delete;
+
+	// Default move constructor and move assignment operator
+	CPU6502(CPU6502 &&) = default;
+	CPU6502 &operator=(CPU6502 &&) = default;
+
 	// Component interface
 	void tick(CpuCycle cycles) override;
 	void reset() override;
@@ -41,30 +49,30 @@ class CPU6502 final : public Component {
 		return program_counter_;
 	}
 	[[nodiscard]] Byte get_status_register() const noexcept {
-		return status_register_;
+		return status_.status_register_;
 	}
 
 	// Individual flag access
 	[[nodiscard]] bool get_carry_flag() const noexcept {
-		return carry_flag_;
+		return status_.flags.carry_flag_;
 	}
 	[[nodiscard]] bool get_zero_flag() const noexcept {
-		return zero_flag_;
+		return status_.flags.zero_flag_;
 	}
 	[[nodiscard]] bool get_interrupt_flag() const noexcept {
-		return interrupt_flag_;
+		return status_.flags.interrupt_flag_;
 	}
 	[[nodiscard]] bool get_decimal_flag() const noexcept {
-		return decimal_flag_;
+		return status_.flags.decimal_flag_;
 	}
 	[[nodiscard]] bool get_break_flag() const noexcept {
-		return break_flag_;
+		return status_.flags.break_flag_;
 	}
 	[[nodiscard]] bool get_overflow_flag() const noexcept {
-		return overflow_flag_;
+		return status_.flags.overflow_flag_;
 	}
 	[[nodiscard]] bool get_negative_flag() const noexcept {
-		return negative_flag_;
+		return status_.flags.negative_flag_;
 	}
 
 	// Test interface - allows setting registers for testing
@@ -80,11 +88,26 @@ class CPU6502 final : public Component {
 	void set_program_counter(Address value) noexcept {
 		program_counter_ = value;
 	}
+	void set_carry_flag(bool value) noexcept {
+		status_.flags.carry_flag_ = value;
+	}
 	void set_zero_flag(bool value) noexcept {
-		zero_flag_ = value;
+		status_.flags.zero_flag_ = value;
+	}
+	void set_interrupt_flag(bool value) noexcept {
+		status_.flags.interrupt_flag_ = value;
+	}
+	void set_decimal_flag(bool value) noexcept {
+		status_.flags.decimal_flag_ = value;
+	}
+	void set_break_flag(bool value) noexcept {
+		status_.flags.break_flag_ = value;
+	}
+	void set_overflow_flag(bool value) noexcept {
+		status_.flags.overflow_flag_ = value;
 	}
 	void set_negative_flag(bool value) noexcept {
-		negative_flag_ = value;
+		status_.flags.negative_flag_ = value;
 	}
 
   private:
@@ -96,9 +119,9 @@ class CPU6502 final : public Component {
 	Address program_counter_; // PC register
 
 	// Status flags (P register) - using union for individual flag access
-	union {
+	union StatusRegister {
 		Byte status_register_;
-		struct {
+		struct Flags {
 			bool carry_flag_ : 1;	  // C - Carry flag
 			bool zero_flag_ : 1;	  // Z - Zero flag
 			bool interrupt_flag_ : 1; // I - Interrupt disable flag
@@ -107,8 +130,8 @@ class CPU6502 final : public Component {
 			bool unused_flag_ : 1;	  // - Always set to 1
 			bool overflow_flag_ : 1;  // V - Overflow flag
 			bool negative_flag_ : 1;  // N - Negative flag
-		};
-	};
+		} flags;
+	} status_;
 
 	// Bus connection
 	SystemBus *bus_;
@@ -131,6 +154,10 @@ class CPU6502 final : public Component {
 	void update_zero_flag(Byte value) noexcept;
 	void update_negative_flag(Byte value) noexcept;
 	void update_zero_and_negative_flags(Byte value) noexcept;
+
+	// Arithmetic operation helpers
+	void perform_adc(Byte value) noexcept;
+	void perform_sbc(Byte value) noexcept;
 
 	// Cycle management helpers
 	void consume_cycle() noexcept;
@@ -193,6 +220,42 @@ class CPU6502 final : public Component {
 	void TAY(); // Transfer Accumulator to Y
 	void TXA(); // Transfer X to Accumulator
 	void TYA(); // Transfer Y to Accumulator
+
+	// Arithmetic instructions - ADC (Add with Carry)
+	void ADC_immediate();		 // ADC #value
+	void ADC_zero_page();		 // ADC zp
+	void ADC_zero_page_X();		 // ADC zp,X
+	void ADC_absolute();		 // ADC abs
+	void ADC_absolute_X();		 // ADC abs,X
+	void ADC_absolute_Y();		 // ADC abs,Y
+	void ADC_indexed_indirect(); // ADC (zp,X)
+	void ADC_indirect_indexed(); // ADC (zp),Y
+
+	// Arithmetic instructions - SBC (Subtract with Carry)
+	void SBC_immediate();		 // SBC #value
+	void SBC_zero_page();		 // SBC zp
+	void SBC_zero_page_X();		 // SBC zp,X
+	void SBC_absolute();		 // SBC abs
+	void SBC_absolute_X();		 // SBC abs,X
+	void SBC_absolute_Y();		 // SBC abs,Y
+	void SBC_indexed_indirect(); // SBC (zp,X)
+	void SBC_indirect_indexed(); // SBC (zp),Y
+
+	// Increment/Decrement instructions - Register operations
+	void INX(); // Increment X Register
+	void INY(); // Increment Y Register
+	void DEX(); // Decrement X Register
+	void DEY(); // Decrement Y Register
+
+	// Increment/Decrement instructions - Memory operations
+	void INC_zero_page();	// INC zp
+	void INC_zero_page_X(); // INC zp,X
+	void INC_absolute();	// INC abs
+	void INC_absolute_X();	// INC abs,X
+	void DEC_zero_page();	// DEC zp
+	void DEC_zero_page_X(); // DEC zp,X
+	void DEC_absolute();	// DEC abs
+	void DEC_absolute_X();	// DEC abs,X
 
 	// No operation
 	void NOP(); // No Operation
