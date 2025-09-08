@@ -262,6 +262,36 @@ class CPU6502 final : public Component {
 	void CPY_zero_page(); // CPY zp
 	void CPY_absolute();  // CPY abs
 
+	// Logical instructions - AND (Bitwise AND with Accumulator)
+	void AND_immediate();		 // AND #value
+	void AND_zero_page();		 // AND zp
+	void AND_zero_page_X();		 // AND zp,X
+	void AND_absolute();		 // AND abs
+	void AND_absolute_X();		 // AND abs,X
+	void AND_absolute_Y();		 // AND abs,Y
+	void AND_indexed_indirect(); // AND (zp,X)
+	void AND_indirect_indexed(); // AND (zp),Y
+
+	// Logical instructions - ORA (Bitwise OR with Accumulator)
+	void ORA_immediate();		 // ORA #value
+	void ORA_zero_page();		 // ORA zp
+	void ORA_zero_page_X();		 // ORA zp,X
+	void ORA_absolute();		 // ORA abs
+	void ORA_absolute_X();		 // ORA abs,X
+	void ORA_absolute_Y();		 // ORA abs,Y
+	void ORA_indexed_indirect(); // ORA (zp,X)
+	void ORA_indirect_indexed(); // ORA (zp),Y
+
+	// Logical instructions - EOR (Bitwise Exclusive OR with Accumulator)
+	void EOR_immediate();		 // EOR #value
+	void EOR_zero_page();		 // EOR zp
+	void EOR_zero_page_X();		 // EOR zp,X
+	void EOR_absolute();		 // EOR abs
+	void EOR_absolute_X();		 // EOR abs,X
+	void EOR_absolute_Y();		 // EOR abs,Y
+	void EOR_indexed_indirect(); // EOR (zp,X)
+	void EOR_indirect_indexed(); // EOR (zp),Y
+
 	// Increment/Decrement instructions - Register operations
 	void INX(); // Increment X Register
 	void INY(); // Increment Y Register

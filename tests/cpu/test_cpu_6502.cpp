@@ -2362,3 +2362,483 @@ TEST_CASE("CPU Compare Instructions - CPY", "[cpu][instructions][compare][CPY]")
 		REQUIRE(cpu.get_program_counter() == 0x0203);
 	}
 }
+
+TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+
+	SECTION("AND Immediate - Basic operation") {
+		cpu.set_accumulator(0xFF);
+		bus->write(0x0200, 0x29); // AND immediate opcode
+		bus->write(0x0201, 0x0F); // AND with 0x0F
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x0F);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("AND Immediate - Zero result") {
+		cpu.set_accumulator(0xF0);
+		bus->write(0x0200, 0x29); // AND immediate opcode
+		bus->write(0x0201, 0x0F); // AND with 0x0F
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("AND Immediate - Negative result") {
+		cpu.set_accumulator(0xFF);
+		bus->write(0x0200, 0x29); // AND immediate opcode
+		bus->write(0x0201, 0x80); // AND with 0x80
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x80);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("AND Zero Page") {
+		cpu.set_accumulator(0xFF);
+		bus->write(0x0200, 0x25); // AND zero page opcode
+		bus->write(0x0201, 0x80); // Zero page address 0x80
+		bus->write(0x0080, 0x55); // Value at zero page 0x80
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x55);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("AND Zero Page,X") {
+		cpu.set_accumulator(0xFF);
+		cpu.set_x_register(0x05);
+		bus->write(0x0200, 0x35); // AND zero page,X opcode
+		bus->write(0x0201, 0x80); // Base zero page address 0x80
+		bus->write(0x0085, 0x33); // Value at zero page 0x85 (0x80 + 0x05)
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x33);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("AND Absolute") {
+		cpu.set_accumulator(0xFF);
+		bus->write(0x0200, 0x2D); // AND absolute opcode
+		bus->write(0x0201, 0x00); // Low byte of address
+		bus->write(0x0202, 0x15); // High byte of address (0x1500)
+		bus->write(0x1500, 0xAA); // Value at absolute address
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xAA);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("AND Absolute,X") {
+		cpu.set_accumulator(0xFF);
+		cpu.set_x_register(0x10);
+		bus->write(0x0200, 0x3D); // AND absolute,X opcode
+		bus->write(0x0201, 0x00); // Low byte of base address
+		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
+		bus->write(0x1510, 0x77); // Value at 0x1500 + 0x10
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x77);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("AND Absolute,Y") {
+		cpu.set_accumulator(0xFF);
+		cpu.set_y_register(0x20);
+		bus->write(0x0200, 0x39); // AND absolute,Y opcode
+		bus->write(0x0201, 0x00); // Low byte of base address
+		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
+		bus->write(0x1520, 0x11); // Value at 0x1500 + 0x20
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x11);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("AND (Indirect,X)") {
+		cpu.set_accumulator(0xFF);
+		cpu.set_x_register(0x04);
+		bus->write(0x0200, 0x21); // AND (zp,X) opcode
+		bus->write(0x0201, 0x20); // Zero page address 0x20
+		// Pointer at 0x24 (0x20 + 0x04) points to 0x1500
+		bus->write(0x0024, 0x00); // Low byte of target address
+		bus->write(0x0025, 0x15); // High byte of target address
+		bus->write(0x1500, 0x66); // Value at target address
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x66);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("AND (Indirect),Y") {
+		cpu.set_accumulator(0xFF);
+		cpu.set_y_register(0x10);
+		bus->write(0x0200, 0x31); // AND (zp),Y opcode
+		bus->write(0x0201, 0x20); // Zero page address 0x20
+		// Pointer at 0x20 points to 0x1500
+		bus->write(0x0020, 0x00); // Low byte of base address
+		bus->write(0x0021, 0x15); // High byte of base address
+		bus->write(0x1510, 0x44); // Value at 0x1500 + 0x10
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x44);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+}
+
+TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+
+	SECTION("ORA Immediate - Basic operation") {
+		cpu.set_accumulator(0x0F);
+		bus->write(0x0200, 0x09); // ORA immediate opcode
+		bus->write(0x0201, 0xF0); // OR with 0xF0
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xFF);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ORA Immediate - Zero result") {
+		cpu.set_accumulator(0x00);
+		bus->write(0x0200, 0x09); // ORA immediate opcode
+		bus->write(0x0201, 0x00); // OR with 0x00
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ORA Immediate - Setting bits") {
+		cpu.set_accumulator(0x55); // 01010101
+		bus->write(0x0200, 0x09);  // ORA immediate opcode
+		bus->write(0x0201, 0xAA);  // OR with 10101010
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xFF); // Should be 11111111
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ORA Zero Page") {
+		cpu.set_accumulator(0x0F);
+		bus->write(0x0200, 0x05); // ORA zero page opcode
+		bus->write(0x0201, 0x80); // Zero page address 0x80
+		bus->write(0x0080, 0x70); // Value at zero page 0x80
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x7F);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ORA Zero Page,X") {
+		cpu.set_accumulator(0x11);
+		cpu.set_x_register(0x05);
+		bus->write(0x0200, 0x15); // ORA zero page,X opcode
+		bus->write(0x0201, 0x80); // Base zero page address 0x80
+		bus->write(0x0085, 0x22); // Value at zero page 0x85 (0x80 + 0x05)
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x33);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ORA Absolute") {
+		cpu.set_accumulator(0x0F);
+		bus->write(0x0200, 0x0D); // ORA absolute opcode
+		bus->write(0x0201, 0x00); // Low byte of address
+		bus->write(0x0202, 0x15); // High byte of address (0x1500)
+		bus->write(0x1500, 0x80); // Value at absolute address
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x8F);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("ORA Absolute,X") {
+		cpu.set_accumulator(0x01);
+		cpu.set_x_register(0x10);
+		bus->write(0x0200, 0x1D); // ORA absolute,X opcode
+		bus->write(0x0201, 0x00); // Low byte of base address
+		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
+		bus->write(0x1510, 0x02); // Value at 0x1500 + 0x10
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x03);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("ORA Absolute,Y") {
+		cpu.set_accumulator(0x10);
+		cpu.set_y_register(0x20);
+		bus->write(0x0200, 0x19); // ORA absolute,Y opcode
+		bus->write(0x0201, 0x00); // Low byte of base address
+		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
+		bus->write(0x1520, 0x20); // Value at 0x1500 + 0x20
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x30);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("ORA (Indirect,X)") {
+		cpu.set_accumulator(0x08);
+		cpu.set_x_register(0x04);
+		bus->write(0x0200, 0x01); // ORA (zp,X) opcode
+		bus->write(0x0201, 0x20); // Zero page address 0x20
+		// Pointer at 0x24 (0x20 + 0x04) points to 0x1500
+		bus->write(0x0024, 0x00); // Low byte of target address
+		bus->write(0x0025, 0x15); // High byte of target address
+		bus->write(0x1500, 0x04); // Value at target address
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x0C);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("ORA (Indirect),Y") {
+		cpu.set_accumulator(0x40);
+		cpu.set_y_register(0x10);
+		bus->write(0x0200, 0x11); // ORA (zp),Y opcode
+		bus->write(0x0201, 0x20); // Zero page address 0x20
+		// Pointer at 0x20 points to 0x1500
+		bus->write(0x0020, 0x00); // Low byte of base address
+		bus->write(0x0021, 0x15); // High byte of base address
+		bus->write(0x1510, 0x80); // Value at 0x1500 + 0x10
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xC0);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+}
+
+TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+
+	SECTION("EOR Immediate - Basic operation") {
+		cpu.set_accumulator(0xFF);
+		bus->write(0x0200, 0x49); // EOR immediate opcode
+		bus->write(0x0201, 0x0F); // XOR with 0x0F
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xF0);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("EOR Immediate - Zero result") {
+		cpu.set_accumulator(0xAA);
+		bus->write(0x0200, 0x49); // EOR immediate opcode
+		bus->write(0x0201, 0xAA); // XOR with same value
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("EOR Immediate - Bit flipping") {
+		cpu.set_accumulator(0x55); // 01010101
+		bus->write(0x0200, 0x49);  // EOR immediate opcode
+		bus->write(0x0201, 0xFF);  // XOR with 11111111
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xAA); // Should be 10101010
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("EOR Zero Page") {
+		cpu.set_accumulator(0x33);
+		bus->write(0x0200, 0x45); // EOR zero page opcode
+		bus->write(0x0201, 0x80); // Zero page address 0x80
+		bus->write(0x0080, 0x55); // Value at zero page 0x80
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x66);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("EOR Zero Page,X") {
+		cpu.set_accumulator(0xFF);
+		cpu.set_x_register(0x05);
+		bus->write(0x0200, 0x55); // EOR zero page,X opcode
+		bus->write(0x0201, 0x80); // Base zero page address 0x80
+		bus->write(0x0085, 0x0F); // Value at zero page 0x85 (0x80 + 0x05)
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xF0);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("EOR Absolute") {
+		cpu.set_accumulator(0x88);
+		bus->write(0x0200, 0x4D); // EOR absolute opcode
+		bus->write(0x0201, 0x00); // Low byte of address
+		bus->write(0x0202, 0x15); // High byte of address (0x1500)
+		bus->write(0x1500, 0x77); // Value at absolute address
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xFF);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("EOR Absolute,X") {
+		cpu.set_accumulator(0xC0);
+		cpu.set_x_register(0x10);
+		bus->write(0x0200, 0x5D); // EOR absolute,X opcode
+		bus->write(0x0201, 0x00); // Low byte of base address
+		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
+		bus->write(0x1510, 0x30); // Value at 0x1500 + 0x10
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xF0);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("EOR Absolute,Y") {
+		cpu.set_accumulator(0x11);
+		cpu.set_y_register(0x20);
+		bus->write(0x0200, 0x59); // EOR absolute,Y opcode
+		bus->write(0x0201, 0x00); // Low byte of base address
+		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
+		bus->write(0x1520, 0x22); // Value at 0x1500 + 0x20
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0x33);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0203);
+	}
+
+	SECTION("EOR (Indirect,X)") {
+		cpu.set_accumulator(0x99);
+		cpu.set_x_register(0x04);
+		bus->write(0x0200, 0x41); // EOR (zp,X) opcode
+		bus->write(0x0201, 0x20); // Zero page address 0x20
+		// Pointer at 0x24 (0x20 + 0x04) points to 0x1500
+		bus->write(0x0024, 0x00); // Low byte of target address
+		bus->write(0x0025, 0x15); // High byte of target address
+		bus->write(0x1500, 0x66); // Value at target address
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xFF);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("EOR (Indirect),Y") {
+		cpu.set_accumulator(0x0F);
+		cpu.set_y_register(0x10);
+		bus->write(0x0200, 0x51); // EOR (zp),Y opcode
+		bus->write(0x0201, 0x20); // Zero page address 0x20
+		// Pointer at 0x20 points to 0x1500
+		bus->write(0x0020, 0x00); // Low byte of base address
+		bus->write(0x0021, 0x15); // High byte of base address
+		bus->write(0x1510, 0xF0); // Value at 0x1500 + 0x10
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_accumulator() == 0xFF);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+}

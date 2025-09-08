@@ -338,6 +338,84 @@ void CPU6502::execute_instruction() {
 		CPY_absolute();
 		break;
 
+	// Logical Instructions - AND (Bitwise AND with Accumulator)
+	case 0x29: // AND - Immediate
+		AND_immediate();
+		break;
+	case 0x25: // AND - Zero Page
+		AND_zero_page();
+		break;
+	case 0x35: // AND - Zero Page,X
+		AND_zero_page_X();
+		break;
+	case 0x2D: // AND - Absolute
+		AND_absolute();
+		break;
+	case 0x3D: // AND - Absolute,X
+		AND_absolute_X();
+		break;
+	case 0x39: // AND - Absolute,Y
+		AND_absolute_Y();
+		break;
+	case 0x21: // AND - (Indirect,X)
+		AND_indexed_indirect();
+		break;
+	case 0x31: // AND - (Indirect),Y
+		AND_indirect_indexed();
+		break;
+
+	// Logical Instructions - ORA (Bitwise OR with Accumulator)
+	case 0x09: // ORA - Immediate
+		ORA_immediate();
+		break;
+	case 0x05: // ORA - Zero Page
+		ORA_zero_page();
+		break;
+	case 0x15: // ORA - Zero Page,X
+		ORA_zero_page_X();
+		break;
+	case 0x0D: // ORA - Absolute
+		ORA_absolute();
+		break;
+	case 0x1D: // ORA - Absolute,X
+		ORA_absolute_X();
+		break;
+	case 0x19: // ORA - Absolute,Y
+		ORA_absolute_Y();
+		break;
+	case 0x01: // ORA - (Indirect,X)
+		ORA_indexed_indirect();
+		break;
+	case 0x11: // ORA - (Indirect),Y
+		ORA_indirect_indexed();
+		break;
+
+	// Logical Instructions - EOR (Bitwise Exclusive OR with Accumulator)
+	case 0x49: // EOR - Immediate
+		EOR_immediate();
+		break;
+	case 0x45: // EOR - Zero Page
+		EOR_zero_page();
+		break;
+	case 0x55: // EOR - Zero Page,X
+		EOR_zero_page_X();
+		break;
+	case 0x4D: // EOR - Absolute
+		EOR_absolute();
+		break;
+	case 0x5D: // EOR - Absolute,X
+		EOR_absolute_X();
+		break;
+	case 0x59: // EOR - Absolute,Y
+		EOR_absolute_Y();
+		break;
+	case 0x41: // EOR - (Indirect,X)
+		EOR_indexed_indirect();
+		break;
+	case 0x51: // EOR - (Indirect),Y
+		EOR_indirect_indexed();
+		break;
+
 	// Increment/Decrement Instructions - Register Operations
 	case 0xE8: // INX - Increment X Register
 		INX();
@@ -1560,6 +1638,438 @@ void CPU6502::CPY_absolute() {
 	Byte value = read_byte(address);
 	perform_compare(y_register_, value);
 	// Total: 4 cycles
+}
+
+// Logical Instructions - AND (Bitwise AND with Accumulator)
+void CPU6502::AND_immediate() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch immediate value
+	Byte value = read_byte(program_counter_);
+	program_counter_++;
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 2 cycles
+}
+
+void CPU6502::AND_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(address);
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 3 cycles
+}
+
+void CPU6502::AND_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to address (wraps in zero page)
+	Byte address = static_cast<Byte>(base_address + x_register_);
+	consume_cycle();
+	// Cycle 4: Read value from zero page,X address
+	Byte value = read_byte(address);
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles
+}
+
+void CPU6502::AND_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(high) << 8) | low;
+	Byte value = read_byte(address);
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles
+}
+
+void CPU6502::AND_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X register to address and read value
+	Word base_address = (static_cast<Word>(high) << 8) | low;
+	Word final_address = base_address + x_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, x_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles (5 if page boundary crossed)
+}
+
+void CPU6502::AND_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y register to address and read value
+	Word base_address = (static_cast<Word>(high) << 8) | low;
+	Word final_address = base_address + y_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles (5 if page boundary crossed)
+}
+
+void CPU6502::AND_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to zero page address
+	Byte indexed_addr = static_cast<Byte>(zero_page_addr + x_register_);
+	consume_cycle();
+	// Cycle 4: Read low byte of target address from indexed zero page
+	Byte target_low = read_byte(indexed_addr);
+	// Cycle 5: Read high byte of target address from indexed zero page + 1
+	Byte target_high = read_byte(static_cast<Byte>(indexed_addr + 1));
+	// Cycle 6: Read value from target address
+	Word target_address = (static_cast<Word>(target_high) << 8) | target_low;
+	Byte value = read_byte(target_address);
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::AND_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read low byte of base address from zero page
+	Byte base_low = read_byte(zero_page_addr);
+	// Cycle 4: Read high byte of base address from zero page + 1
+	Byte base_high = read_byte(static_cast<Byte>(zero_page_addr + 1));
+	// Cycle 5: Add Y register to base address and read value
+	Word base_address = (static_cast<Word>(base_high) << 8) | base_low;
+	Word final_address = base_address + y_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 5 cycles (6 if page boundary crossed)
+}
+
+// Logical Instructions - ORA (Bitwise OR with Accumulator)
+void CPU6502::ORA_immediate() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch immediate value
+	Byte value = read_byte(program_counter_);
+	program_counter_++;
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 2 cycles
+}
+
+void CPU6502::ORA_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(address);
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 3 cycles
+}
+
+void CPU6502::ORA_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to address (wraps in zero page)
+	Byte address = static_cast<Byte>(base_address + x_register_);
+	consume_cycle();
+	// Cycle 4: Read value from zero page,X address
+	Byte value = read_byte(address);
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles
+}
+
+void CPU6502::ORA_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(high) << 8) | low;
+	Byte value = read_byte(address);
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles
+}
+
+void CPU6502::ORA_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X register to address and read value
+	Word base_address = (static_cast<Word>(high) << 8) | low;
+	Word final_address = base_address + x_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, x_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles (5 if page boundary crossed)
+}
+
+void CPU6502::ORA_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y register to address and read value
+	Word base_address = (static_cast<Word>(high) << 8) | low;
+	Word final_address = base_address + y_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles (5 if page boundary crossed)
+}
+
+void CPU6502::ORA_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to zero page address
+	Byte indexed_addr = static_cast<Byte>(zero_page_addr + x_register_);
+	consume_cycle();
+	// Cycle 4: Read low byte of target address from indexed zero page
+	Byte target_low = read_byte(indexed_addr);
+	// Cycle 5: Read high byte of target address from indexed zero page + 1
+	Byte target_high = read_byte(static_cast<Byte>(indexed_addr + 1));
+	// Cycle 6: Read value from target address
+	Word target_address = (static_cast<Word>(target_high) << 8) | target_low;
+	Byte value = read_byte(target_address);
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::ORA_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read low byte of base address from zero page
+	Byte base_low = read_byte(zero_page_addr);
+	// Cycle 4: Read high byte of base address from zero page + 1
+	Byte base_high = read_byte(static_cast<Byte>(zero_page_addr + 1));
+	// Cycle 5: Add Y register to base address and read value
+	Word base_address = (static_cast<Word>(base_high) << 8) | base_low;
+	Word final_address = base_address + y_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 5 cycles (6 if page boundary crossed)
+}
+
+// Logical Instructions - EOR (Bitwise Exclusive OR with Accumulator)
+void CPU6502::EOR_immediate() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch immediate value
+	Byte value = read_byte(program_counter_);
+	program_counter_++;
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 2 cycles
+}
+
+void CPU6502::EOR_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page address
+	Byte value = read_byte(address);
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 3 cycles
+}
+
+void CPU6502::EOR_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to address (wraps in zero page)
+	Byte address = static_cast<Byte>(base_address + x_register_);
+	consume_cycle();
+	// Cycle 4: Read value from zero page,X address
+	Byte value = read_byte(address);
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles
+}
+
+void CPU6502::EOR_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Word address = (static_cast<Word>(high) << 8) | low;
+	Byte value = read_byte(address);
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles
+}
+
+void CPU6502::EOR_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X register to address and read value
+	Word base_address = (static_cast<Word>(high) << 8) | low;
+	Word final_address = base_address + x_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, x_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles (5 if page boundary crossed)
+}
+
+void CPU6502::EOR_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y register to address and read value
+	Word base_address = (static_cast<Word>(high) << 8) | low;
+	Word final_address = base_address + y_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 4 cycles (5 if page boundary crossed)
+}
+
+void CPU6502::EOR_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to zero page address
+	Byte indexed_addr = static_cast<Byte>(zero_page_addr + x_register_);
+	consume_cycle();
+	// Cycle 4: Read low byte of target address from indexed zero page
+	Byte target_low = read_byte(indexed_addr);
+	// Cycle 5: Read high byte of target address from indexed zero page + 1
+	Byte target_high = read_byte(static_cast<Byte>(indexed_addr + 1));
+	// Cycle 6: Read value from target address
+	Word target_address = (static_cast<Word>(target_high) << 8) | target_low;
+	Byte value = read_byte(target_address);
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::EOR_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_addr = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read low byte of base address from zero page
+	Byte base_low = read_byte(zero_page_addr);
+	// Cycle 4: Read high byte of base address from zero page + 1
+	Byte base_high = read_byte(static_cast<Byte>(zero_page_addr + 1));
+	// Cycle 5: Add Y register to base address and read value
+	Word base_address = (static_cast<Word>(base_high) << 8) | base_low;
+	Word final_address = base_address + y_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	Byte value = read_byte(final_address);
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 5 cycles (6 if page boundary crossed)
 }
 
 // Increment/Decrement Instructions - Register Operations
