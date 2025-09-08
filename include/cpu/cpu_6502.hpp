@@ -180,6 +180,14 @@ class CPU6502 final : public Component {
 	void LDX_absolute_Y(); // Load X Register from absolute,Y address
 	void STA_absolute_Y(); // Store Accumulator to absolute,Y address
 
+	// Indexed Indirect (zp,X) addressing mode instructions
+	void LDA_indexed_indirect(); // Load Accumulator from (zp,X) address
+	void STA_indexed_indirect(); // Store Accumulator to (zp,X) address
+
+	// Indirect Indexed (zp),Y addressing mode instructions
+	void LDA_indirect_indexed(); // Load Accumulator from (zp),Y address
+	void STA_indirect_indexed(); // Store Accumulator to (zp),Y address
+
 	// Register transfer instructions
 	void TAX(); // Transfer Accumulator to X
 	void TAY(); // Transfer Accumulator to Y

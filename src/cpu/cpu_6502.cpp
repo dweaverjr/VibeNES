@@ -204,6 +204,26 @@ void CPU6502::execute_instruction() {
 		STA_absolute_Y();
 		break;
 
+	// Load Accumulator - Indexed Indirect (zp,X)
+	case 0xA1:
+		LDA_indexed_indirect();
+		break;
+
+	// Store Accumulator - Indexed Indirect (zp,X)
+	case 0x81:
+		STA_indexed_indirect();
+		break;
+
+	// Load Accumulator - Indirect Indexed (zp),Y
+	case 0xB1:
+		LDA_indirect_indexed();
+		break;
+
+	// Store Accumulator - Indirect Indexed (zp),Y
+	case 0x91:
+		STA_indirect_indexed();
+		break;
+
 	// Transfer instructions
 	case 0xAA:
 		TAX();
@@ -782,6 +802,84 @@ void CPU6502::NOP() {
 	// Cycle 2: Do nothing
 	consume_cycle(); // NOP still takes 1 cycle to execute
 					 // Total: 2 cycles
+}
+
+void CPU6502::LDA_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address (internal operation)
+	consume_cycle();											// Internal indexing operation
+	Byte indexed_address = (base_address + x_register_) & 0xFF; // Wrap within zero page
+	// Cycle 4: Fetch low byte of indirect address
+	Byte low = read_byte(indexed_address);
+	// Cycle 5: Fetch high byte of indirect address
+	Byte high = read_byte((indexed_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 6: Load accumulator from final address
+	Address final_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	accumulator_ = read_byte(final_address);
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::STA_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address (internal operation)
+	consume_cycle();											// Internal indexing operation
+	Byte indexed_address = (base_address + x_register_) & 0xFF; // Wrap within zero page
+	// Cycle 4: Fetch low byte of indirect address
+	Byte low = read_byte(indexed_address);
+	// Cycle 5: Fetch high byte of indirect address
+	Byte high = read_byte((indexed_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 6: Store accumulator to final address
+	Address final_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	write_byte(final_address, accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::LDA_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zp_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(zp_address);
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte((zp_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 5: Add Y register to base address and load
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address final_address = base_address + y_register_;
+
+	// Check for page boundary crossing
+	if (crosses_page_boundary(base_address, y_register_)) {
+		consume_cycle(); // Extra cycle for page boundary crossing
+	}
+
+	accumulator_ = read_byte(final_address);
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 5-6 cycles (5 normally, 6 if page boundary crossed)
+}
+
+void CPU6502::STA_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zp_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(zp_address);
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte((zp_address + 1) & 0xFF); // Wrap within zero page
+	// Cycle 5: Add Y register to base address (internal operation)
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	consume_cycle(); // Internal operation for indexing
+	Address final_address = base_address + y_register_;
+	// Cycle 6: Store accumulator to final address
+	write_byte(final_address, accumulator_);
+	// Total: 6 cycles (store always takes extra cycle for indexing)
 }
 
 } // namespace nes

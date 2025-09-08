@@ -1351,3 +1351,316 @@ TEST_CASE("STY Instructions", "[cpu][sty]") {
 		REQUIRE(cpu.get_program_counter() == 0x0502);
 	}
 }
+
+TEST_CASE("CPU 6502 - LDA Indexed Indirect (zp,X)", "[LDA][indirect]") {
+	auto bus = std::make_shared<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("Basic indexed indirect load") {
+		// Setup: LDA ($20,X) with X=5, pointer at $25 points to $3000
+		cpu.set_program_counter(0x0100);
+		cpu.set_x_register(0x05);
+		cpu.set_accumulator(0x00);
+
+		// Write instruction: LDA ($20,X) = 0xA1 0x20
+		bus->write(0x0100, 0xA1);
+		bus->write(0x0101, 0x20);
+
+		// Setup pointer at $20 + $05 = $25 to point to $0500
+		bus->write(0x0025, 0x00); // Low byte of target address
+		bus->write(0x0026, 0x05); // High byte of target address
+
+		// Write test value at target address
+		bus->write(0x0500, 0x42);
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6});
+
+		REQUIRE(cpu.get_accumulator() == 0x42);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0102);
+	}
+
+	SECTION("Zero page wrap in indexing") {
+		// Setup: LDA ($FF,X) with X=2, should wrap to $01
+		cpu.set_program_counter(0x0200);
+		cpu.set_x_register(0x02);
+		cpu.set_accumulator(0x00);
+
+		// Write instruction: LDA ($FF,X) = 0xA1 0xFF
+		bus->write(0x0200, 0xA1);
+		bus->write(0x0201, 0xFF);
+
+		// Setup pointer at $FF + $02 = $01 (wrapped) to point to $0510
+		bus->write(0x0001, 0x10); // Low byte of target address
+		bus->write(0x0002, 0x05); // High byte of target address
+
+		// Write test value at target address
+		bus->write(0x0510, 0x84);
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6});
+
+		REQUIRE(cpu.get_accumulator() == 0x84);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("Zero flag set") {
+		// Setup: LDA ($10,X) with X=0, target contains 0
+		cpu.set_program_counter(0x0300);
+		cpu.set_x_register(0x00);
+		cpu.set_accumulator(0xFF);
+
+		// Write instruction: LDA ($10,X) = 0xA1 0x10
+		bus->write(0x0300, 0xA1);
+		bus->write(0x0301, 0x10);
+
+		// Setup pointer at $10 to point to $0520
+		bus->write(0x0010, 0x20); // Low byte of target address
+		bus->write(0x0011, 0x05); // High byte of target address
+
+		// Write zero at target address
+		bus->write(0x0520, 0x00);
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6});
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0302);
+	}
+}
+
+TEST_CASE("CPU 6502 - STA Indexed Indirect (zp,X)", "[STA][indirect]") {
+	auto bus = std::make_shared<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("Basic indexed indirect store") {
+		// Setup: STA ($30,X) with X=3, pointer at $33 points to $2000
+		cpu.set_program_counter(0x0100);
+		cpu.set_x_register(0x03);
+		cpu.set_accumulator(0x7F);
+
+		// Write instruction: STA ($30,X) = 0x81 0x30
+		bus->write(0x0100, 0x81);
+		bus->write(0x0101, 0x30);
+
+		// Setup pointer at $30 + $03 = $33 to point to $0530
+		bus->write(0x0033, 0x30); // Low byte of target address
+		bus->write(0x0034, 0x05); // High byte of target address
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6});
+
+		REQUIRE(bus->read(0x0530) == 0x7F); // Value stored correctly
+		REQUIRE(cpu.get_program_counter() == 0x0102);
+	}
+
+	SECTION("Zero page wrap in indexing") {
+		// Setup: STA ($FE,X) with X=3, should wrap to $01
+		cpu.set_program_counter(0x0200);
+		cpu.set_x_register(0x03);
+		cpu.set_accumulator(0xAB);
+
+		// Write instruction: STA ($FE,X) = 0x81 0xFE
+		bus->write(0x0200, 0x81);
+		bus->write(0x0201, 0xFE);
+
+		// Setup pointer at $FE + $03 = $01 (wrapped) to point to $0540
+		bus->write(0x0001, 0x40); // Low byte of target address
+		bus->write(0x0002, 0x05); // High byte of target address
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6});
+
+		REQUIRE(bus->read(0x0540) == 0xAB); // Value stored correctly
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("Store zero value") {
+		// Setup: STA ($40,X) with X=0, accumulator contains 0
+		cpu.set_program_counter(0x0300);
+		cpu.set_x_register(0x00);
+		cpu.set_accumulator(0x00);
+
+		// Write instruction: STA ($40,X) = 0x81 0x40
+		bus->write(0x0300, 0x81);
+		bus->write(0x0301, 0x40);
+
+		// Setup pointer at $40 to point to $0550
+		bus->write(0x0040, 0x50); // Low byte of target address
+		bus->write(0x0041, 0x05); // High byte of target address
+
+		// Initialize target with non-zero value
+		bus->write(0x0550, 0xFF);
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6});
+
+		REQUIRE(bus->read(0x0550) == 0x00); // Value stored correctly
+		REQUIRE(cpu.get_program_counter() == 0x0302);
+	}
+}
+
+TEST_CASE("CPU 6502 - LDA Indirect Indexed (zp),Y", "[LDA][indirect]") {
+	auto bus = std::make_shared<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("Basic indirect indexed load - no page crossing") {
+		// Setup: LDA ($50),Y with Y=10, pointer at $50 points to $2000
+		cpu.set_program_counter(0x0100);
+		cpu.set_y_register(0x0A);
+		cpu.set_accumulator(0x00);
+
+		// Write instruction: LDA ($50),Y = 0xB1 0x50
+		bus->write(0x0100, 0xB1);
+		bus->write(0x0101, 0x50);
+
+		// Setup pointer at $50 to point to $0560
+		bus->write(0x0050, 0x60); // Low byte of base address
+		bus->write(0x0051, 0x05); // High byte of base address
+
+		// Write test value at target address $0560 + $0A = $056A
+		bus->write(0x056A, 0x55);
+
+		// Execute instruction
+		cpu.tick(CpuCycle{5}); // No page crossing = 5 cycles
+
+		REQUIRE(cpu.get_accumulator() == 0x55);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0102);
+	}
+
+	SECTION("Indirect indexed load - with page crossing") {
+		// Setup: LDA ($60),Y with Y=FF, pointer at $60 points to $20FF
+		cpu.set_program_counter(0x0200);
+		cpu.set_y_register(0xFF);
+		cpu.set_accumulator(0x00);
+
+		// Write instruction: LDA ($60),Y = 0xB1 0x60
+		bus->write(0x0200, 0xB1);
+		bus->write(0x0201, 0x60);
+
+		// Setup pointer at $60 to point to $05FF
+		bus->write(0x0060, 0xFF); // Low byte of base address
+		bus->write(0x0061, 0x05); // High byte of base address
+
+		// Write test value at target address $05FF + $FF = $06FE (page crossing)
+		bus->write(0x06FE, 0x99);
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6}); // Page crossing = 6 cycles
+
+		REQUIRE(cpu.get_accumulator() == 0x99);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == true);
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("Zero page wrap in pointer") {
+		// Setup: LDA ($FF),Y with Y=5, pointer wraps to $00
+		cpu.set_program_counter(0x0300);
+		cpu.set_y_register(0x05);
+		cpu.set_accumulator(0x00);
+
+		// Write instruction: LDA ($FF),Y = 0xB1 0xFF
+		bus->write(0x0300, 0xB1);
+		bus->write(0x0301, 0xFF);
+
+		// Setup pointer at $FF/$00 to point to $0570
+		bus->write(0x00FF, 0x70); // Low byte of base address
+		bus->write(0x0000, 0x05); // High byte of base address (wrapped)
+
+		// Write test value at target address $0570 + $05 = $0575
+		bus->write(0x0575, 0x00);
+
+		// Execute instruction
+		cpu.tick(CpuCycle{5}); // No page crossing = 5 cycles
+
+		REQUIRE(cpu.get_accumulator() == 0x00);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == false);
+		REQUIRE(cpu.get_program_counter() == 0x0302);
+	}
+}
+
+TEST_CASE("CPU 6502 - STA Indirect Indexed (zp),Y", "[STA][indirect]") {
+	auto bus = std::make_shared<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("Basic indirect indexed store") {
+		// Setup: STA ($70),Y with Y=8, pointer at $70 points to $3000
+		cpu.set_program_counter(0x0100);
+		cpu.set_y_register(0x08);
+		cpu.set_accumulator(0xCD);
+
+		// Write instruction: STA ($70),Y = 0x91 0x70
+		bus->write(0x0100, 0x91);
+		bus->write(0x0101, 0x70);
+
+		// Setup pointer at $70 to point to $0580
+		bus->write(0x0070, 0x80); // Low byte of base address
+		bus->write(0x0071, 0x05); // High byte of base address
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6}); // Store always takes 6 cycles
+
+		REQUIRE(bus->read(0x0588) == 0xCD); // Value stored at $0580 + $08
+		REQUIRE(cpu.get_program_counter() == 0x0102);
+	}
+
+	SECTION("Indirect indexed store with page crossing") {
+		// Setup: STA ($80),Y with Y=FF, pointer at $80 points to $40FF
+		cpu.set_program_counter(0x0200);
+		cpu.set_y_register(0xFF);
+		cpu.set_accumulator(0x12);
+
+		// Write instruction: STA ($80),Y = 0x91 0x80
+		bus->write(0x0200, 0x91);
+		bus->write(0x0201, 0x80);
+
+		// Setup pointer at $80 to point to $06FF
+		bus->write(0x0080, 0xFF); // Low byte of base address
+		bus->write(0x0081, 0x06); // High byte of base address
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6}); // Store always takes 6 cycles (no extra for page crossing)
+
+		REQUIRE(bus->read(0x07FE) == 0x12); // Value stored at $06FF + $FF = $07FE
+		REQUIRE(cpu.get_program_counter() == 0x0202);
+	}
+
+	SECTION("Zero page wrap in pointer") {
+		// Setup: STA ($FF),Y with Y=2, pointer wraps to $00
+		cpu.set_program_counter(0x0300);
+		cpu.set_y_register(0x02);
+		cpu.set_accumulator(0x88);
+
+		// Write instruction: STA ($FF),Y = 0x91 0xFF
+		bus->write(0x0300, 0x91);
+		bus->write(0x0301, 0xFF);
+
+		// Setup pointer at $FF/$00 to point to $0590
+		bus->write(0x00FF, 0x90); // Low byte of base address
+		bus->write(0x0000, 0x05); // High byte of base address (wrapped)
+
+		// Execute instruction
+		cpu.tick(CpuCycle{6}); // Store always takes 6 cycles
+
+		REQUIRE(bus->read(0x0592) == 0x88); // Value stored at $0590 + $02
+		REQUIRE(cpu.get_program_counter() == 0x0302);
+	}
+}
