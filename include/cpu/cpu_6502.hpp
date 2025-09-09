@@ -362,6 +362,15 @@ class CPU6502 final : public Component {
 	void PHP(); // Push Processor Status
 	void PLP(); // Pull Processor Status
 
+	// Status flag instructions
+	void CLC(); // Clear Carry Flag
+	void SEC(); // Set Carry Flag
+	void CLI(); // Clear Interrupt Flag
+	void SEI(); // Set Interrupt Flag
+	void CLV(); // Clear Overflow Flag
+	void CLD(); // Clear Decimal Flag
+	void SED(); // Set Decimal Flag
+
 	// No operation
 	void NOP(); // No Operation
 };

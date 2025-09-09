@@ -581,6 +581,29 @@ void CPU6502::execute_instruction() {
 		PLP();
 		break;
 
+	// Status Flag Instructions
+	case 0x18: // CLC - Clear Carry Flag
+		CLC();
+		break;
+	case 0x38: // SEC - Set Carry Flag
+		SEC();
+		break;
+	case 0x58: // CLI - Clear Interrupt Flag
+		CLI();
+		break;
+	case 0x78: // SEI - Set Interrupt Flag
+		SEI();
+		break;
+	case 0xB8: // CLV - Clear Overflow Flag
+		CLV();
+		break;
+	case 0xD8: // CLD - Clear Decimal Flag
+		CLD();
+		break;
+	case 0xF8: // SED - Set Decimal Flag
+		SED();
+		break;
+
 	// No Operation
 	case 0xEA:
 		NOP();
@@ -1546,6 +1569,70 @@ void CPU6502::PLP() {
 	status_.status_register_ |= 0x20;					  // Ensure unused flag is set
 	status_.status_register_ &= static_cast<Byte>(~0x10); // Clear B flag (it doesn't exist in the actual register)
 														  // Total: 4 cycles
+}
+
+// Status Flag Instructions
+void CPU6502::CLC() {
+	// Clear Carry Flag
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Clear carry flag
+	consume_cycle();
+	status_.flags.carry_flag_ = false;
+	// Total: 2 cycles
+}
+
+void CPU6502::SEC() {
+	// Set Carry Flag
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Set carry flag
+	consume_cycle();
+	status_.flags.carry_flag_ = true;
+	// Total: 2 cycles
+}
+
+void CPU6502::CLI() {
+	// Clear Interrupt Flag
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Clear interrupt flag
+	consume_cycle();
+	status_.flags.interrupt_flag_ = false;
+	// Total: 2 cycles
+}
+
+void CPU6502::SEI() {
+	// Set Interrupt Flag
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Set interrupt flag
+	consume_cycle();
+	status_.flags.interrupt_flag_ = true;
+	// Total: 2 cycles
+}
+
+void CPU6502::CLV() {
+	// Clear Overflow Flag
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Clear overflow flag
+	consume_cycle();
+	status_.flags.overflow_flag_ = false;
+	// Total: 2 cycles
+}
+
+void CPU6502::CLD() {
+	// Clear Decimal Flag
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Clear decimal flag
+	consume_cycle();
+	status_.flags.decimal_flag_ = false;
+	// Total: 2 cycles
+}
+
+void CPU6502::SED() {
+	// Set Decimal Flag
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Set decimal flag
+	consume_cycle();
+	status_.flags.decimal_flag_ = true;
+	// Total: 2 cycles
 }
 
 void CPU6502::LDA_indexed_indirect() {

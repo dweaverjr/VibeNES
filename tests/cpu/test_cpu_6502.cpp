@@ -3948,3 +3948,138 @@ TEST_CASE("CPU Stack Operations - All Opcodes", "[cpu][instructions][stack][opco
 		}
 	}
 }
+
+TEST_CASE("CPU Status Flag Instructions - All Opcodes", "[cpu][instructions][flags][opcodes]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("All status flag opcodes verification") {
+		struct FlagTest {
+			Byte opcode;
+			std::string name;
+			std::function<void(CPU6502 &, SystemBus *)> setup;
+			std::function<void(const CPU6502 &)> verify;
+		};
+
+		std::vector<FlagTest> tests = {{0x18, "CLC",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											cpu.set_carry_flag(true); // Set carry flag initially
+											bus->write(0x0200, 0x18);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_carry_flag() == false); // Should be cleared
+										}},
+
+									   {0x38, "SEC",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											cpu.set_carry_flag(false); // Clear carry flag initially
+											bus->write(0x0200, 0x38);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_carry_flag() == true); // Should be set
+										}},
+
+									   {0x58, "CLI",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											cpu.set_interrupt_flag(true); // Set interrupt flag initially
+											bus->write(0x0200, 0x58);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_interrupt_flag() == false); // Should be cleared
+										}},
+
+									   {0x78, "SEI",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											cpu.set_interrupt_flag(false); // Clear interrupt flag initially
+											bus->write(0x0200, 0x78);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_interrupt_flag() == true); // Should be set
+										}},
+
+									   {0xB8, "CLV",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											cpu.set_overflow_flag(true); // Set overflow flag initially
+											bus->write(0x0200, 0xB8);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_overflow_flag() == false); // Should be cleared
+										}},
+
+									   {0xD8, "CLD",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											cpu.set_decimal_flag(true); // Set decimal flag initially
+											bus->write(0x0200, 0xD8);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_decimal_flag() == false); // Should be cleared
+										}},
+
+									   {0xF8, "SED",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											cpu.set_decimal_flag(false); // Clear decimal flag initially
+											bus->write(0x0200, 0xF8);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_decimal_flag() == true); // Should be set
+										}}};
+
+		for (const auto &test : tests) {
+			DYNAMIC_SECTION("Testing " << test.name << " (0x" << std::hex << (int)test.opcode << ")") {
+				// Reset CPU state
+				cpu.reset();
+
+				// Set up test
+				test.setup(cpu, bus.get());
+
+				// Store initial state of other flags to ensure they're not affected
+				bool initial_zero = cpu.get_zero_flag();
+				bool initial_negative = cpu.get_negative_flag();
+
+				// Execute instruction
+				cpu.execute_instruction();
+
+				// Verify target flag changed
+				test.verify(cpu);
+
+				// Verify other flags are unchanged
+				REQUIRE(cpu.get_zero_flag() == initial_zero);
+				REQUIRE(cpu.get_negative_flag() == initial_negative);
+			}
+		}
+	}
+
+	SECTION("Flag independence verification") {
+		// Test that flag instructions don't affect other flags
+		cpu.reset();
+		cpu.set_program_counter(0x0200);
+
+		// Set all flags to a known state
+		cpu.set_carry_flag(true);
+		cpu.set_zero_flag(true);
+		cpu.set_interrupt_flag(true);
+		cpu.set_decimal_flag(true);
+		cpu.set_overflow_flag(true);
+		cpu.set_negative_flag(true);
+
+		// Test CLC doesn't affect other flags
+		bus->write(0x0200, 0x18); // CLC
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_carry_flag() == false);	   // Changed
+		REQUIRE(cpu.get_zero_flag() == true);	   // Unchanged
+		REQUIRE(cpu.get_interrupt_flag() == true); // Unchanged
+		REQUIRE(cpu.get_decimal_flag() == true);   // Unchanged
+		REQUIRE(cpu.get_overflow_flag() == true);  // Unchanged
+		REQUIRE(cpu.get_negative_flag() == true);  // Unchanged
+	}
+}
