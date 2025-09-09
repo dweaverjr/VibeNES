@@ -116,6 +116,7 @@
                 "${workspaceFolder}/tests/cpu/timing_tests.cpp",
                 "${workspaceFolder}/tests/cpu/nestest_validation.cpp",
                 "${workspaceFolder}/tests/cpu/undocumented_opcodes_tests.cpp",
+                "${workspaceFolder}/tests/cpu/interrupt_tests.cpp",
                 "${workspaceFolder}/src/core/bus.cpp",
                 "${workspaceFolder}/src/cpu/cpu_6502.cpp",
                 "-I${workspaceFolder}/include",
@@ -140,8 +141,7 @@
             "label": "Run Tests",
             "command": "${workspaceFolder}/build/debug/VibeNES_All_Tests.exe",
             "group": "test",
-            "dependsOn": "Build Tests",
-            "detail": "Build and run all unit tests"
+            "detail": "Run all unit tests"
         },
         {
             "type": "shell",
@@ -153,8 +153,7 @@
                 "yes"
             ],
             "group": "test",
-            "dependsOn": "Build Tests",
-            "detail": "Build and run all unit tests with verbose output"
+            "detail": "Run all unit tests with verbose output"
         }
     ],
     "version": "2.0.0"

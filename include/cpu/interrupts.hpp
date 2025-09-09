@@ -24,6 +24,7 @@ struct InterruptState {
 	bool nmi_pending = false;	///< NMI triggered by PPU VBlank, DMC, etc.
 	bool irq_pending = false;	///< IRQ triggered by APU, mappers, etc.
 	bool reset_pending = false; ///< Reset triggered by reset button, power-on
+	bool irq_enabled_when_triggered = false; ///< Track if IRQ was triggered while interrupts were enabled
 
 	/// Get the highest priority pending interrupt
 	[[nodiscard]] InterruptType get_pending_interrupt() const noexcept {
@@ -47,6 +48,7 @@ struct InterruptState {
 			break;
 		case InterruptType::IRQ:
 			irq_pending = false;
+			irq_enabled_when_triggered = false;
 			break;
 		case InterruptType::NONE:
 			break;
@@ -58,6 +60,7 @@ struct InterruptState {
 		nmi_pending = false;
 		irq_pending = false;
 		reset_pending = false;
+		irq_enabled_when_triggered = false;
 	}
 };
 

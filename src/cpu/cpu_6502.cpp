@@ -66,6 +66,8 @@ void CPU6502::trigger_nmi() noexcept {
 
 void CPU6502::trigger_irq() noexcept {
 	interrupt_state_.irq_pending = true;
+	// Track whether interrupts were enabled when IRQ was triggered
+	interrupt_state_.irq_enabled_when_triggered = !get_interrupt_flag();
 }
 
 void CPU6502::trigger_reset() noexcept {
@@ -95,8 +97,8 @@ void CPU6502::process_interrupts() {
 		break;
 
 	case InterruptType::IRQ:
-		// IRQ can be masked by the interrupt flag
-		if (!get_interrupt_flag()) {
+		// Process IRQ if interrupts are currently enabled OR if it was triggered while enabled
+		if (!get_interrupt_flag() || interrupt_state_.irq_enabled_when_triggered) {
 			handle_irq();
 			interrupt_state_.clear_interrupt(InterruptType::IRQ);
 		}
@@ -116,11 +118,12 @@ void CPU6502::handle_reset() {
 	program_counter_ = read_word(RESET_VECTOR);
 
 	// Reset CPU state
-	stack_pointer_ = 0xFD;				  // Stack pointer decrements by 3 during reset
+	stack_pointer_ -= 3;				  // Stack pointer decrements by 3 during reset (simulates 3 pushes)
 	status_.flags.interrupt_flag_ = true; // Disable interrupts
+	status_.flags.decimal_flag_ = false;  // Clear decimal mode
 
-	// Clear interrupt state
-	interrupt_state_.clear_all();
+	// Note: Reset does NOT clear other pending interrupts, only the reset itself
+	// Other interrupts remain pending and will be processed after reset
 }
 
 void CPU6502::handle_nmi() {
@@ -166,8 +169,28 @@ void CPU6502::handle_irq() {
 void CPU6502::execute_instruction() {
 	// Check for pending interrupts before instruction fetch
 	if (has_pending_interrupt()) {
-		process_interrupts();
-		return; // Interrupt handling consumes cycles, don't execute instruction
+		InterruptType pending = interrupt_state_.get_pending_interrupt();
+		
+		// Only process interrupts that will actually be handled
+		bool should_process = false;
+		switch (pending) {
+		case InterruptType::RESET:
+		case InterruptType::NMI:
+			should_process = true; // Always processed
+			break;
+		case InterruptType::IRQ:
+			// Process IRQ if interrupts are currently enabled OR if it was triggered while enabled
+			should_process = !get_interrupt_flag() || interrupt_state_.irq_enabled_when_triggered;
+			break;
+		case InterruptType::NONE:
+			should_process = false;
+			break;
+		}
+		
+		if (should_process) {
+			process_interrupts();
+			return; // Interrupt handling consumes cycles, don't execute instruction
+		}
 	}
 
 	// Fetch opcode
