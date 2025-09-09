@@ -567,6 +567,20 @@ void CPU6502::execute_instruction() {
 		RTI();
 		break;
 
+	// Stack Operations
+	case 0x48: // PHA - Push Accumulator
+		PHA();
+		break;
+	case 0x68: // PLA - Pull Accumulator
+		PLA();
+		break;
+	case 0x08: // PHP - Push Processor Status
+		PHP();
+		break;
+	case 0x28: // PLP - Pull Processor Status
+		PLP();
+		break;
+
 	// No Operation
 	case 0xEA:
 		NOP();
@@ -1478,6 +1492,60 @@ void CPU6502::NOP() {
 	// Cycle 2: Do nothing
 	consume_cycle(); // NOP still takes 1 cycle to execute
 					 // Total: 2 cycles
+}
+
+// Stack Operations
+void CPU6502::PHA() {
+	// Push Accumulator - Store accumulator on stack
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+	// Cycle 3: Push accumulator to stack
+	push_byte(accumulator_);
+	// Total: 3 cycles
+}
+
+void CPU6502::PLA() {
+	// Pull Accumulator - Load accumulator from stack
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+	// Cycle 3: Increment stack pointer (internal)
+	consume_cycle();
+	// Cycle 4: Pull accumulator from stack
+	accumulator_ = pull_byte();
+
+	// Update flags based on pulled value
+	update_zero_flag(accumulator_);
+	update_negative_flag(accumulator_);
+	// Total: 4 cycles
+}
+
+void CPU6502::PHP() {
+	// Push Processor Status - Store status register on stack
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+	// Cycle 3: Push status register to stack
+	// Note: When PHP is executed, the B flag is set in the pushed value
+	Byte status_to_push = status_.status_register_ | 0x10; // Set B flag
+	push_byte(status_to_push);
+	// Total: 3 cycles
+}
+
+void CPU6502::PLP() {
+	// Pull Processor Status - Load status register from stack
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+	// Cycle 3: Increment stack pointer (internal)
+	consume_cycle();
+	// Cycle 4: Pull status register from stack
+	status_.status_register_ = pull_byte();
+	// Note: Bit 5 (unused flag) is always set, bit 4 (B flag) is ignored
+	status_.status_register_ |= 0x20;					  // Ensure unused flag is set
+	status_.status_register_ &= static_cast<Byte>(~0x10); // Clear B flag (it doesn't exist in the actual register)
+														  // Total: 4 cycles
 }
 
 void CPU6502::LDA_indexed_indirect() {

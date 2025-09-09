@@ -3815,3 +3815,136 @@ TEST_CASE("CPU Jump/Subroutine Instructions - All Opcodes", "[cpu][instructions]
 		}
 	}
 }
+
+TEST_CASE("CPU Stack Operations - All Opcodes", "[cpu][instructions][stack][opcodes]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("All stack opcodes verification") {
+		struct StackTest {
+			Byte opcode;
+			std::string name;
+			std::function<void(CPU6502 &, SystemBus *)> setup;
+			std::function<void(const CPU6502 &)> verify;
+		};
+
+		std::vector<StackTest> tests = {{0x48, "PHA",
+										 [](CPU6502 &cpu, SystemBus *bus) {
+											 cpu.set_program_counter(0x0200);
+											 cpu.set_accumulator(0x42);
+											 cpu.set_stack_pointer(0xFF);
+											 bus->write(0x0200, 0x48);
+										 },
+										 [](const CPU6502 &cpu) {
+											 REQUIRE(cpu.get_accumulator() == 0x42);   // Accumulator unchanged
+											 REQUIRE(cpu.get_stack_pointer() == 0xFE); // Stack pointer decremented
+											 // Note: Can't easily verify stack contents without additional CPU
+											 // interface
+										 }},
+
+										{0x68, "PLA",
+										 [](CPU6502 &cpu, SystemBus *bus) {
+											 cpu.set_program_counter(0x0200);
+											 cpu.set_accumulator(0x00);
+											 cpu.set_stack_pointer(0xFE); // Stack pointer as if something was pushed
+											 bus->write(0x0200, 0x68);
+											 bus->write(0x01FF, 0x42); // Put value on stack
+										 },
+										 [](const CPU6502 &cpu) {
+											 REQUIRE(cpu.get_accumulator() == 0x42);   // Accumulator loaded from stack
+											 REQUIRE(cpu.get_stack_pointer() == 0xFF); // Stack pointer incremented
+											 REQUIRE(cpu.get_zero_flag() == false);	   // N=0, Z=0 for 0x42
+											 REQUIRE(cpu.get_negative_flag() == false);
+										 }},
+
+										{0x68, "PLA Zero Flag",
+										 [](CPU6502 &cpu, SystemBus *bus) {
+											 cpu.set_program_counter(0x0200);
+											 cpu.set_accumulator(0xFF);
+											 cpu.set_stack_pointer(0xFE);
+											 bus->write(0x0200, 0x68);
+											 bus->write(0x01FF, 0x00); // Put zero on stack
+										 },
+										 [](const CPU6502 &cpu) {
+											 REQUIRE(cpu.get_accumulator() == 0x00);
+											 REQUIRE(cpu.get_zero_flag() == true); // Z=1 for zero
+											 REQUIRE(cpu.get_negative_flag() == false);
+										 }},
+
+										{0x68, "PLA Negative Flag",
+										 [](CPU6502 &cpu, SystemBus *bus) {
+											 cpu.set_program_counter(0x0200);
+											 cpu.set_accumulator(0x00);
+											 cpu.set_stack_pointer(0xFE);
+											 bus->write(0x0200, 0x68);
+											 bus->write(0x01FF, 0x80); // Put negative value on stack
+										 },
+										 [](const CPU6502 &cpu) {
+											 REQUIRE(cpu.get_accumulator() == 0x80);
+											 REQUIRE(cpu.get_zero_flag() == false);
+											 REQUIRE(cpu.get_negative_flag() == true); // N=1 for 0x80
+										 }},
+
+										{0x08, "PHP",
+										 [](CPU6502 &cpu, SystemBus *bus) {
+											 cpu.set_program_counter(0x0200);
+											 cpu.set_stack_pointer(0xFF);
+											 // Set some flags for testing
+											 cpu.set_carry_flag(true);
+											 cpu.set_zero_flag(true);
+											 cpu.set_interrupt_flag(true);
+											 bus->write(0x0200, 0x08);
+										 },
+										 [](const CPU6502 &cpu) {
+											 REQUIRE(cpu.get_stack_pointer() == 0xFE); // Stack pointer decremented
+											 // Flags should remain unchanged
+											 REQUIRE(cpu.get_carry_flag() == true);
+											 REQUIRE(cpu.get_zero_flag() == true);
+											 REQUIRE(cpu.get_interrupt_flag() == true);
+										 }},
+
+										{0x28, "PLP",
+										 [](CPU6502 &cpu, SystemBus *bus) {
+											 cpu.set_program_counter(0x0200);
+											 cpu.set_stack_pointer(0xFE);
+											 // Clear all flags initially
+											 cpu.set_carry_flag(false);
+											 cpu.set_zero_flag(false);
+											 cpu.set_interrupt_flag(false);
+											 cpu.set_decimal_flag(false);
+											 cpu.set_overflow_flag(false);
+											 cpu.set_negative_flag(false);
+											 bus->write(0x0200, 0x28);
+											 // Put status with some flags set on stack (C=1, Z=1, I=1)
+											 bus->write(0x01FF, 0x27); // 00100111 (unused bit always set)
+										 },
+										 [](const CPU6502 &cpu) {
+											 REQUIRE(cpu.get_stack_pointer() == 0xFF); // Stack pointer incremented
+											 // Flags should be restored from stack
+											 REQUIRE(cpu.get_carry_flag() == true);
+											 REQUIRE(cpu.get_zero_flag() == true);
+											 REQUIRE(cpu.get_interrupt_flag() == true);
+											 REQUIRE(cpu.get_decimal_flag() == false);
+											 REQUIRE(cpu.get_overflow_flag() == false);
+											 REQUIRE(cpu.get_negative_flag() == false);
+										 }}};
+
+		for (const auto &test : tests) {
+			DYNAMIC_SECTION("Testing " << test.name << " (0x" << std::hex << (int)test.opcode << ")") {
+				// Reset CPU state
+				cpu.reset();
+
+				// Set up test
+				test.setup(cpu, bus.get());
+
+				// Execute instruction
+				cpu.execute_instruction();
+
+				// Verify results
+				test.verify(cpu);
+			}
+		}
+	}
+}

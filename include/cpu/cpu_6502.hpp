@@ -356,6 +356,12 @@ class CPU6502 final : public Component {
 	void RTS();			 // Return from Subroutine
 	void RTI();			 // Return from Interrupt
 
+	// Stack operations
+	void PHA(); // Push Accumulator
+	void PLA(); // Pull Accumulator
+	void PHP(); // Push Processor Status
+	void PLP(); // Pull Processor Status
+
 	// No operation
 	void NOP(); // No Operation
 };
