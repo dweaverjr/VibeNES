@@ -1684,10 +1684,10 @@ void CPU6502::BIT_zero_page() {
 	// Cycle 2: Fetch zero page address
 	Byte zero_page_address = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 3: Read from zero page address
 	Byte memory_value = read_byte(static_cast<Address>(zero_page_address));
-	
+
 	// Perform BIT operation:
 	// Z flag = (A AND M) == 0
 	// N flag = bit 7 of M
@@ -1705,15 +1705,15 @@ void CPU6502::BIT_absolute() {
 	// Cycle 2: Fetch low byte of address
 	Byte low = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 3: Fetch high byte of address
 	Byte high = read_byte(program_counter_);
 	program_counter_++;
-	
+
 	// Cycle 4: Read from absolute address
 	Address absolute_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
 	Byte memory_value = read_byte(absolute_address);
-	
+
 	// Perform BIT operation:
 	// Z flag = (A AND M) == 0
 	// N flag = bit 7 of M
@@ -1732,24 +1732,24 @@ void CPU6502::BRK() {
 	// Cycle 2: Read next instruction byte (ignored, but PC incremented)
 	program_counter_++; // BRK increments PC by 2
 	consume_cycle();
-	
+
 	// Cycle 3: Push high byte of PC to stack
 	push_byte(static_cast<Byte>(program_counter_ >> 8));
-	
-	// Cycle 4: Push low byte of PC to stack  
+
+	// Cycle 4: Push low byte of PC to stack
 	push_byte(static_cast<Byte>(program_counter_ & 0xFF));
-	
+
 	// Cycle 5: Push status register to stack (with B flag set)
 	Byte status_with_b = status_.status_register_ | 0x10; // Set B flag
 	push_byte(status_with_b);
-	
+
 	// Cycle 6: Fetch IRQ vector low byte
 	Byte irq_vector_low = read_byte(0xFFFE);
-	
+
 	// Cycle 7: Fetch IRQ vector high byte and set I flag
 	Byte irq_vector_high = read_byte(0xFFFF);
 	status_.flags.interrupt_flag_ = true; // Set interrupt disable flag
-	
+
 	// Set PC to IRQ vector
 	program_counter_ = static_cast<Address>(irq_vector_low) | (static_cast<Address>(irq_vector_high) << 8);
 	// Total: 7 cycles

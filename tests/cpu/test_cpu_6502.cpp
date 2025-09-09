@@ -4104,7 +4104,7 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 
 		// Verify results
 		REQUIRE(cpu.get_stack_pointer() == 0x80); // Stack pointer should match X register
-		REQUIRE(cpu.get_x_register() == 0x80);    // X register unchanged
+		REQUIRE(cpu.get_x_register() == 0x80);	  // X register unchanged
 		REQUIRE(cpu.get_program_counter() == 0x0201);
 
 		// TXS doesn't affect flags
@@ -4125,12 +4125,12 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 		cpu.execute_instruction();
 
 		// Verify results
-		REQUIRE(cpu.get_x_register() == 0x42);      // X register should match stack pointer
-		REQUIRE(cpu.get_stack_pointer() == 0x42);   // Stack pointer unchanged
+		REQUIRE(cpu.get_x_register() == 0x42);	  // X register should match stack pointer
+		REQUIRE(cpu.get_stack_pointer() == 0x42); // Stack pointer unchanged
 		REQUIRE(cpu.get_program_counter() == 0x0201);
 
 		// TSX affects N and Z flags
-		REQUIRE(cpu.get_zero_flag() == false);   // 0x42 is not zero
+		REQUIRE(cpu.get_zero_flag() == false);	   // 0x42 is not zero
 		REQUIRE(cpu.get_negative_flag() == false); // 0x42 bit 7 is 0
 	}
 
@@ -4143,7 +4143,7 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 		cpu.execute_instruction();
 
 		REQUIRE(cpu.get_x_register() == 0x00);
-		REQUIRE(cpu.get_zero_flag() == true);    // Should be set for zero
+		REQUIRE(cpu.get_zero_flag() == true); // Should be set for zero
 		REQUIRE(cpu.get_negative_flag() == false);
 	}
 
@@ -4184,7 +4184,7 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 		REQUIRE(cpu.get_program_counter() == 0x0202);
 
 		// Flag results: A & M = 0x0F & 0xF0 = 0x00 (zero)
-		REQUIRE(cpu.get_zero_flag() == true);     // A & M is zero
+		REQUIRE(cpu.get_zero_flag() == true);	  // A & M is zero
 		REQUIRE(cpu.get_negative_flag() == true); // Bit 7 of memory (1)
 		REQUIRE(cpu.get_overflow_flag() == true); // Bit 6 of memory (1)
 	}
@@ -4207,7 +4207,7 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 		REQUIRE(cpu.get_program_counter() == 0x0203);
 
 		// Flag results: A & M = 0x50 & 0x60 = 0x40 (non-zero)
-		REQUIRE(cpu.get_zero_flag() == false);    // A & M is non-zero
+		REQUIRE(cpu.get_zero_flag() == false);	   // A & M is non-zero
 		REQUIRE(cpu.get_negative_flag() == false); // Bit 7 of memory (0)
 		REQUIRE(cpu.get_overflow_flag() == true);  // Bit 6 of memory (1)
 	}
@@ -4225,17 +4225,17 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 		};
 
 		std::vector<BitTest> tests = {
-			{0xFF, 0x00, true, false, false},   // Zero result, no flags from memory
-			{0x00, 0xFF, true, true, true},     // Zero result, all flags from memory
-			{0x80, 0x80, false, true, false},   // Non-zero, N=1, V=0
-			{0x40, 0x40, false, false, true},   // Non-zero, N=0, V=1
-			{0xC0, 0xC0, false, true, true},    // Non-zero, N=1, V=1
-			{0x3F, 0x3F, false, false, false}   // Non-zero, N=0, V=0
+			{0xFF, 0x00, true, false, false}, // Zero result, no flags from memory
+			{0x00, 0xFF, true, true, true},	  // Zero result, all flags from memory
+			{0x80, 0x80, false, true, false}, // Non-zero, N=1, V=0
+			{0x40, 0x40, false, false, true}, // Non-zero, N=0, V=1
+			{0xC0, 0xC0, false, true, true},  // Non-zero, N=1, V=1
+			{0x3F, 0x3F, false, false, false} // Non-zero, N=0, V=0
 		};
 
 		for (const auto &test : tests) {
-			DYNAMIC_SECTION("BIT test A=0x" << std::hex << (int)test.accumulator 
-							<< " M=0x" << std::hex << (int)test.memory) {
+			DYNAMIC_SECTION("BIT test A=0x" << std::hex << (int)test.accumulator << " M=0x" << std::hex
+											<< (int)test.memory) {
 				cpu.reset();
 				cpu.set_program_counter(0x0200);
 				cpu.set_accumulator(test.accumulator);
@@ -4265,7 +4265,7 @@ TEST_CASE("CPU BRK Instruction", "[cpu][instructions][brk][interrupt][opcodes]")
 		cpu.reset();
 		cpu.set_program_counter(0x0300);
 		cpu.set_stack_pointer(0xFF);
-		
+
 		// Set up IRQ vector
 		bus->write(0xFFFE, 0x00); // IRQ vector low
 		bus->write(0xFFFF, 0x80); // IRQ vector high (0x8000)
@@ -4283,7 +4283,7 @@ TEST_CASE("CPU BRK Instruction", "[cpu][instructions][brk][interrupt][opcodes]")
 		// PC+2 should be pushed (0x0302)
 		REQUIRE(bus->read(0x01FF) == 0x03); // High byte of PC+2
 		REQUIRE(bus->read(0x01FE) == 0x02); // Low byte of PC+2
-		
+
 		// Status register with B flag set should be pushed
 		Byte pushed_status = bus->read(0x01FD);
 		REQUIRE((pushed_status & 0x10) != 0); // B flag should be set in pushed status
@@ -4291,9 +4291,9 @@ TEST_CASE("CPU BRK Instruction", "[cpu][instructions][brk][interrupt][opcodes]")
 		REQUIRE((pushed_status & 0x02) != 0); // Zero flag should be preserved
 
 		// Verify CPU state
-		REQUIRE(cpu.get_stack_pointer() == 0xFC); // Stack pointer decremented by 3
+		REQUIRE(cpu.get_stack_pointer() == 0xFC);	  // Stack pointer decremented by 3
 		REQUIRE(cpu.get_program_counter() == 0x8000); // Jump to IRQ vector
-		REQUIRE(cpu.get_interrupt_flag() == true);    // I flag should be set
+		REQUIRE(cpu.get_interrupt_flag() == true);	  // I flag should be set
 	}
 
 	SECTION("BRK preserves flags correctly") {
@@ -4305,7 +4305,7 @@ TEST_CASE("CPU BRK Instruction", "[cpu][instructions][brk][interrupt][opcodes]")
 		bus->write(0xFFFE, 0x00);
 		bus->write(0xFFFF, 0x90);
 
-		// Set up instruction  
+		// Set up instruction
 		bus->write(0x0200, 0x00);
 
 		// Set specific flag pattern
