@@ -604,6 +604,27 @@ void CPU6502::execute_instruction() {
 		SED();
 		break;
 
+	// Transfer instructions (remaining)
+	case 0x9A: // TXS - Transfer X to Stack Pointer
+		TXS();
+		break;
+	case 0xBA: // TSX - Transfer Stack Pointer to X
+		TSX();
+		break;
+
+	// Bit test instructions
+	case 0x24: // BIT - Zero Page
+		BIT_zero_page();
+		break;
+	case 0x2C: // BIT - Absolute
+		BIT_absolute();
+		break;
+
+	// System instructions
+	case 0x00: // BRK - Break
+		BRK();
+		break;
+
 	// No Operation
 	case 0xEA:
 		NOP();
@@ -1633,6 +1654,105 @@ void CPU6502::SED() {
 	consume_cycle();
 	status_.flags.decimal_flag_ = true;
 	// Total: 2 cycles
+}
+
+// Transfer instructions (remaining)
+void CPU6502::TXS() {
+	// Transfer X to Stack Pointer
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Transfer X to SP
+	consume_cycle();
+	stack_pointer_ = x_register_;
+	// No flags affected
+	// Total: 2 cycles
+}
+
+void CPU6502::TSX() {
+	// Transfer Stack Pointer to X
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Transfer SP to X and update flags
+	consume_cycle();
+	x_register_ = stack_pointer_;
+	update_zero_and_negative_flags(x_register_);
+	// Total: 2 cycles
+}
+
+// Bit test instructions
+void CPU6502::BIT_zero_page() {
+	// BIT Zero Page - Test bits in memory with accumulator
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte zero_page_address = read_byte(program_counter_);
+	program_counter_++;
+	
+	// Cycle 3: Read from zero page address
+	Byte memory_value = read_byte(static_cast<Address>(zero_page_address));
+	
+	// Perform BIT operation:
+	// Z flag = (A AND M) == 0
+	// N flag = bit 7 of M
+	// V flag = bit 6 of M
+	Byte result = accumulator_ & memory_value;
+	status_.flags.zero_flag_ = (result == 0);
+	status_.flags.negative_flag_ = (memory_value & 0x80) != 0;
+	status_.flags.overflow_flag_ = (memory_value & 0x40) != 0;
+	// Total: 3 cycles
+}
+
+void CPU6502::BIT_absolute() {
+	// BIT Absolute - Test bits in memory with accumulator
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	
+	// Cycle 4: Read from absolute address
+	Address absolute_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte memory_value = read_byte(absolute_address);
+	
+	// Perform BIT operation:
+	// Z flag = (A AND M) == 0
+	// N flag = bit 7 of M
+	// V flag = bit 6 of M
+	Byte result = accumulator_ & memory_value;
+	status_.flags.zero_flag_ = (result == 0);
+	status_.flags.negative_flag_ = (memory_value & 0x80) != 0;
+	status_.flags.overflow_flag_ = (memory_value & 0x40) != 0;
+	// Total: 4 cycles
+}
+
+// System instructions
+void CPU6502::BRK() {
+	// Break - Force interrupt
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Read next instruction byte (ignored, but PC incremented)
+	program_counter_++; // BRK increments PC by 2
+	consume_cycle();
+	
+	// Cycle 3: Push high byte of PC to stack
+	push_byte(static_cast<Byte>(program_counter_ >> 8));
+	
+	// Cycle 4: Push low byte of PC to stack  
+	push_byte(static_cast<Byte>(program_counter_ & 0xFF));
+	
+	// Cycle 5: Push status register to stack (with B flag set)
+	Byte status_with_b = status_.status_register_ | 0x10; // Set B flag
+	push_byte(status_with_b);
+	
+	// Cycle 6: Fetch IRQ vector low byte
+	Byte irq_vector_low = read_byte(0xFFFE);
+	
+	// Cycle 7: Fetch IRQ vector high byte and set I flag
+	Byte irq_vector_high = read_byte(0xFFFF);
+	status_.flags.interrupt_flag_ = true; // Set interrupt disable flag
+	
+	// Set PC to IRQ vector
+	program_counter_ = static_cast<Address>(irq_vector_low) | (static_cast<Address>(irq_vector_high) << 8);
+	// Total: 7 cycles
 }
 
 void CPU6502::LDA_indexed_indirect() {

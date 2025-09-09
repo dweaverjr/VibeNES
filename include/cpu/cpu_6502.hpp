@@ -371,6 +371,17 @@ class CPU6502 final : public Component {
 	void CLD(); // Clear Decimal Flag
 	void SED(); // Set Decimal Flag
 
+	// Transfer instructions (remaining)
+	void TXS(); // Transfer X to Stack Pointer
+	void TSX(); // Transfer Stack Pointer to X
+
+	// Bit test instructions
+	void BIT_zero_page(); // BIT zp
+	void BIT_absolute();  // BIT abs
+
+	// System instructions
+	void BRK(); // Break
+
 	// No operation
 	void NOP(); // No Operation
 };

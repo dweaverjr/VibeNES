@@ -2,6 +2,7 @@
 
 #include "core/component.hpp"
 #include "core/types.hpp"
+#include <array>
 #include <memory>
 
 namespace nes {
@@ -45,6 +46,11 @@ class SystemBus final : public Component {
 	[[nodiscard]] bool is_ram_address(Address address) const noexcept;
 	[[nodiscard]] bool is_ppu_address(Address address) const noexcept;
 	[[nodiscard]] bool is_apu_address(Address address) const noexcept;
+
+	// Test memory for high addresses (temporary solution for testing)
+	// TODO: Replace with proper cartridge ROM when implemented
+	mutable std::array<Byte, 0x8000> test_high_memory_{};
+	mutable std::array<bool, 0x8000> test_high_memory_valid_{};
 
 	// Open bus simulation
 	mutable Byte last_bus_value_ = 0xFF;

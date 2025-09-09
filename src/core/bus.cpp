@@ -22,6 +22,9 @@ void SystemBus::reset() {
 	if (ram_) {
 		ram_->reset();
 	}
+	// Clear test memory
+	test_high_memory_.fill(0x00);
+	test_high_memory_valid_.fill(false);
 	last_bus_value_ = 0xFF;
 }
 
@@ -30,6 +33,9 @@ void SystemBus::power_on() {
 	if (ram_) {
 		ram_->power_on();
 	}
+	// Clear test memory
+	test_high_memory_.fill(0x00);
+	test_high_memory_valid_.fill(false);
 	last_bus_value_ = 0xFF;
 }
 
@@ -56,6 +62,17 @@ Byte SystemBus::read(Address address) const {
 		return last_bus_value_; // Open bus
 	}
 
+	// High memory: $8000-$FFFF (test memory for ROM vectors)
+	if (address >= 0x8000) {
+		Address index = address - 0x8000;
+		if (test_high_memory_valid_[index]) {
+			last_bus_value_ = test_high_memory_[index];
+			return last_bus_value_;
+		}
+		// Return open bus if no data written
+		return last_bus_value_;
+	}
+
 	// Unmapped region - open bus behavior
 	return last_bus_value_;
 }
@@ -78,6 +95,14 @@ void SystemBus::write(Address address, Byte value) {
 
 	// APU/IO: $4000-$401F (TODO: implement when APU ready)
 	if (is_apu_address(address)) {
+		return;
+	}
+
+	// High memory: $8000-$FFFF (test memory for ROM vectors)
+	if (address >= 0x8000) {
+		Address index = address - 0x8000;
+		test_high_memory_[index] = value;
+		test_high_memory_valid_[index] = true;
 		return;
 	}
 
