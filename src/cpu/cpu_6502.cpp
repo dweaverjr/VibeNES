@@ -630,6 +630,238 @@ void CPU6502::execute_instruction() {
 		NOP();
 		break;
 
+	// ===== UNDOCUMENTED/UNOFFICIAL OPCODES =====
+	// LAX - Load Accumulator and X Register
+	case 0xA7: // LAX zp
+		LAX_zero_page();
+		break;
+	case 0xB7: // LAX zp,Y
+		LAX_zero_page_Y();
+		break;
+	case 0xAF: // LAX abs
+		LAX_absolute();
+		break;
+	case 0xBF: // LAX abs,Y
+		LAX_absolute_Y();
+		break;
+	case 0xA3: // LAX (zp,X)
+		LAX_indexed_indirect();
+		break;
+	case 0xB3: // LAX (zp),Y
+		LAX_indirect_indexed();
+		break;
+
+	// SAX - Store Accumulator AND X Register
+	case 0x87: // SAX zp
+		SAX_zero_page();
+		break;
+	case 0x97: // SAX zp,Y
+		SAX_zero_page_Y();
+		break;
+	case 0x8F: // SAX abs
+		SAX_absolute();
+		break;
+	case 0x83: // SAX (zp,X)
+		SAX_indexed_indirect();
+		break;
+
+	// DCP - Decrement and Compare
+	case 0xC7: // DCP zp
+		DCP_zero_page();
+		break;
+	case 0xD7: // DCP zp,X
+		DCP_zero_page_X();
+		break;
+	case 0xCF: // DCP abs
+		DCP_absolute();
+		break;
+	case 0xDF: // DCP abs,X
+		DCP_absolute_X();
+		break;
+	case 0xDB: // DCP abs,Y
+		DCP_absolute_Y();
+		break;
+	case 0xC3: // DCP (zp,X)
+		DCP_indexed_indirect();
+		break;
+	case 0xD3: // DCP (zp),Y
+		DCP_indirect_indexed();
+		break;
+
+	// ISC/ISB - Increment and Subtract with Carry
+	case 0xE7: // ISC zp
+		ISC_zero_page();
+		break;
+	case 0xF7: // ISC zp,X
+		ISC_zero_page_X();
+		break;
+	case 0xEF: // ISC abs
+		ISC_absolute();
+		break;
+	case 0xFF: // ISC abs,X
+		ISC_absolute_X();
+		break;
+	case 0xFB: // ISC abs,Y
+		ISC_absolute_Y();
+		break;
+	case 0xE3: // ISC (zp,X)
+		ISC_indexed_indirect();
+		break;
+	case 0xF3: // ISC (zp),Y
+		ISC_indirect_indexed();
+		break;
+
+	// SLO - Shift Left and OR
+	case 0x07: // SLO zp
+		SLO_zero_page();
+		break;
+	case 0x17: // SLO zp,X
+		SLO_zero_page_X();
+		break;
+	case 0x0F: // SLO abs
+		SLO_absolute();
+		break;
+	case 0x1F: // SLO abs,X
+		SLO_absolute_X();
+		break;
+	case 0x1B: // SLO abs,Y
+		SLO_absolute_Y();
+		break;
+	case 0x03: // SLO (zp,X)
+		SLO_indexed_indirect();
+		break;
+	case 0x13: // SLO (zp),Y
+		SLO_indirect_indexed();
+		break;
+
+	// RLA - Rotate Left and AND
+	case 0x27: // RLA zp
+		RLA_zero_page();
+		break;
+	case 0x37: // RLA zp,X
+		RLA_zero_page_X();
+		break;
+	case 0x2F: // RLA abs
+		RLA_absolute();
+		break;
+	case 0x3F: // RLA abs,X
+		RLA_absolute_X();
+		break;
+	case 0x3B: // RLA abs,Y
+		RLA_absolute_Y();
+		break;
+	case 0x23: // RLA (zp,X)
+		RLA_indexed_indirect();
+		break;
+	case 0x33: // RLA (zp),Y
+		RLA_indirect_indexed();
+		break;
+
+	// SRE - Shift Right and EOR
+	case 0x47: // SRE zp
+		SRE_zero_page();
+		break;
+	case 0x57: // SRE zp,X
+		SRE_zero_page_X();
+		break;
+	case 0x4F: // SRE abs
+		SRE_absolute();
+		break;
+	case 0x5F: // SRE abs,X
+		SRE_absolute_X();
+		break;
+	case 0x5B: // SRE abs,Y
+		SRE_absolute_Y();
+		break;
+	case 0x43: // SRE (zp,X)
+		SRE_indexed_indirect();
+		break;
+	case 0x53: // SRE (zp),Y
+		SRE_indirect_indexed();
+		break;
+
+	// RRA - Rotate Right and Add
+	case 0x67: // RRA zp
+		RRA_zero_page();
+		break;
+	case 0x77: // RRA zp,X
+		RRA_zero_page_X();
+		break;
+	case 0x6F: // RRA abs
+		RRA_absolute();
+		break;
+	case 0x7F: // RRA abs,X
+		RRA_absolute_X();
+		break;
+	case 0x7B: // RRA abs,Y
+		RRA_absolute_Y();
+		break;
+	case 0x63: // RRA (zp,X)
+		RRA_indexed_indirect();
+		break;
+	case 0x73: // RRA (zp),Y
+		RRA_indirect_indexed();
+		break;
+
+	// Undocumented NOPs
+	case 0x80: // NOP #value (unofficial)
+	case 0x82: // NOP #value (unofficial)
+	case 0x89: // NOP #value (unofficial)
+	case 0xC2: // NOP #value (unofficial)
+	case 0xE2: // NOP #value (unofficial)
+		NOP_immediate();
+		break;
+
+	case 0x04: // NOP zp (unofficial)
+	case 0x44: // NOP zp (unofficial)
+	case 0x64: // NOP zp (unofficial)
+		NOP_zero_page();
+		break;
+
+	case 0x14: // NOP zp,X (unofficial)
+	case 0x34: // NOP zp,X (unofficial)
+	case 0x54: // NOP zp,X (unofficial)
+	case 0x74: // NOP zp,X (unofficial)
+	case 0xD4: // NOP zp,X (unofficial)
+	case 0xF4: // NOP zp,X (unofficial)
+		NOP_zero_page_X();
+		break;
+
+	case 0x0C: // NOP abs (unofficial)
+		NOP_absolute();
+		break;
+
+	case 0x1C: // NOP abs,X (unofficial)
+	case 0x3C: // NOP abs,X (unofficial)
+	case 0x5C: // NOP abs,X (unofficial)
+	case 0x7C: // NOP abs,X (unofficial)
+	case 0xDC: // NOP abs,X (unofficial)
+	case 0xFC: // NOP abs,X (unofficial)
+		NOP_absolute_X();
+		break;
+
+	// Single-byte NOPs (same as 0xEA but different opcodes)
+	case 0x1A: // NOP (unofficial)
+	case 0x3A: // NOP (unofficial)
+	case 0x5A: // NOP (unofficial)
+	case 0x7A: // NOP (unofficial)
+	case 0xDA: // NOP (unofficial)
+	case 0xFA: // NOP (unofficial)
+		NOP();
+		break;
+
+	// Highly unstable opcodes - these crash the CPU
+	case 0x8B: // ANE/XAA - extremely unstable
+	case 0xAB: // LAX #value - sometimes works, sometimes doesn't
+	case 0x9F: // SHA/AHX abs,Y - unstable high byte
+	case 0x93: // SHA/AHX (zp),Y - unstable high byte
+	case 0x9E: // SHX abs,Y - unstable high byte
+	case 0x9C: // SHY abs,X - unstable high byte
+	case 0x9B: // TAS - transfers A&X to SP, unstable high byte in abs,Y
+	case 0xBB: // LAS - load A&X&SP from memory AND stack pointer
+		CRASH();
+		break;
+
 	default:
 		std::cerr << std::format("Unknown opcode: 0x{:02X} at PC: 0x{:04X}\n", static_cast<int>(opcode),
 								 static_cast<int>(program_counter_ - 1));
@@ -3447,6 +3679,1308 @@ void CPU6502::DEC_absolute_X() {
 	write_byte(effective_address, value);
 	update_zero_and_negative_flags(value);
 	// Total: 7 cycles (RMW instructions always take extra cycle)
+}
+
+// ===== UNDOCUMENTED/UNOFFICIAL OPCODES =====
+// These are stable undocumented opcodes that are safe to implement
+
+// LAX - Load Accumulator and X Register (LDA + TAX combined)
+void CPU6502::LAX_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(static_cast<Address>(address));
+	// Load into both A and X registers
+	accumulator_ = value;
+	x_register_ = value;
+	update_zero_and_negative_flags(value);
+	// Total: 3 cycles
+}
+
+void CPU6502::LAX_zero_page_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add Y register to base address
+	Address effective_address = static_cast<Address>((base_address + y_register_) & 0xFF);
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Load into both A and X registers
+	accumulator_ = value;
+	x_register_ = value;
+	update_zero_and_negative_flags(value);
+	// Total: 4 cycles
+}
+
+void CPU6502::LAX_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+	// Load into both A and X registers
+	accumulator_ = value;
+	x_register_ = value;
+	update_zero_and_negative_flags(value);
+	// Total: 4 cycles
+}
+
+void CPU6502::LAX_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Calculate effective address
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+
+	// Cycle 4: Read from effective address (always, even if page crossed)
+	if (crosses_page_boundary(base_address, y_register_)) {
+		// Cycle 4: Read from wrong page first (dummy read)
+		consume_cycle();
+	}
+	Byte value = read_byte(effective_address);
+	// Load into both A and X registers
+	accumulator_ = value;
+	x_register_ = value;
+	update_zero_and_negative_flags(value);
+	// Total: 4 cycles (5 if page boundary crossed)
+}
+
+void CPU6502::LAX_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Byte pointer_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Fetch low byte of target address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 5: Fetch high byte of target address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 6: Read value from target address
+	Address target_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(target_address);
+	// Load into both A and X registers
+	accumulator_ = value;
+	x_register_ = value;
+	update_zero_and_negative_flags(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::LAX_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte pointer_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Calculate effective address
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+
+	// Cycle 5: Read from effective address
+	if (crosses_page_boundary(base_address, y_register_)) {
+		// Cycle 5: Read from wrong page first (dummy read)
+		consume_cycle();
+	}
+	Byte value = read_byte(effective_address);
+	// Load into both A and X registers
+	accumulator_ = value;
+	x_register_ = value;
+	update_zero_and_negative_flags(value);
+	// Total: 5 cycles (6 if page boundary crossed)
+}
+
+// SAX - Store Accumulator AND X Register
+void CPU6502::SAX_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Store A AND X to zero page
+	Byte value = accumulator_ & x_register_;
+	write_byte(static_cast<Address>(address), value);
+	// Total: 3 cycles
+}
+
+void CPU6502::SAX_zero_page_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add Y register to base address
+	consume_cycle();
+	Address effective_address = static_cast<Address>((base_address + y_register_) & 0xFF);
+	// Cycle 4: Store A AND X to effective address
+	Byte value = accumulator_ & x_register_;
+	write_byte(effective_address, value);
+	// Total: 4 cycles
+}
+
+void CPU6502::SAX_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Store A AND X to absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = accumulator_ & x_register_;
+	write_byte(address, value);
+	// Total: 4 cycles
+}
+
+void CPU6502::SAX_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Byte pointer_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Fetch low byte of target address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 5: Fetch high byte of target address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 6: Store A AND X to target address
+	Address target_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = accumulator_ & x_register_;
+	write_byte(target_address, value);
+	// Total: 6 cycles
+}
+
+// DCP - Decrement and Compare (DEC + CMP combined)
+void CPU6502::DCP_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(static_cast<Address>(address));
+	// Cycle 4: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 5: Write decremented value back
+	write_byte(static_cast<Address>(address), value);
+	// Then perform compare with accumulator
+	perform_compare(accumulator_, value);
+	// Total: 5 cycles
+}
+
+void CPU6502::DCP_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Address effective_address = static_cast<Address>((base_address + x_register_) & 0xFF);
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 5: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 6: Write decremented value back
+	write_byte(effective_address, value);
+	// Then perform compare with accumulator
+	perform_compare(accumulator_, value);
+	// Total: 6 cycles
+}
+
+void CPU6502::DCP_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+	// Cycle 5: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 6: Write decremented value back
+	write_byte(address, value);
+	// Then perform compare with accumulator
+	perform_compare(accumulator_, value);
+	// Total: 6 cycles
+}
+
+void CPU6502::DCP_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 7: Write decremented value back
+	write_byte(effective_address, value);
+	// Then perform compare with accumulator
+	perform_compare(accumulator_, value);
+	// Total: 7 cycles
+}
+
+void CPU6502::DCP_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 7: Write decremented value back
+	write_byte(effective_address, value);
+	// Then perform compare with accumulator
+	perform_compare(accumulator_, value);
+	// Total: 7 cycles
+}
+
+void CPU6502::DCP_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Byte pointer_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Fetch low byte of target address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 5: Fetch high byte of target address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 6: Read value from target address
+	Address target_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(target_address);
+	// Cycle 7: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 8: Write decremented value back
+	write_byte(target_address, value);
+	// Then perform compare with accumulator
+	perform_compare(accumulator_, value);
+	// Total: 8 cycles
+}
+
+void CPU6502::DCP_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte pointer_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 5: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 6: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 7: Internal operation (decrement)
+	consume_cycle();
+	value--;
+	// Cycle 8: Write decremented value back
+	write_byte(effective_address, value);
+	// Then perform compare with accumulator
+	perform_compare(accumulator_, value);
+	// Total: 8 cycles
+}
+
+// ISC/ISB - Increment and Subtract with Carry (INC + SBC combined)
+void CPU6502::ISC_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(static_cast<Address>(address));
+	// Cycle 4: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 5: Write incremented value back
+	write_byte(static_cast<Address>(address), value);
+	// Then perform SBC with the incremented value
+	perform_sbc(value);
+	// Total: 5 cycles
+}
+
+void CPU6502::ISC_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Address effective_address = static_cast<Address>((base_address + x_register_) & 0xFF);
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 5: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 6: Write incremented value back
+	write_byte(effective_address, value);
+	// Then perform SBC with the incremented value
+	perform_sbc(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::ISC_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+	// Cycle 5: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 6: Write incremented value back
+	write_byte(address, value);
+	// Then perform SBC with the incremented value
+	perform_sbc(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::ISC_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 7: Write incremented value back
+	write_byte(effective_address, value);
+	// Then perform SBC with the incremented value
+	perform_sbc(value);
+	// Total: 7 cycles
+}
+
+void CPU6502::ISC_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 7: Write incremented value back
+	write_byte(effective_address, value);
+	// Then perform SBC with the incremented value
+	perform_sbc(value);
+	// Total: 7 cycles
+}
+
+void CPU6502::ISC_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Byte pointer_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Fetch low byte of target address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 5: Fetch high byte of target address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 6: Read value from target address
+	Address target_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(target_address);
+	// Cycle 7: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 8: Write incremented value back
+	write_byte(target_address, value);
+	// Then perform SBC with the incremented value
+	perform_sbc(value);
+	// Total: 8 cycles
+}
+
+void CPU6502::ISC_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte pointer_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 5: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 6: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 7: Internal operation (increment)
+	consume_cycle();
+	value++;
+	// Cycle 8: Write incremented value back
+	write_byte(effective_address, value);
+	// Then perform SBC with the incremented value
+	perform_sbc(value);
+	// Total: 8 cycles
+}
+
+// SLO - Shift Left and OR (ASL + ORA combined)
+void CPU6502::SLO_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(static_cast<Address>(address));
+	// Cycle 4: Internal operation (shift left)
+	consume_cycle();
+	// Perform ASL operation
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value <<= 1;
+	// Cycle 5: Write shifted value back
+	write_byte(static_cast<Address>(address), value);
+	// Then perform ORA with the shifted value
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 5 cycles
+}
+
+void CPU6502::SLO_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Address effective_address = static_cast<Address>((base_address + x_register_) & 0xFF);
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 5: Internal operation (shift left)
+	consume_cycle();
+	// Perform ASL operation
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value <<= 1;
+	// Cycle 6: Write shifted value back
+	write_byte(effective_address, value);
+	// Then perform ORA with the shifted value
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::SLO_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+	// Cycle 5: Internal operation (shift left)
+	consume_cycle();
+	// Perform ASL operation
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value <<= 1;
+	// Cycle 6: Write shifted value back
+	write_byte(address, value);
+	// Then perform ORA with the shifted value
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::SLO_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (shift left)
+	consume_cycle();
+	// Perform ASL operation
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value <<= 1;
+	// Cycle 7: Write shifted value back
+	write_byte(effective_address, value);
+	// Then perform ORA with the shifted value
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 7 cycles
+}
+
+void CPU6502::SLO_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (shift left)
+	consume_cycle();
+	// Perform ASL operation
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value <<= 1;
+	// Cycle 7: Write shifted value back
+	write_byte(effective_address, value);
+	// Then perform ORA with the shifted value
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 7 cycles
+}
+
+void CPU6502::SLO_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Byte pointer_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Fetch low byte of target address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 5: Fetch high byte of target address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 6: Read value from target address
+	Address target_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(target_address);
+	// Cycle 7: Internal operation (shift left)
+	consume_cycle();
+	// Perform ASL operation
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value <<= 1;
+	// Cycle 8: Write shifted value back
+	write_byte(target_address, value);
+	// Then perform ORA with the shifted value
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 8 cycles
+}
+
+void CPU6502::SLO_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte pointer_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 5: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 6: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 7: Internal operation (shift left)
+	consume_cycle();
+	// Perform ASL operation
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value <<= 1;
+	// Cycle 8: Write shifted value back
+	write_byte(effective_address, value);
+	// Then perform ORA with the shifted value
+	accumulator_ |= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 8 cycles
+}
+
+// RLA - Rotate Left and AND (ROL + AND combined)
+void CPU6502::RLA_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(static_cast<Address>(address));
+	// Cycle 4: Internal operation (rotate left)
+	consume_cycle();
+	// Perform ROL operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value = (value << 1) | (old_carry ? 1 : 0);
+	// Cycle 5: Write rotated value back
+	write_byte(static_cast<Address>(address), value);
+	// Then perform AND with the rotated value
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 5 cycles
+}
+
+void CPU6502::RLA_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Address effective_address = static_cast<Address>((base_address + x_register_) & 0xFF);
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 5: Internal operation (rotate left)
+	consume_cycle();
+	// Perform ROL operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value = (value << 1) | (old_carry ? 1 : 0);
+	// Cycle 6: Write rotated value back
+	write_byte(effective_address, value);
+	// Then perform AND with the rotated value
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::RLA_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+	// Cycle 5: Internal operation (rotate left)
+	consume_cycle();
+	// Perform ROL operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value = (value << 1) | (old_carry ? 1 : 0);
+	// Cycle 6: Write rotated value back
+	write_byte(address, value);
+	// Then perform AND with the rotated value
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::RLA_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (rotate left)
+	consume_cycle();
+	// Perform ROL operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value = (value << 1) | (old_carry ? 1 : 0);
+	// Cycle 7: Write rotated value back
+	write_byte(effective_address, value);
+	// Then perform AND with the rotated value
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 7 cycles
+}
+
+void CPU6502::RLA_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (rotate left)
+	consume_cycle();
+	// Perform ROL operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value = (value << 1) | (old_carry ? 1 : 0);
+	// Cycle 7: Write rotated value back
+	write_byte(effective_address, value);
+	// Then perform AND with the rotated value
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 7 cycles
+}
+
+void CPU6502::RLA_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Byte pointer_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Fetch low byte of target address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 5: Fetch high byte of target address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 6: Read value from target address
+	Address target_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(target_address);
+	// Cycle 7: Internal operation (rotate left)
+	consume_cycle();
+	// Perform ROL operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value = (value << 1) | (old_carry ? 1 : 0);
+	// Cycle 8: Write rotated value back
+	write_byte(target_address, value);
+	// Then perform AND with the rotated value
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 8 cycles
+}
+
+void CPU6502::RLA_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte pointer_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 5: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 6: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 7: Internal operation (rotate left)
+	consume_cycle();
+	// Perform ROL operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x80) != 0;
+	value = (value << 1) | (old_carry ? 1 : 0);
+	// Cycle 8: Write rotated value back
+	write_byte(effective_address, value);
+	// Then perform AND with the rotated value
+	accumulator_ &= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 8 cycles
+}
+
+// Continue with the remaining undocumented opcodes in the next part...
+// (SRE, RRA, undocumented NOPs, and CRASH)
+
+// SRE - Shift Right and EOR (LSR + EOR combined)
+void CPU6502::SRE_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(static_cast<Address>(address));
+	// Cycle 4: Internal operation (shift right)
+	consume_cycle();
+	// Perform LSR operation
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value >>= 1;
+	// Cycle 5: Write shifted value back
+	write_byte(static_cast<Address>(address), value);
+	// Then perform EOR with the shifted value
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 5 cycles
+}
+
+void CPU6502::SRE_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Address effective_address = static_cast<Address>((base_address + x_register_) & 0xFF);
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 5: Internal operation (shift right)
+	consume_cycle();
+	// Perform LSR operation
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value >>= 1;
+	// Cycle 6: Write shifted value back
+	write_byte(effective_address, value);
+	// Then perform EOR with the shifted value
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::SRE_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+	// Cycle 5: Internal operation (shift right)
+	consume_cycle();
+	// Perform LSR operation
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value >>= 1;
+	// Cycle 6: Write shifted value back
+	write_byte(address, value);
+	// Then perform EOR with the shifted value
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 6 cycles
+}
+
+void CPU6502::SRE_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (shift right)
+	consume_cycle();
+	// Perform LSR operation
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value >>= 1;
+	// Cycle 7: Write shifted value back
+	write_byte(effective_address, value);
+	// Then perform EOR with the shifted value
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 7 cycles
+}
+
+void CPU6502::SRE_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (shift right)
+	consume_cycle();
+	// Perform LSR operation
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value >>= 1;
+	// Cycle 7: Write shifted value back
+	write_byte(effective_address, value);
+	// Then perform EOR with the shifted value
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 7 cycles
+}
+
+void CPU6502::SRE_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Byte pointer_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Fetch low byte of target address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 5: Fetch high byte of target address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 6: Read value from target address
+	Address target_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(target_address);
+	// Cycle 7: Internal operation (shift right)
+	consume_cycle();
+	// Perform LSR operation
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value >>= 1;
+	// Cycle 8: Write shifted value back
+	write_byte(target_address, value);
+	// Then perform EOR with the shifted value
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 8 cycles
+}
+
+void CPU6502::SRE_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte pointer_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 5: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 6: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 7: Internal operation (shift right)
+	consume_cycle();
+	// Perform LSR operation
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value >>= 1;
+	// Cycle 8: Write shifted value back
+	write_byte(effective_address, value);
+	// Then perform EOR with the shifted value
+	accumulator_ ^= value;
+	update_zero_and_negative_flags(accumulator_);
+	// Total: 8 cycles
+}
+
+// RRA - Rotate Right and Add (ROR + ADC combined)
+void CPU6502::RRA_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read value from zero page
+	Byte value = read_byte(static_cast<Address>(address));
+	// Cycle 4: Internal operation (rotate right)
+	consume_cycle();
+	// Perform ROR operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value = (value >> 1) | (old_carry ? 0x80 : 0);
+	// Cycle 5: Write rotated value back
+	write_byte(static_cast<Address>(address), value);
+	// Then perform ADC with the rotated value
+	perform_adc(value);
+	// Total: 5 cycles
+}
+
+void CPU6502::RRA_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Address effective_address = static_cast<Address>((base_address + x_register_) & 0xFF);
+	// Cycle 4: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 5: Internal operation (rotate right)
+	consume_cycle();
+	// Perform ROR operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value = (value >> 1) | (old_carry ? 0x80 : 0);
+	// Cycle 6: Write rotated value back
+	write_byte(effective_address, value);
+	// Then perform ADC with the rotated value
+	perform_adc(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::RRA_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Read value from absolute address
+	Address address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(address);
+	// Cycle 5: Internal operation (rotate right)
+	consume_cycle();
+	// Perform ROR operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value = (value >> 1) | (old_carry ? 0x80 : 0);
+	// Cycle 6: Write rotated value back
+	write_byte(address, value);
+	// Then perform ADC with the rotated value
+	perform_adc(value);
+	// Total: 6 cycles
+}
+
+void CPU6502::RRA_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add X to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + x_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (rotate right)
+	consume_cycle();
+	// Perform ROR operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value = (value >> 1) | (old_carry ? 0x80 : 0);
+	// Cycle 7: Write rotated value back
+	write_byte(effective_address, value);
+	// Then perform ADC with the rotated value
+	perform_adc(value);
+	// Total: 7 cycles
+}
+
+void CPU6502::RRA_absolute_Y() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 5: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 6: Internal operation (rotate right)
+	consume_cycle();
+	// Perform ROR operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value = (value >> 1) | (old_carry ? 0x80 : 0);
+	// Cycle 7: Write rotated value back
+	write_byte(effective_address, value);
+	// Then perform ADC with the rotated value
+	perform_adc(value);
+	// Total: 7 cycles
+}
+
+void CPU6502::RRA_indexed_indirect() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	Byte base_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register to base address
+	consume_cycle();
+	Byte pointer_address = (base_address + x_register_) & 0xFF;
+	// Cycle 4: Fetch low byte of target address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 5: Fetch high byte of target address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 6: Read value from target address
+	Address target_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Byte value = read_byte(target_address);
+	// Cycle 7: Internal operation (rotate right)
+	consume_cycle();
+	// Perform ROR operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value = (value >> 1) | (old_carry ? 0x80 : 0);
+	// Cycle 8: Write rotated value back
+	write_byte(target_address, value);
+	// Then perform ADC with the rotated value
+	perform_adc(value);
+	// Total: 8 cycles
+}
+
+void CPU6502::RRA_indirect_indexed() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	Byte pointer_address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch low byte of base address
+	Byte low = read_byte(static_cast<Address>(pointer_address));
+	// Cycle 4: Fetch high byte of base address
+	Byte high = read_byte(static_cast<Address>((pointer_address + 1) & 0xFF));
+	// Cycle 5: Add Y to base address (internal operation)
+	consume_cycle(); // Always takes extra cycle for RMW operations
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	Address effective_address = base_address + y_register_;
+	// Cycle 6: Read value from effective address
+	Byte value = read_byte(effective_address);
+	// Cycle 7: Internal operation (rotate right)
+	consume_cycle();
+	// Perform ROR operation
+	bool old_carry = status_.flags.carry_flag_;
+	status_.flags.carry_flag_ = (value & 0x01) != 0;
+	value = (value >> 1) | (old_carry ? 0x80 : 0);
+	// Cycle 8: Write rotated value back
+	write_byte(effective_address, value);
+	// Then perform ADC with the rotated value
+	perform_adc(value);
+	// Total: 8 cycles
+}
+
+// Undocumented NOPs with different cycle counts and addressing modes
+void CPU6502::NOP_immediate() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch immediate value (but ignore it)
+	[[maybe_unused]] Byte value = read_byte(program_counter_);
+	program_counter_++;
+	// Total: 2 cycles
+}
+
+void CPU6502::NOP_zero_page() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page address
+	[[maybe_unused]] Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Read from zero page (dummy read)
+	consume_cycle();
+	// Total: 3 cycles
+}
+
+void CPU6502::NOP_zero_page_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch zero page base address
+	[[maybe_unused]] Byte address = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Add X register (dummy operation)
+	consume_cycle();
+	// Cycle 4: Dummy read
+	consume_cycle();
+	// Total: 4 cycles
+}
+
+void CPU6502::NOP_absolute() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	[[maybe_unused]] Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	[[maybe_unused]] Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Dummy read
+	consume_cycle();
+	// Total: 4 cycles
+}
+
+void CPU6502::NOP_absolute_X() {
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of base address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of base address
+	Byte high = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 4: Calculate effective address and read (may cross page boundary)
+	Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
+	if (crosses_page_boundary(base_address, x_register_)) {
+		// Cycle 4: Read from wrong page first (dummy read)
+		consume_cycle();
+	}
+	// Cycle 4/5: Read from correct address (dummy read)
+	consume_cycle();
+	// Total: 4 cycles (5 if page boundary crossed)
+}
+
+// Highly unstable opcodes - these will crash/halt the CPU
+void CPU6502::CRASH() {
+	// These opcodes cause the CPU to enter an undefined state
+	// In real hardware, this could cause the CPU to hang, crash, or behave unpredictably
+	std::cerr << std::format("CPU CRASH: Highly unstable opcode executed at PC: 0x{:04X}\n",
+							 static_cast<int>(program_counter_ - 1));
+
+	// In a real emulator, you might want to:
+	// 1. Halt execution completely
+	// 2. Reset the CPU
+	// 3. Generate an exception
+	// For now, we'll just consume some cycles and continue (treating as a very slow NOP)
+	consume_cycles(2);
+
+	// Note: Some highly unstable opcodes like ANE/XAA have unpredictable results
+	// that depend on analog effects and manufacturing variations
 }
 
 } // namespace nes

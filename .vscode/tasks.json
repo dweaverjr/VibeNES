@@ -115,6 +115,7 @@
                 "${workspaceFolder}/tests/cpu/instruction_tests.cpp",
                 "${workspaceFolder}/tests/cpu/timing_tests.cpp",
                 "${workspaceFolder}/tests/cpu/nestest_validation.cpp",
+                "${workspaceFolder}/tests/cpu/undocumented_opcodes_tests.cpp",
                 "${workspaceFolder}/src/core/bus.cpp",
                 "${workspaceFolder}/src/cpu/cpu_6502.cpp",
                 "-I${workspaceFolder}/include",

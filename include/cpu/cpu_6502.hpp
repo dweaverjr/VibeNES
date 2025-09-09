@@ -384,6 +384,88 @@ class CPU6502 final : public Component {
 
 	// No operation
 	void NOP(); // No Operation
+
+	// ===== UNDOCUMENTED/UNOFFICIAL OPCODES =====
+	// These are stable undocumented opcodes that are safe to implement
+	// and are actually used by some NES games
+
+	// LAX - Load Accumulator and X Register (combination of LDA + TAX)
+	void LAX_zero_page();		 // LAX zp
+	void LAX_zero_page_Y();		 // LAX zp,Y
+	void LAX_absolute();		 // LAX abs
+	void LAX_absolute_Y();		 // LAX abs,Y
+	void LAX_indexed_indirect(); // LAX (zp,X)
+	void LAX_indirect_indexed(); // LAX (zp),Y
+
+	// SAX - Store Accumulator AND X Register
+	void SAX_zero_page();		 // SAX zp
+	void SAX_zero_page_Y();		 // SAX zp,Y
+	void SAX_absolute();		 // SAX abs
+	void SAX_indexed_indirect(); // SAX (zp,X)
+
+	// DCP - Decrement and Compare (combination of DEC + CMP)
+	void DCP_zero_page();		 // DCP zp
+	void DCP_zero_page_X();		 // DCP zp,X
+	void DCP_absolute();		 // DCP abs
+	void DCP_absolute_X();		 // DCP abs,X
+	void DCP_absolute_Y();		 // DCP abs,Y
+	void DCP_indexed_indirect(); // DCP (zp,X)
+	void DCP_indirect_indexed(); // DCP (zp),Y
+
+	// ISC/ISB - Increment and Subtract with Carry (combination of INC + SBC)
+	void ISC_zero_page();		 // ISC zp
+	void ISC_zero_page_X();		 // ISC zp,X
+	void ISC_absolute();		 // ISC abs
+	void ISC_absolute_X();		 // ISC abs,X
+	void ISC_absolute_Y();		 // ISC abs,Y
+	void ISC_indexed_indirect(); // ISC (zp,X)
+	void ISC_indirect_indexed(); // ISC (zp),Y
+
+	// SLO - Shift Left and OR (combination of ASL + ORA)
+	void SLO_zero_page();		 // SLO zp
+	void SLO_zero_page_X();		 // SLO zp,X
+	void SLO_absolute();		 // SLO abs
+	void SLO_absolute_X();		 // SLO abs,X
+	void SLO_absolute_Y();		 // SLO abs,Y
+	void SLO_indexed_indirect(); // SLO (zp,X)
+	void SLO_indirect_indexed(); // SLO (zp),Y
+
+	// RLA - Rotate Left and AND (combination of ROL + AND)
+	void RLA_zero_page();		 // RLA zp
+	void RLA_zero_page_X();		 // RLA zp,X
+	void RLA_absolute();		 // RLA abs
+	void RLA_absolute_X();		 // RLA abs,X
+	void RLA_absolute_Y();		 // RLA abs,Y
+	void RLA_indexed_indirect(); // RLA (zp,X)
+	void RLA_indirect_indexed(); // RLA (zp),Y
+
+	// SRE - Shift Right and EOR (combination of LSR + EOR)
+	void SRE_zero_page();		 // SRE zp
+	void SRE_zero_page_X();		 // SRE zp,X
+	void SRE_absolute();		 // SRE abs
+	void SRE_absolute_X();		 // SRE abs,X
+	void SRE_absolute_Y();		 // SRE abs,Y
+	void SRE_indexed_indirect(); // SRE (zp,X)
+	void SRE_indirect_indexed(); // SRE (zp),Y
+
+	// RRA - Rotate Right and Add (combination of ROR + ADC)
+	void RRA_zero_page();		 // RRA zp
+	void RRA_zero_page_X();		 // RRA zp,X
+	void RRA_absolute();		 // RRA abs
+	void RRA_absolute_X();		 // RRA abs,X
+	void RRA_absolute_Y();		 // RRA abs,Y
+	void RRA_indexed_indirect(); // RRA (zp,X)
+	void RRA_indirect_indexed(); // RRA (zp),Y
+
+	// Undocumented NOPs with different cycle counts and addressing modes
+	void NOP_immediate();	// NOP #value (2 cycles)
+	void NOP_zero_page();	// NOP zp (3 cycles)
+	void NOP_zero_page_X(); // NOP zp,X (4 cycles)
+	void NOP_absolute();	// NOP abs (4 cycles)
+	void NOP_absolute_X();	// NOP abs,X (4/5 cycles)
+
+	// Highly unstable opcodes - these will crash/halt the CPU
+	void CRASH(); // For highly unstable opcodes that should halt execution
 };
 
 } // namespace nes
