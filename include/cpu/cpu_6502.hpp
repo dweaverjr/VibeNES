@@ -2,6 +2,7 @@
 
 #include "core/component.hpp"
 #include "core/types.hpp"
+#include "cpu/interrupts.hpp"
 
 namespace nes {
 
@@ -31,6 +32,14 @@ class CPU6502 final : public Component {
 
 	// CPU execution
 	void execute_instruction();
+
+	// Interrupt handling
+	void trigger_nmi() noexcept;   ///< Trigger Non-Maskable Interrupt (PPU VBlank, etc.)
+	void trigger_irq() noexcept;   ///< Trigger Maskable Interrupt (APU, mappers, etc.)
+	void trigger_reset() noexcept; ///< Trigger Reset (reset button, power-on)
+
+	[[nodiscard]] bool has_pending_interrupt() const noexcept;
+	[[nodiscard]] InterruptType get_pending_interrupt() const noexcept;
 
 	// Register access (for debugging and testing)
 	[[nodiscard]] Byte get_accumulator() const noexcept {
@@ -142,6 +151,9 @@ class CPU6502 final : public Component {
 	// Cycle tracking
 	CpuCycle cycles_remaining_;
 
+	// Interrupt state
+	InterruptState interrupt_state_;
+
 	// Memory access methods
 	[[nodiscard]] Byte read_byte(Address address);
 	void write_byte(Address address, Byte value);
@@ -166,6 +178,12 @@ class CPU6502 final : public Component {
 	// Cycle management helpers
 	void consume_cycle() noexcept;
 	void consume_cycles(int count) noexcept;
+
+	// Interrupt handling
+	void handle_nmi();		   ///< Handle Non-Maskable Interrupt
+	void handle_irq();		   ///< Handle Maskable Interrupt (IRQ/BRK)
+	void handle_reset();	   ///< Handle Reset interrupt
+	void process_interrupts(); ///< Check and process pending interrupts
 
 	// Addressing mode helpers
 	[[nodiscard]] bool crosses_page_boundary(Address base_address, Byte offset) const noexcept;

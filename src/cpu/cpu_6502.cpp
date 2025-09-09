@@ -10,7 +10,7 @@ CPU6502::CPU6502(SystemBus *bus)
 	  ,
 	  program_counter_(0), status_({.status_register_ = 0x20}) // Unused flag always set
 	  ,
-	  bus_(bus), cycles_remaining_(0) {
+	  bus_(bus), cycles_remaining_(0), interrupt_state_() {
 
 	// Ensure unused flag is always set
 	status_.flags.unused_flag_ = true;
@@ -25,21 +25,15 @@ void CPU6502::tick(CpuCycle cycles) {
 	}
 }
 void CPU6502::reset() {
-	// For testing, use a known reset vector
-	// In a real NES, this would read from cartridge ROM at $FFFC-$FFFD
-	program_counter_ = 0x8000;
+	// Trigger a reset interrupt rather than immediately setting PC
+	// This ensures proper reset vector handling
+	trigger_reset();
 
-	// Reset registers to known state
-	accumulator_ = 0;
-	x_register_ = 0;
-	y_register_ = 0;
-	stack_pointer_ = 0xFD; // Stack pointer decremented by 3 on reset
+	// Clear any other pending interrupts
+	interrupt_state_.irq_pending = false;
+	interrupt_state_.nmi_pending = false;
 
-	// Set status flags
-	status_.status_register_ = 0x20;	  // Unused flag set
-	status_.flags.interrupt_flag_ = true; // Interrupts disabled
-
-	cycles_remaining_ = CpuCycle{7}; // Reset takes 7 cycles
+	// Reset will be processed in next execute_instruction() call
 }
 
 void CPU6502::power_on() {
@@ -62,7 +56,120 @@ const char *CPU6502::get_name() const noexcept {
 	return "6502 CPU";
 }
 
+// ============================================================================
+// Interrupt Handling
+// ============================================================================
+
+void CPU6502::trigger_nmi() noexcept {
+	interrupt_state_.nmi_pending = true;
+}
+
+void CPU6502::trigger_irq() noexcept {
+	interrupt_state_.irq_pending = true;
+}
+
+void CPU6502::trigger_reset() noexcept {
+	interrupt_state_.reset_pending = true;
+}
+
+bool CPU6502::has_pending_interrupt() const noexcept {
+	return interrupt_state_.get_pending_interrupt() != InterruptType::NONE;
+}
+
+InterruptType CPU6502::get_pending_interrupt() const noexcept {
+	return interrupt_state_.get_pending_interrupt();
+}
+
+void CPU6502::process_interrupts() {
+	InterruptType pending = interrupt_state_.get_pending_interrupt();
+
+	switch (pending) {
+	case InterruptType::RESET:
+		handle_reset();
+		interrupt_state_.clear_interrupt(InterruptType::RESET);
+		break;
+
+	case InterruptType::NMI:
+		handle_nmi();
+		interrupt_state_.clear_interrupt(InterruptType::NMI);
+		break;
+
+	case InterruptType::IRQ:
+		// IRQ can be masked by the interrupt flag
+		if (!get_interrupt_flag()) {
+			handle_irq();
+			interrupt_state_.clear_interrupt(InterruptType::IRQ);
+		}
+		break;
+
+	case InterruptType::NONE:
+		// No interrupt to process
+		break;
+	}
+}
+
+void CPU6502::handle_reset() {
+	// Reset sequence takes 7 cycles total
+	consume_cycles(7);
+
+	// Read reset vector from $FFFC-$FFFD
+	program_counter_ = read_word(RESET_VECTOR);
+
+	// Reset CPU state
+	stack_pointer_ = 0xFD;				  // Stack pointer decrements by 3 during reset
+	status_.flags.interrupt_flag_ = true; // Disable interrupts
+
+	// Clear interrupt state
+	interrupt_state_.clear_all();
+}
+
+void CPU6502::handle_nmi() {
+	// NMI sequence takes 7 cycles
+	consume_cycles(7);
+
+	// Push return address (PC) onto stack
+	push_word(program_counter_);
+
+	// Push status register (with break flag clear for NMI)
+	Byte status_to_push = status_.status_register_;
+	status_to_push &= 0xEFu; // Clear break flag (bit 4)
+	status_to_push |= 0x20u; // Set unused flag (bit 5)
+	push_byte(status_to_push);
+
+	// Set interrupt disable flag
+	status_.flags.interrupt_flag_ = true;
+
+	// Jump to NMI handler
+	program_counter_ = read_word(NMI_VECTOR);
+}
+
+void CPU6502::handle_irq() {
+	// IRQ/BRK sequence takes 7 cycles
+	consume_cycles(7);
+
+	// Push return address (PC) onto stack
+	push_word(program_counter_);
+
+	// Push status register (with break flag clear for IRQ)
+	Byte status_to_push = status_.status_register_;
+	status_to_push &= 0xEFu; // Clear break flag (bit 4)
+	status_to_push |= 0x20u; // Set unused flag (bit 5)
+	push_byte(status_to_push);
+
+	// Set interrupt disable flag
+	status_.flags.interrupt_flag_ = true;
+
+	// Jump to IRQ handler
+	program_counter_ = read_word(IRQ_VECTOR);
+}
+
 void CPU6502::execute_instruction() {
+	// Check for pending interrupts before instruction fetch
+	if (has_pending_interrupt()) {
+		process_interrupts();
+		return; // Interrupt handling consumes cycles, don't execute instruction
+	}
+
 	// Fetch opcode
 	Byte opcode = read_byte(program_counter_);
 	program_counter_++;
@@ -1819,9 +1926,9 @@ void CPU6502::PLP() {
 	// Cycle 4: Pull status register from stack
 	status_.status_register_ = pull_byte();
 	// Note: Bit 5 (unused flag) is always set, bit 4 (B flag) is ignored
-	status_.status_register_ |= 0x20;					  // Ensure unused flag is set
-	status_.status_register_ &= static_cast<Byte>(~0x10); // Clear B flag (it doesn't exist in the actual register)
-														  // Total: 4 cycles
+	status_.status_register_ |= 0x20u; // Ensure unused flag is set
+	status_.status_register_ &= 0xEFu; // Clear B flag (it doesn't exist in the actual register)
+									   // Total: 4 cycles
 }
 
 // Status Flag Instructions
