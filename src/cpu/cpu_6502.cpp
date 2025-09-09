@@ -524,6 +524,49 @@ void CPU6502::execute_instruction() {
 		DEC_absolute_X();
 		break;
 
+	// Branch Instructions
+	case 0x10: // BPL - Branch if Plus/Positive
+		BPL_relative();
+		break;
+	case 0x30: // BMI - Branch if Minus/Negative
+		BMI_relative();
+		break;
+	case 0x50: // BVC - Branch if Overflow Clear
+		BVC_relative();
+		break;
+	case 0x70: // BVS - Branch if Overflow Set
+		BVS_relative();
+		break;
+	case 0x90: // BCC - Branch if Carry Clear
+		BCC_relative();
+		break;
+	case 0xB0: // BCS - Branch if Carry Set
+		BCS_relative();
+		break;
+	case 0xD0: // BNE - Branch if Not Equal/Zero Clear
+		BNE_relative();
+		break;
+	case 0xF0: // BEQ - Branch if Equal/Zero Set
+		BEQ_relative();
+		break;
+
+	// Jump and Subroutine Instructions
+	case 0x4C: // JMP - Jump to absolute address
+		JMP_absolute();
+		break;
+	case 0x6C: // JMP - Jump to indirect address
+		JMP_indirect();
+		break;
+	case 0x20: // JSR - Jump to Subroutine
+		JSR();
+		break;
+	case 0x60: // RTS - Return from Subroutine
+		RTS();
+		break;
+	case 0x40: // RTI - Return from Interrupt
+		RTI();
+		break;
+
 	// No Operation
 	case 0xEA:
 		NOP();
@@ -1133,6 +1176,301 @@ void CPU6502::TYA() {
 	accumulator_ = y_register_;
 	update_zero_and_negative_flags(accumulator_);
 	// Total: 2 cycles
+}
+
+// Branch Instructions - All use relative addressing mode
+void CPU6502::BPL_relative() {
+	// Branch if Plus/Positive (N = 0)
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch offset
+	SignedByte offset = static_cast<SignedByte>(read_byte(program_counter_));
+	program_counter_++;
+
+	if (!status_.flags.negative_flag_) {
+		// Branch taken
+		// Cycle 3: Internal operation (branch decision)
+		consume_cycle();
+		Address old_pc = program_counter_;
+		program_counter_ = static_cast<Address>(program_counter_ + offset);
+
+		// Check for page boundary crossing (cycle 4 if crossed)
+		if ((old_pc & 0xFF00) != (program_counter_ & 0xFF00)) {
+			consume_cycle(); // Extra cycle for page boundary crossing
+		}
+	}
+	// Total: 2 cycles (no branch), 3 cycles (branch same page), 4 cycles (branch different page)
+}
+
+void CPU6502::BMI_relative() {
+	// Branch if Minus/Negative (N = 1)
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch offset
+	SignedByte offset = static_cast<SignedByte>(read_byte(program_counter_));
+	program_counter_++;
+
+	if (status_.flags.negative_flag_) {
+		// Branch taken
+		// Cycle 3: Internal operation (branch decision)
+		consume_cycle();
+		Address old_pc = program_counter_;
+		program_counter_ = static_cast<Address>(program_counter_ + offset);
+
+		// Check for page boundary crossing (cycle 4 if crossed)
+		if ((old_pc & 0xFF00) != (program_counter_ & 0xFF00)) {
+			consume_cycle(); // Extra cycle for page boundary crossing
+		}
+	}
+	// Total: 2 cycles (no branch), 3 cycles (branch same page), 4 cycles (branch different page)
+}
+
+void CPU6502::BVC_relative() {
+	// Branch if Overflow Clear (V = 0)
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch offset
+	SignedByte offset = static_cast<SignedByte>(read_byte(program_counter_));
+	program_counter_++;
+
+	if (!status_.flags.overflow_flag_) {
+		// Branch taken
+		// Cycle 3: Internal operation (branch decision)
+		consume_cycle();
+		Address old_pc = program_counter_;
+		program_counter_ = static_cast<Address>(program_counter_ + offset);
+
+		// Check for page boundary crossing (cycle 4 if crossed)
+		if ((old_pc & 0xFF00) != (program_counter_ & 0xFF00)) {
+			consume_cycle(); // Extra cycle for page boundary crossing
+		}
+	}
+	// Total: 2 cycles (no branch), 3 cycles (branch same page), 4 cycles (branch different page)
+}
+
+void CPU6502::BVS_relative() {
+	// Branch if Overflow Set (V = 1)
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch offset
+	SignedByte offset = static_cast<SignedByte>(read_byte(program_counter_));
+	program_counter_++;
+
+	if (status_.flags.overflow_flag_) {
+		// Branch taken
+		// Cycle 3: Internal operation (branch decision)
+		consume_cycle();
+		Address old_pc = program_counter_;
+		program_counter_ = static_cast<Address>(program_counter_ + offset);
+
+		// Check for page boundary crossing (cycle 4 if crossed)
+		if ((old_pc & 0xFF00) != (program_counter_ & 0xFF00)) {
+			consume_cycle(); // Extra cycle for page boundary crossing
+		}
+	}
+	// Total: 2 cycles (no branch), 3 cycles (branch same page), 4 cycles (branch different page)
+}
+
+void CPU6502::BCC_relative() {
+	// Branch if Carry Clear (C = 0)
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch offset
+	SignedByte offset = static_cast<SignedByte>(read_byte(program_counter_));
+	program_counter_++;
+
+	if (!status_.flags.carry_flag_) {
+		// Branch taken
+		// Cycle 3: Internal operation (branch decision)
+		consume_cycle();
+		Address old_pc = program_counter_;
+		program_counter_ = static_cast<Address>(program_counter_ + offset);
+
+		// Check for page boundary crossing (cycle 4 if crossed)
+		if ((old_pc & 0xFF00) != (program_counter_ & 0xFF00)) {
+			consume_cycle(); // Extra cycle for page boundary crossing
+		}
+	}
+	// Total: 2 cycles (no branch), 3 cycles (branch same page), 4 cycles (branch different page)
+}
+
+void CPU6502::BCS_relative() {
+	// Branch if Carry Set (C = 1)
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch offset
+	SignedByte offset = static_cast<SignedByte>(read_byte(program_counter_));
+	program_counter_++;
+
+	if (status_.flags.carry_flag_) {
+		// Branch taken
+		// Cycle 3: Internal operation (branch decision)
+		consume_cycle();
+		Address old_pc = program_counter_;
+		program_counter_ = static_cast<Address>(program_counter_ + offset);
+
+		// Check for page boundary crossing (cycle 4 if crossed)
+		if ((old_pc & 0xFF00) != (program_counter_ & 0xFF00)) {
+			consume_cycle(); // Extra cycle for page boundary crossing
+		}
+	}
+	// Total: 2 cycles (no branch), 3 cycles (branch same page), 4 cycles (branch different page)
+}
+
+void CPU6502::BNE_relative() {
+	// Branch if Not Equal/Zero Clear (Z = 0)
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch offset
+	SignedByte offset = static_cast<SignedByte>(read_byte(program_counter_));
+	program_counter_++;
+
+	if (!status_.flags.zero_flag_) {
+		// Branch taken
+		// Cycle 3: Internal operation (branch decision)
+		consume_cycle();
+		Address old_pc = program_counter_;
+		program_counter_ = static_cast<Address>(program_counter_ + offset);
+
+		// Check for page boundary crossing (cycle 4 if crossed)
+		if ((old_pc & 0xFF00) != (program_counter_ & 0xFF00)) {
+			consume_cycle(); // Extra cycle for page boundary crossing
+		}
+	}
+	// Total: 2 cycles (no branch), 3 cycles (branch same page), 4 cycles (branch different page)
+}
+
+void CPU6502::BEQ_relative() {
+	// Branch if Equal/Zero Set (Z = 1)
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch offset
+	SignedByte offset = static_cast<SignedByte>(read_byte(program_counter_));
+	program_counter_++;
+
+	if (status_.flags.zero_flag_) {
+		// Branch taken
+		// Cycle 3: Internal operation (branch decision)
+		consume_cycle();
+		Address old_pc = program_counter_;
+		program_counter_ = static_cast<Address>(program_counter_ + offset);
+
+		// Check for page boundary crossing (cycle 4 if crossed)
+		if ((old_pc & 0xFF00) != (program_counter_ & 0xFF00)) {
+			consume_cycle(); // Extra cycle for page boundary crossing
+		}
+	}
+	// Total: 2 cycles (no branch), 3 cycles (branch same page), 4 cycles (branch different page)
+}
+
+// Jump and Subroutine Instructions
+void CPU6502::JMP_absolute() {
+	// Jump to absolute address
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of address
+	Byte high = read_byte(program_counter_);
+	// Don't increment PC here - we're jumping to the new address
+
+	// Set program counter to the new address
+	program_counter_ = (static_cast<Address>(high) << 8) | low;
+	// Total: 3 cycles
+}
+
+void CPU6502::JMP_indirect() {
+	// Jump to address stored at given address (with 6502 page boundary bug)
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of indirect address
+	Byte indirect_low = read_byte(program_counter_);
+	program_counter_++;
+	// Cycle 3: Fetch high byte of indirect address
+	Byte indirect_high = read_byte(program_counter_);
+	program_counter_++;
+
+	Address indirect_address = (static_cast<Address>(indirect_high) << 8) | indirect_low;
+
+	// Cycle 4: Read low byte of target address
+	Byte target_low = read_byte(indirect_address);
+
+	// Cycle 5: Read high byte of target address (with page boundary bug)
+	// The 6502 has a bug where if the indirect address is at a page boundary,
+	// it reads the high byte from the same page instead of crossing to the next page
+	Address high_byte_address;
+	if ((indirect_address & 0xFF) == 0xFF) {
+		// Page boundary bug: wrap around within the same page
+		high_byte_address = indirect_address & 0xFF00;
+	} else {
+		// Normal case: read from next address
+		high_byte_address = indirect_address + 1;
+	}
+	Byte target_high = read_byte(high_byte_address);
+
+	// Set program counter to the target address
+	program_counter_ = (static_cast<Address>(target_high) << 8) | target_low;
+	// Total: 5 cycles
+}
+
+void CPU6502::JSR() {
+	// Jump to Subroutine
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Fetch low byte of subroutine address
+	Byte low = read_byte(program_counter_);
+	program_counter_++;
+
+	// Cycle 3: Internal operation (stack pointer operation)
+	consume_cycle();
+
+	// Cycle 4: Push high byte of return address (PC-1) to stack
+	Address return_address = program_counter_; // This points to the high byte we haven't read yet
+	push_byte(static_cast<Byte>((return_address) >> 8));
+
+	// Cycle 5: Push low byte of return address (PC-1) to stack
+	push_byte(static_cast<Byte>(return_address & 0xFF));
+
+	// Cycle 6: Fetch high byte of subroutine address
+	Byte high = read_byte(program_counter_);
+
+	// Set program counter to the subroutine address
+	program_counter_ = (static_cast<Address>(high) << 8) | low;
+	// Total: 6 cycles
+}
+
+void CPU6502::RTS() {
+	// Return from Subroutine
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+
+	// Cycle 3: Pull low byte of return address from stack
+	Byte low = pull_byte();
+
+	// Cycle 4: Pull high byte of return address from stack
+	Byte high = pull_byte();
+
+	// Cycle 5: Internal operation (increment PC)
+	consume_cycle();
+
+	// Restore program counter and increment by 1 (RTS returns to instruction after JSR)
+	program_counter_ = (static_cast<Address>(high) << 8) | low;
+	program_counter_++; // RTS increments PC by 1 after restoring it
+						// Total: 6 cycles
+}
+
+void CPU6502::RTI() {
+	// Return from Interrupt
+	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
+	// Cycle 2: Internal operation
+	consume_cycle();
+
+	// Cycle 3: Pull status register from stack
+	status_.status_register_ = pull_byte();
+	// Clear break flag and set unused flag (as per 6502 behavior)
+	status_.flags.break_flag_ = false;
+	status_.flags.unused_flag_ = true;
+
+	// Cycle 4: Pull low byte of return address from stack
+	Byte low = pull_byte();
+
+	// Cycle 5: Pull high byte of return address from stack
+	Byte high = pull_byte();
+
+	// Restore program counter (RTI doesn't increment PC - returns to exact interrupt address)
+	program_counter_ = (static_cast<Address>(high) << 8) | low;
+	// Total: 6 cycles
 }
 
 void CPU6502::NOP() {

@@ -88,6 +88,9 @@ class CPU6502 final : public Component {
 	void set_program_counter(Address value) noexcept {
 		program_counter_ = value;
 	}
+	void set_stack_pointer(Byte value) noexcept {
+		stack_pointer_ = value;
+	}
 	void set_carry_flag(bool value) noexcept {
 		status_.flags.carry_flag_ = value;
 	}
@@ -335,6 +338,23 @@ class CPU6502 final : public Component {
 	void DEC_zero_page_X(); // DEC zp,X
 	void DEC_absolute();	// DEC abs
 	void DEC_absolute_X();	// DEC abs,X
+
+	// Branch instructions (relative addressing mode)
+	void BPL_relative(); // Branch if Plus/Positive (N = 0)
+	void BMI_relative(); // Branch if Minus/Negative (N = 1)
+	void BVC_relative(); // Branch if Overflow Clear (V = 0)
+	void BVS_relative(); // Branch if Overflow Set (V = 1)
+	void BCC_relative(); // Branch if Carry Clear (C = 0)
+	void BCS_relative(); // Branch if Carry Set (C = 1)
+	void BNE_relative(); // Branch if Not Equal/Zero Clear (Z = 0)
+	void BEQ_relative(); // Branch if Equal/Zero Set (Z = 1)
+
+	// Jump and Subroutine instructions
+	void JMP_absolute(); // Jump to absolute address
+	void JMP_indirect(); // Jump to address stored at given address (with page boundary bug)
+	void JSR();			 // Jump to Subroutine
+	void RTS();			 // Return from Subroutine
+	void RTI();			 // Return from Interrupt
 
 	// No operation
 	void NOP(); // No Operation

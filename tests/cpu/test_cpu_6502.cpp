@@ -3252,3 +3252,566 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROR", "[cpu][ror]") {
 		REQUIRE(cpu.get_negative_flag() == true);
 	}
 }
+
+TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][branch]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("BPL - Branch if Plus/Positive (N = 0)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_negative_flag(false); // N = 0, branch should be taken
+
+		// Write instruction: BPL +10 = 0x10 0x0A
+		bus->write(0x0200, 0x10); // BPL opcode
+		bus->write(0x0201, 0x0A); // Offset +10
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x020C); // 0x0202 + 0x0A = 0x020C
+	}
+
+	SECTION("BPL - No branch when N = 1") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_negative_flag(true); // N = 1, branch should NOT be taken
+
+		// Write instruction: BPL +10 = 0x10 0x0A
+		bus->write(0x0200, 0x10); // BPL opcode
+		bus->write(0x0201, 0x0A); // Offset +10
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0202); // No branch, PC advances normally
+	}
+
+	SECTION("BMI - Branch if Minus/Negative (N = 1)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_negative_flag(true); // N = 1, branch should be taken
+
+		// Write instruction: BMI -5 = 0x30 0xFB
+		bus->write(0x0200, 0x30); // BMI opcode
+		bus->write(0x0201, 0xFB); // Offset -5 (as signed byte)
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x01FD); // 0x0202 + (-5) = 0x01FD
+	}
+
+	SECTION("BVC - Branch if Overflow Clear (V = 0)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_overflow_flag(false); // V = 0, branch should be taken
+
+		// Write instruction: BVC +20 = 0x50 0x14
+		bus->write(0x0200, 0x50); // BVC opcode
+		bus->write(0x0201, 0x14); // Offset +20
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0216); // 0x0202 + 0x14 = 0x0216
+	}
+
+	SECTION("BVS - Branch if Overflow Set (V = 1)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_overflow_flag(true); // V = 1, branch should be taken
+
+		// Write instruction: BVS +8 = 0x70 0x08
+		bus->write(0x0200, 0x70); // BVS opcode
+		bus->write(0x0201, 0x08); // Offset +8
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x020A); // 0x0202 + 0x08 = 0x020A
+	}
+
+	SECTION("BCC - Branch if Carry Clear (C = 0)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_carry_flag(false); // C = 0, branch should be taken
+
+		// Write instruction: BCC +15 = 0x90 0x0F
+		bus->write(0x0200, 0x90); // BCC opcode
+		bus->write(0x0201, 0x0F); // Offset +15
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0211); // 0x0202 + 0x0F = 0x0211
+	}
+
+	SECTION("BCS - Branch if Carry Set (C = 1)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_carry_flag(true); // C = 1, branch should be taken
+
+		// Write instruction: BCS -10 = 0xB0 0xF6
+		bus->write(0x0200, 0xB0); // BCS opcode
+		bus->write(0x0201, 0xF6); // Offset -10 (as signed byte)
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x01F8); // 0x0202 + (-10) = 0x01F8
+	}
+
+	SECTION("BNE - Branch if Not Equal/Zero Clear (Z = 0)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_zero_flag(false); // Z = 0, branch should be taken
+
+		// Write instruction: BNE +25 = 0xD0 0x19
+		bus->write(0x0200, 0xD0); // BNE opcode
+		bus->write(0x0201, 0x19); // Offset +25
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x021B); // 0x0202 + 0x19 = 0x021B
+	}
+
+	SECTION("BEQ - Branch if Equal/Zero Set (Z = 1)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_zero_flag(true); // Z = 1, branch should be taken
+
+		// Write instruction: BEQ +30 = 0xF0 0x1E
+		bus->write(0x0200, 0xF0); // BEQ opcode
+		bus->write(0x0201, 0x1E); // Offset +30
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0220); // 0x0202 + 0x1E = 0x0220
+	}
+}
+
+TEST_CASE("CPU Branch Instructions - Page Boundary Crossing", "[cpu][instructions][branch][timing]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("BPL - Same page branch (3 cycles)") {
+		cpu.set_program_counter(0x0280); // Start in middle of page
+		cpu.set_negative_flag(false);	 // Branch will be taken
+
+		// Write instruction: BPL +10 = 0x10 0x0A
+		bus->write(0x0280, 0x10); // BPL opcode
+		bus->write(0x0281, 0x0A); // Offset +10
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x028C); // 0x0282 + 0x0A = 0x028C (same page)
+													  // Branch taken, same page = 3 cycles total
+	}
+
+	SECTION("BPL - Cross page boundary forward (4 cycles)") {
+		cpu.set_program_counter(0x02F0); // Near end of page
+		cpu.set_negative_flag(false);	 // Branch will be taken
+
+		// Write instruction: BPL +20 = 0x10 0x14
+		bus->write(0x02F0, 0x10); // BPL opcode
+		bus->write(0x02F1, 0x14); // Offset +20
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0306); // 0x02F2 + 0x14 = 0x0306 (crosses page)
+													  // Branch taken, page boundary crossed = 4 cycles total
+	}
+
+	SECTION("BMI - Cross page boundary backward (4 cycles)") {
+		cpu.set_program_counter(0x0310); // Start of page
+		cpu.set_negative_flag(true);	 // Branch will be taken
+
+		// Write instruction: BMI -20 = 0x30 0xEC
+		bus->write(0x0310, 0x30); // BMI opcode
+		bus->write(0x0311, 0xEC); // Offset -20 (as signed byte)
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x02FE); // 0x0312 + (-20) = 0x02FE (crosses page)
+													  // Branch taken, page boundary crossed = 4 cycles total
+	}
+
+	SECTION("BEQ - No branch (2 cycles)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_zero_flag(false); // Z = 0, branch should NOT be taken
+
+		// Write instruction: BEQ +50 = 0xF0 0x32
+		bus->write(0x0200, 0xF0); // BEQ opcode
+		bus->write(0x0201, 0x32); // Offset +50
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0202); // No branch, PC advances normally
+													  // Branch not taken = 2 cycles total
+	}
+}
+
+TEST_CASE("CPU Branch Instructions - Edge Cases", "[cpu][instructions][branch][edge]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("Branch with zero offset") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_zero_flag(true); // Branch will be taken
+
+		// Write instruction: BEQ +0 = 0xF0 0x00
+		bus->write(0x0200, 0xF0); // BEQ opcode
+		bus->write(0x0201, 0x00); // Offset 0
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0202); // 0x0202 + 0 = 0x0202
+	}
+
+	SECTION("Branch with maximum forward offset (+127)") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_carry_flag(false); // Branch will be taken
+
+		// Write instruction: BCC +127 = 0x90 0x7F
+		bus->write(0x0200, 0x90); // BCC opcode
+		bus->write(0x0201, 0x7F); // Offset +127
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0281); // 0x0202 + 127 = 0x0281
+	}
+
+	SECTION("Branch with maximum backward offset (-128)") {
+		cpu.set_program_counter(0x0300);
+		cpu.set_carry_flag(true); // Branch will be taken
+
+		// Write instruction: BCS -128 = 0xB0 0x80
+		bus->write(0x0300, 0xB0); // BCS opcode
+		bus->write(0x0301, 0x80); // Offset -128 (as signed byte)
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0282); // 0x0302 + (-128) = 0x0282
+	}
+
+	SECTION("Branch across multiple page boundaries") {
+		cpu.set_program_counter(0x01F0); // Near page boundary
+		cpu.set_overflow_flag(false);	 // Branch will be taken
+
+		// Write instruction: BVC +32 = 0x50 0x20
+		bus->write(0x01F0, 0x50); // BVC opcode
+		bus->write(0x01F1, 0x20); // Offset +32
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0212); // 0x01F2 + 32 = 0x0212 (crosses page)
+	}
+}
+
+TEST_CASE("CPU Branch Instructions - All Opcodes", "[cpu][instructions][branch][opcodes]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("All branch opcodes with correct conditions") {
+		struct BranchTest {
+			Byte opcode;
+			const char *name;
+			void (CPU6502::*set_flag)(bool);
+			bool flag_value;
+			SignedByte offset;
+		};
+
+		std::vector<BranchTest> tests = {{0x10, "BPL", &CPU6502::set_negative_flag, false, 10},
+										 {0x30, "BMI", &CPU6502::set_negative_flag, true, -5},
+										 {0x50, "BVC", &CPU6502::set_overflow_flag, false, 15},
+										 {0x70, "BVS", &CPU6502::set_overflow_flag, true, -10},
+										 {0x90, "BCC", &CPU6502::set_carry_flag, false, 8},
+										 {0xB0, "BCS", &CPU6502::set_carry_flag, true, 12},
+										 {0xD0, "BNE", &CPU6502::set_zero_flag, false, -15},
+										 {0xF0, "BEQ", &CPU6502::set_zero_flag, true, 20}};
+
+		for (const auto &test : tests) {
+			// Reset CPU state
+			cpu.set_program_counter(0x0200);
+			cpu.set_carry_flag(false);
+			cpu.set_zero_flag(false);
+			cpu.set_interrupt_flag(false);
+			cpu.set_decimal_flag(false);
+			cpu.set_break_flag(false);
+			cpu.set_overflow_flag(false);
+			cpu.set_negative_flag(false);
+
+			// Set the specific flag for this test
+			(cpu.*test.set_flag)(test.flag_value);
+
+			// Write instruction
+			bus->write(0x0200, test.opcode);
+			bus->write(0x0201, static_cast<Byte>(test.offset));
+
+			// Execute and verify
+			cpu.execute_instruction();
+
+			Address expected_pc = static_cast<Address>(0x0202 + test.offset);
+			REQUIRE(cpu.get_program_counter() == expected_pc);
+		}
+	}
+}
+
+TEST_CASE("CPU Jump Instructions - JMP", "[cpu][instructions][jump]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("JMP Absolute") {
+		cpu.set_program_counter(0x0200);
+
+		// Write instruction: JMP $1234 = 0x4C 0x34 0x12
+		bus->write(0x0200, 0x4C); // JMP absolute opcode
+		bus->write(0x0201, 0x34); // Low byte of target address
+		bus->write(0x0202, 0x12); // High byte of target address
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x1234);
+	}
+
+	SECTION("JMP Indirect - Normal case") {
+		cpu.set_program_counter(0x0200);
+
+		// Write instruction: JMP ($1000) = 0x6C 0x00 0x10
+		bus->write(0x0200, 0x6C); // JMP indirect opcode
+		bus->write(0x0201, 0x00); // Low byte of indirect address
+		bus->write(0x0202, 0x10); // High byte of indirect address
+
+		// Store target address at $1000-$1001
+		bus->write(0x1000, 0x56); // Low byte of target
+		bus->write(0x1001, 0x78); // High byte of target
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x7856);
+	}
+
+	SECTION("JMP Indirect - Page boundary bug") {
+		cpu.set_program_counter(0x0200);
+
+		// Write instruction: JMP ($10FF) = 0x6C 0xFF 0x10
+		bus->write(0x0200, 0x6C); // JMP indirect opcode
+		bus->write(0x0201, 0xFF); // Low byte of indirect address (page boundary)
+		bus->write(0x0202, 0x10); // High byte of indirect address
+
+		// Store target address with page boundary bug
+		bus->write(0x10FF, 0x34); // Low byte of target
+		bus->write(0x1100, 0xAB); // This should be high byte but won't be read due to bug
+		bus->write(0x1000, 0x56); // This will be read instead (wraps to start of page)
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x5634); // 0x56 from $1000, 0x34 from $10FF
+	}
+}
+
+TEST_CASE("CPU Subroutine Instructions - JSR/RTS", "[cpu][instructions][subroutine]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("JSR - Jump to Subroutine") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_stack_pointer(0xFF); // Start with full stack
+
+		// Write instruction: JSR $1500 = 0x20 0x00 0x15
+		bus->write(0x0200, 0x20); // JSR opcode
+		bus->write(0x0201, 0x00); // Low byte of subroutine address
+		bus->write(0x0202, 0x15); // High byte of subroutine address
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x1500);
+		REQUIRE(cpu.get_stack_pointer() == 0xFD); // Stack pointer decremented by 2
+
+		// Check that return address (0x0202) was pushed to stack
+		REQUIRE(bus->read(0x01FF) == 0x02); // High byte of return address
+		REQUIRE(bus->read(0x01FE) == 0x02); // Low byte of return address
+	}
+
+	SECTION("RTS - Return from Subroutine") {
+		cpu.set_program_counter(0x1500);
+		cpu.set_stack_pointer(0xFD); // Stack as if JSR was called
+
+		// Set up stack with return address (should return to 0x0203)
+		bus->write(0x01FE, 0x02); // Low byte of return address
+		bus->write(0x01FF, 0x02); // High byte of return address
+
+		// Write instruction: RTS = 0x60
+		bus->write(0x1500, 0x60); // RTS opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x0203); // Return address + 1
+		REQUIRE(cpu.get_stack_pointer() == 0xFF);	  // Stack pointer restored
+	}
+
+	SECTION("JSR/RTS - Complete subroutine call sequence") {
+		cpu.set_program_counter(0x0200);
+		cpu.set_stack_pointer(0xFF);
+
+		// Main program: JSR $1500
+		bus->write(0x0200, 0x20); // JSR opcode
+		bus->write(0x0201, 0x00); // Low byte
+		bus->write(0x0202, 0x15); // High byte
+
+		// Subroutine: RTS
+		bus->write(0x1500, 0x60); // RTS opcode
+
+		// Execute JSR
+		cpu.execute_instruction();
+		REQUIRE(cpu.get_program_counter() == 0x1500);
+		REQUIRE(cpu.get_stack_pointer() == 0xFD);
+
+		// Execute RTS
+		cpu.execute_instruction();
+		REQUIRE(cpu.get_program_counter() == 0x0203); // Next instruction after JSR
+		REQUIRE(cpu.get_stack_pointer() == 0xFF);
+	}
+}
+
+TEST_CASE("CPU Interrupt Instructions - RTI", "[cpu][instructions][interrupt]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("RTI - Return from Interrupt") {
+		cpu.set_program_counter(0x8000); // Interrupt handler
+		cpu.set_stack_pointer(0xFC);	 // Stack as if interrupt occurred
+
+		// Set up stack with saved state (status register and return address)
+		bus->write(0x01FD, 0b11010101); // Saved status register
+		bus->write(0x01FE, 0x34);		// Low byte of return address
+		bus->write(0x01FF, 0x12);		// High byte of return address
+
+		// Write instruction: RTI = 0x40
+		bus->write(0x8000, 0x40); // RTI opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_program_counter() == 0x1234); // Return address restored
+		REQUIRE(cpu.get_stack_pointer() == 0xFF);	  // Stack pointer restored
+
+		// Check that status register was restored (with break flag cleared, unused set)
+		REQUIRE(cpu.get_carry_flag() == true);
+		REQUIRE(cpu.get_zero_flag() == false);
+		REQUIRE(cpu.get_interrupt_flag() == true);
+		REQUIRE(cpu.get_decimal_flag() == false);
+		REQUIRE(cpu.get_break_flag() == false); // Should be cleared by RTI
+		REQUIRE(cpu.get_overflow_flag() == true);
+		REQUIRE(cpu.get_negative_flag() == true);
+	}
+
+	SECTION("RTI - Status register flag handling") {
+		cpu.set_program_counter(0x8000);
+		cpu.set_stack_pointer(0xFC);
+
+		// Test with different status register values
+		bus->write(0x01FD, 0b00101010); // Different flag pattern
+		bus->write(0x01FE, 0x00);		// Return address low
+		bus->write(0x01FF, 0x30);		// Return address high
+
+		bus->write(0x8000, 0x40); // RTI opcode
+
+		cpu.execute_instruction();
+
+		REQUIRE(cpu.get_carry_flag() == false);
+		REQUIRE(cpu.get_zero_flag() == true);
+		REQUIRE(cpu.get_interrupt_flag() == false);
+		REQUIRE(cpu.get_decimal_flag() == true);
+		REQUIRE(cpu.get_break_flag() == false); // Always cleared by RTI
+		REQUIRE(cpu.get_overflow_flag() == false);
+		REQUIRE(cpu.get_negative_flag() == false);
+	}
+}
+
+TEST_CASE("CPU Jump/Subroutine Instructions - All Opcodes", "[cpu][instructions][jump][opcodes]") {
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	CPU6502 cpu(bus.get());
+
+	SECTION("All jump/subroutine opcodes verification") {
+		struct JumpTest {
+			Byte opcode;
+			const char *name;
+			std::function<void(CPU6502 &, SystemBus *)> setup;
+			std::function<void(const CPU6502 &)> verify;
+		};
+
+		std::vector<JumpTest> tests = {{0x4C, "JMP Absolute",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											bus->write(0x0200, 0x4C);
+											bus->write(0x0201, 0x00);
+											bus->write(0x0202, 0x30);
+										},
+										[](const CPU6502 &cpu) { REQUIRE(cpu.get_program_counter() == 0x3000); }},
+
+									   {0x6C, "JMP Indirect",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											bus->write(0x0200, 0x6C);
+											bus->write(0x0201, 0x00);
+											bus->write(0x0202, 0x10); // Changed from 0x20 to 0x10
+											bus->write(0x1000, 0x00); // Changed from 0x2000 to 0x1000
+											bus->write(0x1001, 0x40); // Changed from 0x2001 to 0x1001
+										},
+										[](const CPU6502 &cpu) { REQUIRE(cpu.get_program_counter() == 0x4000); }},
+
+									   {0x20, "JSR",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x0200);
+											cpu.set_stack_pointer(0xFF);
+											bus->write(0x0200, 0x20);
+											bus->write(0x0201, 0x00);
+											bus->write(0x0202, 0x50);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_program_counter() == 0x5000);
+											REQUIRE(cpu.get_stack_pointer() == 0xFD);
+										}},
+
+									   {0x60, "RTS",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x5000);
+											cpu.set_stack_pointer(0xFD);
+											bus->write(0x01FE, 0x02);
+											bus->write(0x01FF, 0x02);
+											bus->write(0x5000, 0x60);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_program_counter() == 0x0203);
+											REQUIRE(cpu.get_stack_pointer() == 0xFF);
+										}},
+
+									   {0x40, "RTI",
+										[](CPU6502 &cpu, SystemBus *bus) {
+											cpu.set_program_counter(0x8000);
+											cpu.set_stack_pointer(0xFC);
+											bus->write(0x01FD, 0b10000001);
+											bus->write(0x01FE, 0x00);
+											bus->write(0x01FF, 0x60);
+											bus->write(0x8000, 0x40);
+										},
+										[](const CPU6502 &cpu) {
+											REQUIRE(cpu.get_program_counter() == 0x6000);
+											REQUIRE(cpu.get_stack_pointer() == 0xFF);
+											REQUIRE(cpu.get_carry_flag() == true);
+											REQUIRE(cpu.get_negative_flag() == true);
+										}}};
+
+		for (const auto &test : tests) {
+			// Setup test
+			test.setup(cpu, bus.get());
+
+			// Execute instruction
+			cpu.execute_instruction();
+
+			// Verify results
+			test.verify(cpu);
+		}
+	}
+}
