@@ -1,7 +1,7 @@
 #include "../../include/core/bus.hpp"
 #include "../../include/cpu/cpu_6502.hpp"
-#include "../../include/memory/ram.hpp"
 #include "../../include/cpu/interrupts.hpp"
+#include "../../include/memory/ram.hpp"
 #include "../catch2/catch_amalgamated.hpp"
 #include <memory>
 
@@ -10,23 +10,23 @@ using namespace nes;
 namespace {
 
 /// Helper function to set up a bus with controlled memory for interrupt testing
-void setup_interrupt_vectors(SystemBus& bus) {
+void setup_interrupt_vectors(SystemBus &bus) {
 	// Set up interrupt vectors with known test values
 	// NMI Vector (0xFFFA-0xFFFB): points to 0x8000
 	bus.write(0xFFFA, 0x00); // Low byte
 	bus.write(0xFFFB, 0x80); // High byte
-	
+
 	// Reset Vector (0xFFFC-0xFFFD): points to 0x8100
 	bus.write(0xFFFC, 0x00); // Low byte
 	bus.write(0xFFFD, 0x81); // High byte
-	
+
 	// IRQ Vector (0xFFFE-0xFFFF): points to 0x8200
 	bus.write(0xFFFE, 0x00); // Low byte
 	bus.write(0xFFFF, 0x82); // High byte
 }
 
 /// Get the value at the top of the stack (for testing stack operations)
-Byte peek_stack(const SystemBus& bus, Byte stack_pointer) {
+Byte peek_stack(const SystemBus &bus, Byte stack_pointer) {
 	return bus.read(0x0100 + stack_pointer + 1);
 }
 
@@ -105,32 +105,32 @@ TEST_CASE("CPU interrupt triggering", "[cpu][interrupts]") {
 	auto ram = std::make_shared<Ram>();
 	bus->connect_ram(ram);
 	setup_interrupt_vectors(*bus);
-	
+
 	CPU6502 cpu(bus.get());
 
 	SECTION("Trigger NMI") {
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
-		
+
 		cpu.trigger_nmi();
-		
+
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::NMI);
 	}
 
 	SECTION("Trigger IRQ") {
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
-		
+
 		cpu.trigger_irq();
-		
+
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::IRQ);
 	}
 
 	SECTION("Trigger reset") {
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
-		
+
 		cpu.trigger_reset();
-		
+
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::RESET);
 	}
@@ -139,7 +139,7 @@ TEST_CASE("CPU interrupt triggering", "[cpu][interrupts]") {
 		cpu.trigger_irq();
 		cpu.trigger_nmi();
 		cpu.trigger_reset();
-		
+
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::RESET);
 	}
 }
@@ -149,14 +149,14 @@ TEST_CASE("NMI interrupt handling", "[cpu][interrupts]") {
 	auto ram = std::make_shared<Ram>();
 	bus->connect_ram(ram);
 	setup_interrupt_vectors(*bus);
-	
+
 	CPU6502 cpu(bus.get());
 
 	SECTION("NMI execution sequence") {
 		// Set up initial CPU state
 		cpu.set_program_counter(0x1234);
 		cpu.set_stack_pointer(0xFF);
-		
+
 		// Set up status register with known state
 		cpu.set_carry_flag(true);
 		cpu.set_zero_flag(false);
@@ -201,7 +201,7 @@ TEST_CASE("NMI interrupt handling", "[cpu][interrupts]") {
 	SECTION("NMI is non-maskable") {
 		cpu.set_interrupt_flag(true); // Set interrupt disable flag
 		cpu.trigger_nmi();
-		
+
 		// NMI should still be processed despite interrupt flag
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::NMI);
@@ -213,7 +213,7 @@ TEST_CASE("IRQ interrupt handling", "[cpu][interrupts]") {
 	auto ram = std::make_shared<Ram>();
 	bus->connect_ram(ram);
 	setup_interrupt_vectors(*bus);
-	
+
 	CPU6502 cpu(bus.get());
 
 	SECTION("IRQ execution sequence") {
@@ -267,12 +267,12 @@ TEST_CASE("IRQ interrupt handling", "[cpu][interrupts]") {
 
 		// IRQ should be pending but not processed
 		REQUIRE(cpu.has_pending_interrupt());
-		
+
 		// Put a NOP instruction and try to execute
 		cpu.set_program_counter(0x1000);
-		bus->write(0x1000, 0xEA); // NOP
+		bus->write(0x1000, 0xEA);  // NOP
 		cpu.execute_instruction(); // Should execute NOP, not IRQ
-		
+
 		// Should have executed NOP (PC incremented)
 		REQUIRE(cpu.get_program_counter() == 0x1001);
 		// IRQ should still be pending because interrupts are disabled
@@ -283,18 +283,18 @@ TEST_CASE("IRQ interrupt handling", "[cpu][interrupts]") {
 	SECTION("IRQ processes when interrupts enabled") {
 		cpu.set_interrupt_flag(true); // Initially disabled
 		cpu.trigger_irq();
-		
+
 		// Put a NOP instruction
 		cpu.set_program_counter(0x1000);
-		bus->write(0x1000, 0xEA); // NOP
+		bus->write(0x1000, 0xEA);  // NOP
 		cpu.execute_instruction(); // Should execute NOP since IRQ is masked
-		
+
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_program_counter() == 0x1001); // NOP executed
-		
+
 		cpu.set_interrupt_flag(false); // Enable interrupts
-		cpu.execute_instruction(); // Should now process IRQ
-		
+		cpu.execute_instruction();	   // Should now process IRQ
+
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_program_counter() == 0x8200);
 	}
@@ -305,7 +305,7 @@ TEST_CASE("Reset interrupt handling", "[cpu][interrupts]") {
 	auto ram = std::make_shared<Ram>();
 	bus->connect_ram(ram);
 	setup_interrupt_vectors(*bus);
-	
+
 	CPU6502 cpu(bus.get());
 
 	SECTION("Reset execution sequence") {
@@ -353,11 +353,11 @@ TEST_CASE("Reset interrupt handling", "[cpu][interrupts]") {
 	SECTION("Reset is non-maskable") {
 		cpu.set_interrupt_flag(true); // Set interrupt disable flag
 		cpu.trigger_reset();
-		
+
 		// Reset should still be processed despite interrupt flag
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::RESET);
-		
+
 		cpu.execute_instruction();
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_program_counter() == 0x8100);
@@ -369,7 +369,7 @@ TEST_CASE("Interrupt priority and precedence", "[cpu][interrupts]") {
 	auto ram = std::make_shared<Ram>();
 	bus->connect_ram(ram);
 	setup_interrupt_vectors(*bus);
-	
+
 	CPU6502 cpu(bus.get());
 
 	SECTION("Reset preempts all other interrupts") {
@@ -381,7 +381,7 @@ TEST_CASE("Interrupt priority and precedence", "[cpu][interrupts]") {
 
 		// Should process reset first
 		REQUIRE(cpu.get_program_counter() == 0x8100);
-		
+
 		// Other interrupts should still be pending
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::NMI); // Next highest
@@ -395,7 +395,7 @@ TEST_CASE("Interrupt priority and precedence", "[cpu][interrupts]") {
 
 		// Should process NMI first
 		REQUIRE(cpu.get_program_counter() == 0x8000);
-		
+
 		// IRQ should still be pending
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::IRQ);
@@ -448,7 +448,7 @@ TEST_CASE("BRK instruction vs IRQ handling", "[cpu][interrupts]") {
 	auto ram = std::make_shared<Ram>();
 	bus->connect_ram(ram);
 	setup_interrupt_vectors(*bus);
-	
+
 	CPU6502 cpu(bus.get());
 
 	SECTION("IRQ handler receives different B flag than BRK") {
@@ -460,7 +460,7 @@ TEST_CASE("BRK instruction vs IRQ handling", "[cpu][interrupts]") {
 
 		// Put a NOP at PC so IRQ can be processed
 		bus->write(0x3000, 0xEA); // NOP
-		
+
 		cpu.trigger_irq();
 		cpu.execute_instruction(); // Process IRQ
 
@@ -476,7 +476,7 @@ TEST_CASE("BRK instruction vs IRQ handling", "[cpu][interrupts]") {
 		// Set up BRK instruction
 		bus->write(0x4000, 0x00); // BRK
 		bus->write(0x4001, 0x00); // BRK padding byte
-		
+
 		cpu.execute_instruction(); // Execute BRK
 
 		// Check that B flag was set in pushed status

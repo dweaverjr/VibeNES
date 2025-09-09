@@ -170,7 +170,7 @@ void CPU6502::execute_instruction() {
 	// Check for pending interrupts before instruction fetch
 	if (has_pending_interrupt()) {
 		InterruptType pending = interrupt_state_.get_pending_interrupt();
-		
+
 		// Only process interrupts that will actually be handled
 		bool should_process = false;
 		switch (pending) {
@@ -186,7 +186,7 @@ void CPU6502::execute_instruction() {
 			should_process = false;
 			break;
 		}
-		
+
 		if (should_process) {
 			process_interrupts();
 			return; // Interrupt handling consumes cycles, don't execute instruction
