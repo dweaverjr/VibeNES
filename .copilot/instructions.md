@@ -27,9 +27,52 @@ You are helping develop a cycle-accurate Nintendo Entertainment System (NES) emu
 - **CPU (6502)**: ✅ 10/10 timing accuracy achieved with 146/151 official opcodes implemented (96.7% complete)
 - **Instruction Categories Completed**: Load/Store, Arithmetic, Logical, Shift/Rotate, Compare, Increment/Decrement, Branch, Jump/Subroutine, Stack, Status Flag operations
 - **Remaining Instructions**: BRK (0x00), TXS (0x9A), TSX (0xBA), BIT Zero Page (0x24), BIT Absolute (0x2C)
-- **Memory System**: ✅ System bus with RAM and open bus behavior implemented
+- **Memory System**: ✅ Complete NES memory map implemented with component stubs (Phase 1 complete)
 - **Testing Framework**: ✅ Comprehensive test suite with Catch2, 433 assertions across 25 test cases
 - **Build System**: ✅ VS Code tasks for debug/release builds
+
+## CPU State GUI Development Plan
+**Current Phase**: Phase 2 - GUI Framework Setup
+
+### Technology Stack Decisions
+- **GUI Framework**: ImGui + SDL2 (cross-platform immediate mode GUI)
+- **Platform Target**: Cross-platform (Windows-first development with MSYS2/MinGW)
+- **Visual Design**: Retro/authentic look matching NES era aesthetics
+- **Priority Features**: CPU state visualization and instruction disassembler
+- **Architecture**: Dockable panel system with real-time CPU monitoring
+
+### Development Phases
+1. **Phase 1: Complete Memory Map** ✅ **COMPLETED**
+   - SystemBus with full $0000-$FFFF NES memory map
+   - Component stubs: PPUStub, APUStub, ControllerStub, CartridgeStub
+   - Proper address mirroring (RAM every $800, PPU every 8 bytes)
+
+2. **Phase 2: Basic GUI Framework** 🔄 **IN PROGRESS**
+   - SDL2 + ImGui integration
+   - Main window with retro styling
+   - Dockable panel system
+   - Basic CPU state display framework
+
+3. **Phase 3: CPU State Display** 📋 **PLANNED**
+   - Complete CPU register visualization (A, X, Y, SP, PC, flags)
+   - Real-time instruction disassembler
+   - Stack memory viewer
+   - Step-by-step execution control
+
+### Memory Map Implementation (Phase 1 Complete)
+```
+$0000-$1FFF: RAM [mirroring every $800] - Implemented in SystemBus
+$2000-$3FFF: PPU registers [8-byte mirroring] - PPUStub with proper mirroring
+$4000-$401F: APU/IO registers - APUStub implementation
+$4016-$4017: Controller ports - ControllerStub implementation  
+$4020-$FFFF: Cartridge space - CartridgeStub with SRAM/PRG ROM support
+```
+
+### GUI Implementation Notes
+- **Retro Aesthetics**: Use period-appropriate colors, fonts (like classic terminal/monitor look)
+- **CPU Debugging Focus**: Primary goal is real-time CPU state monitoring and instruction stepping
+- **Panel Architecture**: Modular system allowing flexible layout of CPU registers, disassembler, memory viewers
+- **Integration**: Connect directly to CPU_6502 class for live register/flag updates
 
 ## Established Development Patterns
 
