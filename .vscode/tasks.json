@@ -39,6 +39,57 @@
         },
         {
             "type": "cppbuild",
+            "label": "Debug Build with GUI",
+            "command": "c:\\msys64\\ucrt64\\bin\\g++.exe",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-g3",
+                "-O0",
+                "-std=c++23",
+                "-Wall",
+                "-Wextra",
+                "${workspaceFolder}/src/main.cpp",
+                "${workspaceFolder}/src/core/bus.cpp",
+                "${workspaceFolder}/src/cpu/cpu_6502.cpp",
+                "${workspaceFolder}/src/gui/gui_application.cpp",
+                "${workspaceFolder}/src/gui/style/retro_theme.cpp",
+                "${workspaceFolder}/src/gui/panels/cpu_state_panel.cpp",
+                "${workspaceFolder}/src/gui/panels/disassembler_panel.cpp",
+                "${workspaceFolder}/src/gui/panels/memory_viewer_panel.cpp",
+                "${workspaceFolder}/third_party/imgui/imgui.cpp",
+                "${workspaceFolder}/third_party/imgui/imgui_demo.cpp",
+                "${workspaceFolder}/third_party/imgui/imgui_draw.cpp",
+                "${workspaceFolder}/third_party/imgui/imgui_tables.cpp",
+                "${workspaceFolder}/third_party/imgui/imgui_widgets.cpp",
+                "${workspaceFolder}/third_party/imgui/backends/imgui_impl_sdl2.cpp",
+                "${workspaceFolder}/third_party/imgui/backends/imgui_impl_opengl3.cpp",
+                "-I${workspaceFolder}/include",
+                "-I${workspaceFolder}/third_party/imgui",
+                "-I${workspaceFolder}/third_party/imgui/backends",
+                "-IC:/msys64/ucrt64/include/SDL2",
+                "-IC:/msys64/ucrt64/include",
+                "-LC:/msys64/ucrt64/lib",
+                "-lmingw32",
+                "-lSDL2main",
+                "-lSDL2",
+                "-lSDL2_image",
+                "-lSDL2_ttf",
+                "-lopengl32",
+                "-DNES_GUI_ENABLED",
+                "-o",
+                "${workspaceFolder}/build/debug/VibeNES_GUI.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build",
+            "detail": "Debug build with GUI support using ImGui and SDL2"
+        },
+        {
+            "type": "cppbuild",
             "label": "Release Build",
             "command": "c:\\msys64\\ucrt64\\bin\\g++.exe",
             "args": [

@@ -64,7 +64,7 @@ You are helping develop a cycle-accurate Nintendo Entertainment System (NES) emu
 $0000-$1FFF: RAM [mirroring every $800] - Implemented in SystemBus
 $2000-$3FFF: PPU registers [8-byte mirroring] - PPUStub with proper mirroring
 $4000-$401F: APU/IO registers - APUStub implementation
-$4016-$4017: Controller ports - ControllerStub implementation  
+$4016-$4017: Controller ports - ControllerStub implementation
 $4020-$FFFF: Cartridge space - CartridgeStub with SRAM/PRG ROM support
 ```
 

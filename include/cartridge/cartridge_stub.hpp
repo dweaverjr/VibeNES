@@ -44,7 +44,7 @@ class CartridgeStub final : public Component {
 			}
 			return 0x00; // No SRAM
 		}
-		
+
 		// PRG ROM area ($8000-$FFFF)
 		if (address >= 0x8000) {
 			const Address rom_addr = address - 0x8000;
@@ -53,7 +53,7 @@ class CartridgeStub final : public Component {
 			}
 			return 0xFF; // Open bus
 		}
-		
+
 		return 0x00;
 	}
 
@@ -67,7 +67,7 @@ class CartridgeStub final : public Component {
 			}
 			return;
 		}
-		
+
 		// PRG ROM area ($8000-$FFFF) - typically read-only
 		// TODO: Some mappers may allow writes for bank switching
 		// For now, ignore writes to ROM area
@@ -76,7 +76,7 @@ class CartridgeStub final : public Component {
 	}
 
 	/// Load test ROM data
-	void load_test_rom(const std::vector<Byte>& rom_data) {
+	void load_test_rom(const std::vector<Byte> &rom_data) {
 		prg_rom_ = rom_data;
 		// Ensure minimum size for interrupt vectors
 		if (prg_rom_.size() < 0x8000) {
@@ -91,11 +91,11 @@ class CartridgeStub final : public Component {
 			// Reset vector at $FFFC-$FFFD
 			prg_rom_[0x7FFC] = low_byte(reset_vector);
 			prg_rom_[0x7FFD] = high_byte(reset_vector);
-			
+
 			// NMI vector at $FFFA-$FFFB
 			prg_rom_[0x7FFA] = low_byte(nmi_vector);
 			prg_rom_[0x7FFB] = high_byte(nmi_vector);
-			
+
 			// IRQ vector at $FFFE-$FFFF
 			prg_rom_[0x7FFE] = low_byte(irq_vector);
 			prg_rom_[0x7FFF] = high_byte(irq_vector);
@@ -113,10 +113,10 @@ class CartridgeStub final : public Component {
   private:
 	/// PRG ROM data (maps to $8000-$FFFF)
 	std::vector<Byte> prg_rom_;
-	
+
 	/// SRAM data (maps to $6000-$7FFF if present)
 	std::array<Byte, 0x2000> sram_{};
-	
+
 	/// Whether cartridge has SRAM
 	bool has_sram_ = false;
 };

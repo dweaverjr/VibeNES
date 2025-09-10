@@ -1,16 +1,15 @@
 #include "core/bus.hpp"
+#include "apu/apu_stub.hpp"
+#include "cartridge/cartridge_stub.hpp"
+#include "input/controller_stub.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu_stub.hpp"
-#include "apu/apu_stub.hpp"
-#include "input/controller_stub.hpp"
-#include "cartridge/cartridge_stub.hpp"
 #include <iomanip>
 #include <iostream>
 
 namespace nes {
 
-SystemBus::SystemBus() : ram_{nullptr}, ppu_{nullptr}, apu_{nullptr}, 
-                         controllers_{nullptr}, cartridge_{nullptr} {
+SystemBus::SystemBus() : ram_{nullptr}, ppu_{nullptr}, apu_{nullptr}, controllers_{nullptr}, cartridge_{nullptr} {
 }
 
 void SystemBus::tick(CpuCycle cycles) {
@@ -49,7 +48,7 @@ void SystemBus::reset() {
 	if (cartridge_) {
 		cartridge_->reset();
 	}
-	
+
 	// Clear test memory
 	test_high_memory_.fill(0x00);
 	test_high_memory_valid_.fill(false);
@@ -73,7 +72,7 @@ void SystemBus::power_on() {
 	if (cartridge_) {
 		cartridge_->power_on();
 	}
-	
+
 	// Clear test memory
 	test_high_memory_.fill(0x00);
 	test_high_memory_valid_.fill(false);

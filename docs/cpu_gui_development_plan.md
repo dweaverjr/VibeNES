@@ -6,7 +6,7 @@ Development of a CPU state visualization and debugging GUI for the VibeNES emula
 ## Development Phases
 
 ### Phase 1: Complete Memory Map ✅ **COMPLETED**
-**Duration**: 1-2 weeks  
+**Duration**: 1-2 weeks
 **Status**: ✅ COMPLETE
 
 **Objectives**:
@@ -23,7 +23,7 @@ Development of a CPU state visualization and debugging GUI for the VibeNES emula
 - **Address Mirroring**: RAM ($0000-$1FFF), PPU registers ($2000-$3FFF), proper component routing
 
 ### Phase 2: Basic GUI Framework 🔄 **NEXT**
-**Duration**: 2-3 weeks  
+**Duration**: 2-3 weeks
 **Status**: 🔄 PLANNING
 
 **Technology Decisions**:
@@ -45,13 +45,13 @@ Development of a CPU state visualization and debugging GUI for the VibeNES emula
    - Add SDL2 to MSYS2 environment
    - Integrate ImGui into build system
    - Setup OpenGL context
-   
+
 2. **Main Window Structure**
    - SDL2 window creation and management
    - ImGui integration and initialization
    - Retro color scheme and fonts
    - Docking system for panels
-   
+
 3. **Basic Framework**
    - Abstract panel base class
    - Panel registration system
@@ -96,7 +96,7 @@ Development of a CPU state visualization and debugging GUI for the VibeNES emula
 ### Memory Map Coverage
 ```
 $0000-$1FFF: RAM [with mirroring every $800]
-$2000-$3FFF: PPU registers [8-byte mirroring] 
+$2000-$3FFF: PPU registers [8-byte mirroring]
 $4000-$401F: APU/IO registers
 $4016-$4017: Controller ports
 $4020-$FFFF: Cartridge space (SRAM + PRG ROM)
@@ -147,7 +147,7 @@ CPU writes to PPU through register interface:
 include/
 ├── core/bus.hpp          # SystemBus with complete memory map
 ├── ppu/ppu_stub.hpp      # PPU register simulation
-├── apu/apu_stub.hpp      # APU register handling  
+├── apu/apu_stub.hpp      # APU register handling
 ├── input/controller_stub.hpp  # Controller interface
 ├── cartridge/cartridge_stub.hpp  # Cartridge memory
 └── gui/                  # GUI components (Phase 2+)

@@ -43,12 +43,12 @@ class ControllerStub final : public Component {
 			// Return next bit from shift register
 			// TODO: Implement proper controller reading
 			return 0x40; // No buttons pressed
-			
+
 		case 0x4017: // Controller 2
 			// Return next bit from shift register
 			// TODO: Implement proper controller reading
 			return 0x40; // No buttons pressed
-			
+
 		default:
 			return 0x00;
 		}
@@ -59,7 +59,7 @@ class ControllerStub final : public Component {
 		if (address == 0x4016) {
 			// Controller strobe - latch current button states
 			strobe_latch_ = (value & 0x01) != 0;
-			
+
 			if (strobe_latch_) {
 				// Reset shift registers when strobing
 				shift_register_1_ = 0x00; // TODO: Load actual button states

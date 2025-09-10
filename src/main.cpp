@@ -1,14 +1,53 @@
 #include "core/bus.hpp"
 #include "core/component.hpp"
 #include "core/types.hpp"
-#include "gui/emulator_gui.hpp"
 #include "memory/ram.hpp"
 #include <iostream>
 #include <memory>
 
+#ifdef NES_GUI_ENABLED
+#include "cpu/cpu_6502.hpp"
+#include "gui/gui_application.hpp"
+#endif
+
 using namespace nes;
 
-int main() {
+int main(int argc, char *argv[]) {
+	// Suppress unused parameter warnings
+	(void)argc;
+	(void)argv;
+#ifdef NES_GUI_ENABLED
+	std::cout << "VibeNES GUI - Starting debugger interface...\n";
+
+	// Create basic emulator components for testing
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	bus->power_on();
+	bus->reset();
+
+	// Initialize with some test data
+	bus->write(0x0000, 0xEA); // NOP instruction
+	bus->write(0x0001, 0xA9); // LDA immediate
+	bus->write(0x0002, 0x42); // Value
+
+	// Create and run GUI
+	nes::gui::GuiApplication gui_app;
+
+	if (!gui_app.initialize()) {
+		std::cerr << "Failed to initialize GUI application" << std::endl;
+		return 1;
+	}
+
+	// Set emulator references
+	gui_app.set_bus(bus.get());
+	// gui_app.set_cpu(cpu.get()); // TODO: Create CPU instance
+
+	// Run the GUI
+	gui_app.run();
+
+	return 0;
+#else
 	std::cout << "VibeNES - Starting emulator...\n";
 	std::cout << "Testing core components:\n\n";
 
@@ -120,4 +159,5 @@ int main() {
 	std::cout << "3. Implement basic 6502 instructions\n";
 
 	return 0;
+#endif
 }

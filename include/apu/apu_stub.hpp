@@ -42,7 +42,7 @@ class APUStub final : public Component {
 		if (address == 0x4015) {
 			return status_register_;
 		}
-		
+
 		// All other APU registers are write-only
 		return 0x00; // Open bus behavior
 	}
@@ -52,7 +52,7 @@ class APUStub final : public Component {
 		if (address >= APU_REGISTERS_START && address <= APU_REGISTERS_END) {
 			const Address reg_index = address - APU_REGISTERS_START;
 			registers_[reg_index] = value;
-			
+
 			// Special handling for status register
 			if (address == 0x4015) {
 				status_register_ = value;
@@ -73,10 +73,10 @@ class APUStub final : public Component {
 	static constexpr Address APU_REGISTERS_START = 0x4000;
 	static constexpr Address APU_REGISTERS_END = 0x401F;
 	static constexpr std::size_t APU_REGISTER_COUNT = 0x20; // $4000-$401F
-	
+
 	/// APU registers ($4000-$401F)
 	std::array<Byte, APU_REGISTER_COUNT> registers_{};
-	
+
 	/// APU status register ($4015) - readable
 	Byte status_register_ = 0x00;
 };

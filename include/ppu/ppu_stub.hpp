@@ -40,7 +40,7 @@ class PPUStub final : public Component {
 	[[nodiscard]] Byte read(Address address) const noexcept {
 		const Address reg_addr = mirror_ppu_address(address);
 		(void)reg_addr; // Suppress unused variable warning
-		
+
 		// Most PPU registers are write-only, return last written value
 		// TODO: Implement proper read behavior for status register, etc.
 		return last_write_;
@@ -69,10 +69,10 @@ class PPUStub final : public Component {
 	}
 
 	static constexpr std::size_t PPU_REGISTER_COUNT = 8;
-	
+
 	/// PPU registers ($2000-$2007, mirrored through $3FFF)
 	std::array<Byte, PPU_REGISTER_COUNT> registers_{};
-	
+
 	/// Last written value (for read behavior)
 	Byte last_write_ = 0x00;
 };
