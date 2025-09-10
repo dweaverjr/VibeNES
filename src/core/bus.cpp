@@ -1,11 +1,16 @@
 #include "core/bus.hpp"
 #include "memory/ram.hpp"
+#include "ppu/ppu_stub.hpp"
+#include "apu/apu_stub.hpp"
+#include "input/controller_stub.hpp"
+#include "cartridge/cartridge_stub.hpp"
 #include <iomanip>
 #include <iostream>
 
 namespace nes {
 
-SystemBus::SystemBus() : ram_{nullptr} {
+SystemBus::SystemBus() : ram_{nullptr}, ppu_{nullptr}, apu_{nullptr}, 
+                         controllers_{nullptr}, cartridge_{nullptr} {
 }
 
 void SystemBus::tick(CpuCycle cycles) {
@@ -13,8 +18,18 @@ void SystemBus::tick(CpuCycle cycles) {
 	if (ram_) {
 		ram_->tick(cycles);
 	}
-	// TODO: Tick other components when available
-	(void)cycles; // Suppress unused parameter warning until more components added
+	if (ppu_) {
+		ppu_->tick(cycles);
+	}
+	if (apu_) {
+		apu_->tick(cycles);
+	}
+	if (controllers_) {
+		controllers_->tick(cycles);
+	}
+	if (cartridge_) {
+		cartridge_->tick(cycles);
+	}
 }
 
 void SystemBus::reset() {
@@ -22,6 +37,19 @@ void SystemBus::reset() {
 	if (ram_) {
 		ram_->reset();
 	}
+	if (ppu_) {
+		ppu_->reset();
+	}
+	if (apu_) {
+		apu_->reset();
+	}
+	if (controllers_) {
+		controllers_->reset();
+	}
+	if (cartridge_) {
+		cartridge_->reset();
+	}
+	
 	// Clear test memory
 	test_high_memory_.fill(0x00);
 	test_high_memory_valid_.fill(false);
@@ -33,6 +61,19 @@ void SystemBus::power_on() {
 	if (ram_) {
 		ram_->power_on();
 	}
+	if (ppu_) {
+		ppu_->power_on();
+	}
+	if (apu_) {
+		apu_->power_on();
+	}
+	if (controllers_) {
+		controllers_->power_on();
+	}
+	if (cartridge_) {
+		cartridge_->power_on();
+	}
+	
 	// Clear test memory
 	test_high_memory_.fill(0x00);
 	test_high_memory_valid_.fill(false);
@@ -52,14 +93,39 @@ Byte SystemBus::read(Address address) const {
 		}
 	}
 
-	// PPU: $2000-$3FFF (TODO: implement when PPU ready)
+	// PPU: $2000-$3FFF (includes register mirroring)
 	if (is_ppu_address(address)) {
+		if (ppu_) {
+			last_bus_value_ = ppu_->read(address);
+			return last_bus_value_;
+		}
 		return last_bus_value_; // Open bus
 	}
 
-	// APU/IO: $4000-$401F (TODO: implement when APU ready)
+	// APU/IO: $4000-$401F
 	if (is_apu_address(address)) {
+		if (apu_) {
+			last_bus_value_ = apu_->read(address);
+			return last_bus_value_;
+		}
 		return last_bus_value_; // Open bus
+	}
+
+	// Controllers: $4016-$4017
+	if (is_controller_address(address)) {
+		if (controllers_) {
+			last_bus_value_ = controllers_->read(address);
+			return last_bus_value_;
+		}
+		return last_bus_value_; // Open bus
+	}
+
+	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
+	if (is_cartridge_address(address)) {
+		if (cartridge_) {
+			last_bus_value_ = cartridge_->read(address);
+			return last_bus_value_;
+		}
 	}
 
 	// High memory: $8000-$FFFF (test memory for ROM vectors)
@@ -88,14 +154,36 @@ void SystemBus::write(Address address, Byte value) {
 		}
 	}
 
-	// PPU: $2000-$3FFF (TODO: implement when PPU ready)
+	// PPU: $2000-$3FFF (includes register mirroring)
 	if (is_ppu_address(address)) {
+		if (ppu_) {
+			ppu_->write(address, value);
+		}
 		return;
 	}
 
-	// APU/IO: $4000-$401F (TODO: implement when APU ready)
+	// APU/IO: $4000-$401F
 	if (is_apu_address(address)) {
+		if (apu_) {
+			apu_->write(address, value);
+		}
 		return;
+	}
+
+	// Controllers: $4016-$4017
+	if (is_controller_address(address)) {
+		if (controllers_) {
+			controllers_->write(address, value);
+		}
+		return;
+	}
+
+	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
+	if (is_cartridge_address(address)) {
+		if (cartridge_) {
+			cartridge_->write(address, value);
+			return;
+		}
 	}
 
 	// High memory: $8000-$FFFF (test memory for ROM vectors)
@@ -113,14 +201,31 @@ void SystemBus::connect_ram(std::shared_ptr<Ram> ram) {
 	ram_ = std::move(ram);
 }
 
+void SystemBus::connect_ppu(std::shared_ptr<PPUStub> ppu) {
+	ppu_ = std::move(ppu);
+}
+
+void SystemBus::connect_apu(std::shared_ptr<APUStub> apu) {
+	apu_ = std::move(apu);
+}
+
+void SystemBus::connect_controllers(std::shared_ptr<ControllerStub> controllers) {
+	controllers_ = std::move(controllers);
+}
+
+void SystemBus::connect_cartridge(std::shared_ptr<CartridgeStub> cartridge) {
+	cartridge_ = std::move(cartridge);
+}
+
 void SystemBus::debug_print_memory_map() const {
 	std::cout << "=== System Bus Memory Map ===\n";
 	std::cout << "$0000-$1FFF: RAM" << (ram_ ? " [connected]" : " [not connected]") << "\n";
-	std::cout << "$2000-$3FFF: PPU registers [not implemented]\n";
-	std::cout << "$4000-$401F: APU/IO registers [not implemented]\n";
-	std::cout << "$4020-$5FFF: Expansion ROM [not implemented]\n";
-	std::cout << "$6000-$7FFF: SRAM [not implemented]\n";
-	std::cout << "$8000-$FFFF: PRG ROM [not implemented]\n";
+	std::cout << "$2000-$3FFF: PPU registers" << (ppu_ ? " [connected]" : " [not connected]") << "\n";
+	std::cout << "$4000-$401F: APU/IO registers" << (apu_ ? " [connected]" : " [not connected]") << "\n";
+	std::cout << "$4016-$4017: Controllers" << (controllers_ ? " [connected]" : " [not connected]") << "\n";
+	std::cout << "$4020-$5FFF: Expansion ROM" << (cartridge_ ? " [connected]" : " [not connected]") << "\n";
+	std::cout << "$6000-$7FFF: SRAM" << (cartridge_ ? " [connected]" : " [not connected]") << "\n";
+	std::cout << "$8000-$FFFF: PRG ROM" << (cartridge_ ? " [connected]" : " [not connected]") << "\n";
 }
 
 bool SystemBus::is_ram_address(Address address) const noexcept {
@@ -133,6 +238,14 @@ bool SystemBus::is_ppu_address(Address address) const noexcept {
 
 bool SystemBus::is_apu_address(Address address) const noexcept {
 	return address >= 0x4000 && address <= 0x401F;
+}
+
+bool SystemBus::is_controller_address(Address address) const noexcept {
+	return address == 0x4016 || address == 0x4017;
+}
+
+bool SystemBus::is_cartridge_address(Address address) const noexcept {
+	return address >= 0x4020; // Address is 16-bit, so it's always <= 0xFFFF
 }
 
 } // namespace nes
