@@ -3,7 +3,7 @@
 #include "cartridge/cartridge.hpp"
 #include "input/controller_stub.hpp"
 #include "memory/ram.hpp"
-#include "ppu/ppu_stub.hpp"
+#include "ppu/ppu.hpp"
 #include <iomanip>
 #include <iostream>
 
@@ -95,7 +95,7 @@ Byte SystemBus::read(Address address) const {
 	// PPU: $2000-$3FFF (includes register mirroring)
 	if (is_ppu_address(address)) {
 		if (ppu_) {
-			last_bus_value_ = ppu_->read(address);
+			last_bus_value_ = ppu_->read_register(address);
 			return last_bus_value_;
 		}
 		return last_bus_value_; // Open bus
@@ -156,7 +156,7 @@ void SystemBus::write(Address address, Byte value) {
 	// PPU: $2000-$3FFF (includes register mirroring)
 	if (is_ppu_address(address)) {
 		if (ppu_) {
-			ppu_->write(address, value);
+			ppu_->write_register(address, value);
 		}
 		return;
 	}
@@ -200,7 +200,7 @@ void SystemBus::connect_ram(std::shared_ptr<Ram> ram) {
 	ram_ = std::move(ram);
 }
 
-void SystemBus::connect_ppu(std::shared_ptr<PPUStub> ppu) {
+void SystemBus::connect_ppu(std::shared_ptr<PPU> ppu) {
 	ppu_ = std::move(ppu);
 }
 

@@ -4,7 +4,7 @@
 #include "core/component.hpp"
 #include "core/types.hpp"
 #include "memory/ram.hpp"
-#include "ppu/ppu_stub.hpp"
+#include "ppu/ppu.hpp"
 #include <iostream>
 #include <memory>
 
@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
 	// Create basic emulator components for testing
 	auto bus = std::make_unique<SystemBus>();
 	auto ram = std::make_shared<Ram>();
-	auto ppu = std::make_shared<PPUStub>();
+	auto ppu = std::make_shared<PPU>();
 	auto apu = std::make_shared<APUStub>();
 	auto cartridge = std::make_shared<Cartridge>();
 	auto cpu = std::make_unique<CPU6502>(bus.get());
@@ -34,6 +34,10 @@ int main(int argc, char *argv[]) {
 	bus->connect_ppu(ppu);
 	bus->connect_apu(apu);
 	bus->connect_cartridge(cartridge);
+
+	// Connect cartridge to PPU for CHR ROM/RAM access
+	ppu->connect_cartridge(cartridge);
+
 	bus->power_on();
 	// Note: power_on() already triggers reset sequence, so no separate reset() call needed
 

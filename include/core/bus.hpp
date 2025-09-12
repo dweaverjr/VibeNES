@@ -9,7 +9,7 @@ namespace nes {
 
 // Forward declarations
 class Ram;
-class PPUStub;
+class PPU;
 class APUStub;
 class ControllerStub;
 class Cartridge;
@@ -33,7 +33,7 @@ class SystemBus final : public Component {
 
 	// Component management
 	void connect_ram(std::shared_ptr<Ram> ram);
-	void connect_ppu(std::shared_ptr<PPUStub> ppu);
+	void connect_ppu(std::shared_ptr<PPU> ppu);
 	void connect_apu(std::shared_ptr<APUStub> apu);
 	void connect_controllers(std::shared_ptr<ControllerStub> controllers);
 	void connect_cartridge(std::shared_ptr<Cartridge> cartridge);
@@ -44,7 +44,7 @@ class SystemBus final : public Component {
   private:
 	// Connected components
 	std::shared_ptr<Ram> ram_;
-	std::shared_ptr<PPUStub> ppu_;
+	std::shared_ptr<PPU> ppu_;
 	std::shared_ptr<APUStub> apu_;
 	std::shared_ptr<ControllerStub> controllers_;
 	std::shared_ptr<Cartridge> cartridge_;
