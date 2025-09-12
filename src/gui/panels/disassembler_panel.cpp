@@ -46,7 +46,8 @@ static uint8_t get_instruction_size(uint8_t opcode) {
 	return INSTRUCTION_SIZES[opcode];
 }
 
-DisassemblerPanel::DisassemblerPanel() : visible_(true), follow_pc_(true), start_address_(0x0000) {
+DisassemblerPanel::DisassemblerPanel()
+	: visible_(true), follow_pc_(true), start_address_(0x0000), last_pc_(0xFFFF), alignment_valid_(false) {
 }
 
 void DisassemblerPanel::render(const nes::CPU6502 *cpu, const nes::SystemBus *bus) {
@@ -79,51 +80,126 @@ void DisassemblerPanel::render_controls() {
 void DisassemblerPanel::render_instruction_list(const nes::CPU6502 *cpu, const nes::SystemBus *bus) {
 	uint16_t current_pc = cpu->get_program_counter();
 
-	// Fixed layout: always show exactly 8 instructions before PC, PC, then 10 after
-	std::vector<uint16_t> instruction_addresses;
+	// Update our instruction stream cache if needed
+	update_instruction_stream(current_pc, bus);
 
-	// Try to find proper instruction boundaries before PC
-	std::vector<uint16_t> before_pc = find_instructions_before_pc(current_pc, bus, 8);
+	// Find the current PC in our cached stream
+	auto pc_it = std::find(cached_instruction_stream_.begin(), cached_instruction_stream_.end(), current_pc);
 
-	// FORCE exactly 8 addresses before PC for consistent layout
-	std::vector<uint16_t> fixed_before_pc;
-	if (before_pc.size() >= 8) {
-		// Take the last 8
-		fixed_before_pc.assign(before_pc.end() - 8, before_pc.end());
-	} else {
-		// Pad with estimated addresses to always have 8
-		int needed = 8 - static_cast<int>(before_pc.size());
-		for (int i = needed; i > 0; --i) {
-			uint16_t addr = current_pc >= (i * 2) ? current_pc - (i * 2) : 0;
-			fixed_before_pc.push_back(addr);
+	if (pc_it != cached_instruction_stream_.end()) {
+		// PC found in our cached stream - use the cached alignment
+		size_t pc_index = std::distance(cached_instruction_stream_.begin(), pc_it);
+
+		// Show 8 instructions before PC, PC, then 10 after
+		size_t start_index = pc_index >= 8 ? pc_index - 8 : 0;
+		size_t end_index = std::min(pc_index + 11, cached_instruction_stream_.size());
+
+		for (size_t i = start_index; i < end_index; ++i) {
+			render_single_instruction(cached_instruction_stream_[i], current_pc, bus);
 		}
-		// Add whatever we found from the proper scan
-		fixed_before_pc.insert(fixed_before_pc.end(), before_pc.begin(), before_pc.end());
+	} else {
+		// PC not in cached stream - force a rebuild and use fallback
+		alignment_valid_ = false;
+		update_instruction_stream(current_pc, bus);
+
+		// Fallback: just show addresses around PC
+		for (int i = -8; i <= 10; ++i) {
+			uint16_t addr = static_cast<uint16_t>(current_pc + i);
+			render_single_instruction(addr, current_pc, bus);
+		}
+	}
+}
+
+void DisassemblerPanel::update_instruction_stream(uint16_t pc, const nes::SystemBus *bus) {
+	// Check if we need to extend or rebuild the cache
+	auto pc_it = std::find(cached_instruction_stream_.begin(), cached_instruction_stream_.end(), pc);
+
+	bool need_rebuild = !alignment_valid_ || pc_it == cached_instruction_stream_.end();
+	bool need_extend = false;
+
+	if (!need_rebuild && pc_it != cached_instruction_stream_.end()) {
+		// Check if we're getting close to the end of our cached stream
+		size_t pc_index = std::distance(cached_instruction_stream_.begin(), pc_it);
+		size_t remaining = cached_instruction_stream_.size() - pc_index;
+		if (remaining < 15) { // Less than 15 instructions ahead
+			need_extend = true;
+		}
 	}
 
-	// Add the fixed 8 addresses before PC
-	instruction_addresses.insert(instruction_addresses.end(), fixed_before_pc.begin(), fixed_before_pc.end());
+	if (need_rebuild) {
+		// Full rebuild of the instruction stream
+		cached_instruction_stream_.clear();
 
-	// Add the current PC (this will always be at position 8 in the display)
-	instruction_addresses.push_back(current_pc);
+		// Find a good starting point far before the current PC
+		uint16_t start_addr = pc >= 200 ? pc - 200 : 0;
+		bool found_alignment = false;
 
-	// Add exactly 10 instructions after the PC (this is straightforward)
-	uint16_t scan_addr = current_pc;
-	for (int i = 0; i < 10; ++i) {
-		uint8_t opcode = bus->read(scan_addr);
-		uint8_t size = get_instruction_size(opcode);
+		// Try multiple starting points to find proper alignment
+		for (int offset = 0; offset <= 50 && !found_alignment; ++offset) {
+			uint16_t try_start = start_addr + offset;
+			if (try_start >= pc)
+				break;
 
-		// Check for wraparound before adding
-		if (scan_addr > 0xFFFF - size)
-			break; // Would wraparound
+			std::vector<uint16_t> test_stream;
+			uint16_t scan_addr = try_start;
 
-		scan_addr += size;
-		instruction_addresses.push_back(scan_addr);
-	}
+			// Build a long instruction stream - extend much further ahead
+			for (int steps = 0; steps < 300; ++steps) { // Increased from 150 to 300
+				if (scan_addr >= pc + 200)
+					break; // Extend 200 bytes past PC instead of 50
 
-	// Render each instruction - PC will always be at the same vertical position
-	for (uint16_t addr : instruction_addresses) {
-		render_single_instruction(addr, current_pc, bus);
+				test_stream.push_back(scan_addr);
+
+				uint8_t opcode = bus->read(scan_addr);
+				uint8_t size = get_instruction_size(opcode);
+
+				if (size < 1 || size > 3)
+					break; // Invalid instruction
+
+				scan_addr += size;
+
+				// Check if this alignment includes our target PC
+				if (std::find(test_stream.begin(), test_stream.end(), pc) != test_stream.end()) {
+					cached_instruction_stream_ = test_stream;
+					found_alignment = true;
+					break;
+				}
+			}
+		}
+
+		// If no good alignment found, create a simple fallback stream
+		if (!found_alignment) {
+			for (uint16_t addr = (pc >= 100 ? pc - 100 : 0); addr <= pc + 100; addr += 2) {
+				cached_instruction_stream_.push_back(addr);
+			}
+		}
+
+		last_pc_ = pc;
+		alignment_valid_ = true;
+
+	} else if (need_extend) {
+		// Extend the existing cache forward
+		if (!cached_instruction_stream_.empty()) {
+			uint16_t last_addr = cached_instruction_stream_.back();
+			uint16_t scan_addr = last_addr;
+
+			// Extend by scanning forward from the last cached instruction
+			for (int steps = 0; steps < 50; ++steps) {
+				uint8_t opcode = bus->read(scan_addr);
+				uint8_t size = get_instruction_size(opcode);
+
+				if (size < 1 || size > 3)
+					break; // Invalid instruction
+
+				scan_addr += size;
+				cached_instruction_stream_.push_back(scan_addr);
+
+				if (scan_addr >= pc + 100)
+					break; // Extended far enough
+			}
+		}
+
+		last_pc_ = pc;
 	}
 }
 
@@ -131,17 +207,20 @@ std::vector<uint16_t> DisassemblerPanel::find_instructions_before_pc(uint16_t pc
 																	 int count) {
 	std::vector<uint16_t> candidates;
 
-	// Simple approach: try a few different starting points and pick the best one
-	std::vector<uint16_t> best_sequence;
+	// IMPROVED APPROACH: Find a long sequence of properly aligned instructions,
+	// then take just the slice we need for display. This ensures instruction
+	// boundaries are correct regardless of display window size.
 
-	// Try starting points from 3 to 30 bytes before PC
-	for (int start_offset = 3; start_offset <= 30 && start_offset < pc; start_offset += 1) {
+	std::vector<uint16_t> full_sequence;
+
+	// Try starting points from 5 to 100 bytes before PC to establish proper alignment
+	for (int start_offset = 5; start_offset <= 100 && start_offset < pc; start_offset += 1) {
 		uint16_t start_addr = pc - start_offset;
 		std::vector<uint16_t> sequence;
 		uint16_t scan_addr = start_addr;
 
-		// Scan forward and collect instruction addresses
-		for (int steps = 0; steps < 25; ++steps) {
+		// Scan forward and collect ALL instruction addresses leading to PC
+		for (int steps = 0; steps < 60; ++steps) { // Increased limit
 			if (scan_addr >= pc)
 				break; // Stop when we reach or pass the PC
 
@@ -155,24 +234,33 @@ std::vector<uint16_t> DisassemblerPanel::find_instructions_before_pc(uint16_t pc
 
 			scan_addr += size;
 
-			// If we hit the PC exactly, this is a perfect alignment
+			// If we hit the PC exactly, we found a perfect alignment
 			if (scan_addr == pc) {
-				// Take the last 'count' instructions
-				if (sequence.size() > static_cast<size_t>(count)) {
-					best_sequence.assign(sequence.end() - count, sequence.end());
-				} else {
-					best_sequence = sequence;
-				}
-				return best_sequence; // Return immediately - perfect match
+				full_sequence = sequence; // Save the entire sequence
+				break;
 			}
+		}
+
+		// If we found a good full sequence, stop searching
+		if (!full_sequence.empty()) {
+			break;
 		}
 	}
 
-	// If no perfect alignment found, create a simple fallback
-	// Just go back by estimated instruction sizes
-	for (int i = count; i > 0; --i) {
-		uint16_t addr = pc >= (i * 2) ? pc - (i * 2) : 0;
-		candidates.push_back(addr);
+	// Now take just the visible portion we need for display
+	if (!full_sequence.empty()) {
+		if (full_sequence.size() > static_cast<size_t>(count)) {
+			// Take the last 'count' instructions from the full sequence
+			candidates.assign(full_sequence.end() - count, full_sequence.end());
+		} else {
+			candidates = full_sequence;
+		}
+	} else {
+		// Fallback if no perfect alignment found
+		for (int i = count; i > 0; --i) {
+			uint16_t addr = pc >= (i * 2) ? pc - (i * 2) : 0;
+			candidates.push_back(addr);
+		}
 	}
 
 	return candidates;
