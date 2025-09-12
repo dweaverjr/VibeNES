@@ -3,6 +3,7 @@
 #include "core/component.hpp"
 #include "core/types.hpp"
 #include <array>
+#include <cstdint>
 
 namespace nes {
 
@@ -26,9 +27,24 @@ class PPUStub final : public Component {
 	}
 
 	void power_on() override {
-		// PPU registers are undefined on power-on
-		registers_.fill(0x00);
-		last_write_ = 0x00;
+		// PPU registers contain random values on power-on (like RAM)
+		// Use similar randomization as RAM for realistic garbage values
+		std::uint32_t seed = 0x87654321; // Different seed than RAM
+		
+		for (std::size_t i = 0; i < registers_.size(); ++i) {
+			seed = seed * 1664525 + 1013904223;
+			std::uint32_t noise = seed ^ (static_cast<std::uint32_t>(i) * 0x9E3779B9);
+			noise ^= noise >> 16;
+			registers_[i] = static_cast<Byte>(noise & 0xFF);
+		}
+		
+		// PPUSTATUS ($2002) has some known initial bits
+		// Bit 7 (VBlank), 6 (Sprite 0), 5 (Sprite overflow) typically start clear
+		if (registers_.size() > 2) {
+			registers_[2] &= 0x1F; // Clear upper 3 bits for more realistic PPUSTATUS
+		}
+		
+		last_write_ = static_cast<Byte>(seed & 0xFF);
 	}
 
 	[[nodiscard]] const char *get_name() const noexcept override {

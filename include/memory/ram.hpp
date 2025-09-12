@@ -3,6 +3,7 @@
 #include "core/component.hpp"
 #include "core/types.hpp"
 #include <array>
+#include <cstdint>
 #include <iomanip>
 #include <iostream>
 
@@ -22,18 +23,36 @@ class Ram final : public Component {
 	}
 
 	void reset() override {
-		// RAM contents are typically undefined on reset
-		// Some emulators fill with specific patterns for testing
-		memory_.fill(0x00);
+		// RAM contents are NOT cleared on reset in real NES hardware
+		// Reset only affects CPU state, not memory contents
+		// RAM retains its power-on state until explicitly written to
+		// (No action needed here)
 	}
 
 	void power_on() override {
 		// Simulate realistic random power-on state
 		// Real NES RAM contains garbage values on power-up
+
+		// Use multiple random sources for better distribution
+		std::uint32_t seed = 0x12345678; // Deterministic but complex seed
+
 		for (std::size_t i = 0; i < memory_.size(); ++i) {
-			// Generate pseudo-random garbage pattern
-			// Using simple LCG for deterministic but varied results
-			memory_[i] = static_cast<Byte>((i * 17 + 42) ^ (i >> 3) ^ 0xAA);
+			// Multiple LCG iterations with different constants for chaos
+			seed = seed * 1664525 + 1013904223; // First LCG
+			std::uint32_t temp1 = seed;
+
+			seed = seed * 22695477 + 1; // Second LCG
+			std::uint32_t temp2 = seed;
+
+			seed = seed * 48271 + 0; // Third LCG
+			std::uint32_t temp3 = seed;
+
+			// Combine multiple noise sources
+			std::uint32_t noise = temp1 ^ (temp2 >> 8) ^ (temp3 << 4);
+			noise ^= static_cast<std::uint32_t>(i * 0x9E3779B9); // Golden ratio hash
+			noise ^= noise >> 16;								 // Additional mixing
+
+			memory_[i] = static_cast<Byte>(noise & 0xFF);
 		}
 	}
 

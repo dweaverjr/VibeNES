@@ -2,6 +2,7 @@
 #include "core/component.hpp"
 #include "core/types.hpp"
 #include "memory/ram.hpp"
+#include "ppu/ppu_stub.hpp"
 #include <iostream>
 #include <memory>
 
@@ -22,7 +23,9 @@ int main(int argc, char *argv[]) {
 	// Create basic emulator components for testing
 	auto bus = std::make_unique<SystemBus>();
 	auto ram = std::make_shared<Ram>();
+	auto ppu = std::make_shared<PPUStub>();
 	bus->connect_ram(ram);
+	bus->connect_ppu(ppu);
 	bus->power_on();
 	bus->reset();
 
