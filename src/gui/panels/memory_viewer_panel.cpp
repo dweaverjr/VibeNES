@@ -43,6 +43,12 @@ void MemoryViewerPanel::render_controls() {
 	ImGui::SameLine();
 	if (ImGui::Button("APU"))
 		start_address_ = 0x4000;
+	ImGui::SameLine();
+	if (ImGui::Button("ROM"))
+		start_address_ = 0x8000;
+	ImGui::SameLine();
+	if (ImGui::Button("Vectors"))
+		start_address_ = 0xFFFA;
 }
 
 void MemoryViewerPanel::render_memory_grid(const nes::SystemBus *bus) {

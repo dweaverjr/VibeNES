@@ -16,8 +16,9 @@ namespace nes::gui {
 
 GuiApplication::GuiApplication()
 	: window_(nullptr), gl_context_(nullptr), io_(nullptr), running_(false), show_demo_window_(false), cpu_(nullptr),
-	  bus_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
-	  disassembler_panel_(std::make_unique<DisassemblerPanel>()), memory_panel_(std::make_unique<MemoryViewerPanel>()) {
+	  bus_(nullptr), cartridge_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
+	  disassembler_panel_(std::make_unique<DisassemblerPanel>()), memory_panel_(std::make_unique<MemoryViewerPanel>()),
+	  rom_loader_panel_(std::make_unique<RomLoaderPanel>()) {
 }
 
 GuiApplication::~GuiApplication() {
@@ -142,6 +143,10 @@ void GuiApplication::render_frame() {
 		memory_panel_->render(bus_);
 	}
 
+	if (rom_loader_panel_->is_visible()) {
+		rom_loader_panel_->render(cartridge_);
+	}
+
 	// Show demo window if requested
 	if (show_demo_window_) {
 		ImGui::ShowDemoWindow(&show_demo_window_);
@@ -159,6 +164,14 @@ void GuiApplication::render_frame() {
 
 void GuiApplication::render_main_menu_bar() {
 	if (ImGui::BeginMainMenuBar()) {
+		if (ImGui::BeginMenu("File")) {
+			bool rom_loader_visible = rom_loader_panel_->is_visible();
+			if (ImGui::MenuItem("Load ROM...", nullptr, rom_loader_visible)) {
+				rom_loader_panel_->set_visible(!rom_loader_visible);
+			}
+			ImGui::EndMenu();
+		}
+
 		if (ImGui::BeginMenu("View")) {
 			bool cpu_visible = cpu_panel_->is_visible();
 			bool disasm_visible = disassembler_panel_->is_visible();

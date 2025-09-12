@@ -1,0 +1,47 @@
+#pragma once
+
+#include "core/types.hpp"
+#include <vector>
+
+namespace nes {
+
+/**
+ * Base class for all NES mappers
+ * Mappers control how ROM/RAM is mapped into CPU and PPU address spaces
+ */
+class Mapper {
+  public:
+	virtual ~Mapper() = default;
+
+	// CPU memory access (PRG ROM/RAM)
+	virtual Byte cpu_read(Address address) const = 0;
+	virtual void cpu_write(Address address, Byte value) = 0;
+
+	// PPU memory access (CHR ROM/RAM)
+	virtual Byte ppu_read(Address address) const = 0;
+	virtual void ppu_write(Address address, Byte value) = 0;
+
+	// Mapper information
+	virtual std::uint8_t get_mapper_id() const noexcept = 0;
+	virtual const char *get_name() const noexcept = 0;
+
+	// Reset the mapper state
+	virtual void reset() = 0;
+
+	// Get mirroring mode for nametables
+	enum class Mirroring { Horizontal, Vertical, SingleScreenLow, SingleScreenHigh, FourScreen };
+	virtual Mirroring get_mirroring() const noexcept = 0;
+
+  protected:
+	// Helper to check if address is in PRG ROM range
+	static constexpr bool is_prg_rom_address(Address address) noexcept {
+		return address >= 0x8000;
+	}
+
+	// Helper to check if address is in CHR range
+	static constexpr bool is_chr_address(Address address) noexcept {
+		return address <= 0x1FFF;
+	}
+};
+
+} // namespace nes

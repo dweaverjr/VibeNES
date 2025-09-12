@@ -1,6 +1,6 @@
 #include "core/bus.hpp"
 #include "apu/apu_stub.hpp"
-#include "cartridge/cartridge_stub.hpp"
+#include "cartridge/cartridge.hpp"
 #include "input/controller_stub.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu_stub.hpp"
@@ -122,7 +122,7 @@ Byte SystemBus::read(Address address) const {
 	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
 	if (is_cartridge_address(address)) {
 		if (cartridge_) {
-			last_bus_value_ = cartridge_->read(address);
+			last_bus_value_ = cartridge_->cpu_read(address);
 			return last_bus_value_;
 		}
 	}
@@ -180,7 +180,7 @@ void SystemBus::write(Address address, Byte value) {
 	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
 	if (is_cartridge_address(address)) {
 		if (cartridge_) {
-			cartridge_->write(address, value);
+			cartridge_->cpu_write(address, value);
 			return;
 		}
 	}
@@ -212,7 +212,7 @@ void SystemBus::connect_controllers(std::shared_ptr<ControllerStub> controllers)
 	controllers_ = std::move(controllers);
 }
 
-void SystemBus::connect_cartridge(std::shared_ptr<CartridgeStub> cartridge) {
+void SystemBus::connect_cartridge(std::shared_ptr<Cartridge> cartridge) {
 	cartridge_ = std::move(cartridge);
 }
 

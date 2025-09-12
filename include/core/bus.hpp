@@ -12,7 +12,7 @@ class Ram;
 class PPUStub;
 class APUStub;
 class ControllerStub;
-class CartridgeStub;
+class Cartridge;
 
 /// System Bus - Central memory and I/O interconnect
 /// Handles address decoding and routes memory accesses to appropriate components
@@ -36,7 +36,7 @@ class SystemBus final : public Component {
 	void connect_ppu(std::shared_ptr<PPUStub> ppu);
 	void connect_apu(std::shared_ptr<APUStub> apu);
 	void connect_controllers(std::shared_ptr<ControllerStub> controllers);
-	void connect_cartridge(std::shared_ptr<CartridgeStub> cartridge);
+	void connect_cartridge(std::shared_ptr<Cartridge> cartridge);
 
 	// Debug interface
 	void debug_print_memory_map() const;
@@ -47,7 +47,7 @@ class SystemBus final : public Component {
 	std::shared_ptr<PPUStub> ppu_;
 	std::shared_ptr<APUStub> apu_;
 	std::shared_ptr<ControllerStub> controllers_;
-	std::shared_ptr<CartridgeStub> cartridge_;
+	std::shared_ptr<Cartridge> cartridge_;
 
 	// Address decoding helpers
 	[[nodiscard]] bool is_ram_address(Address address) const noexcept;

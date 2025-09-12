@@ -1,3 +1,4 @@
+#include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
 #include "core/component.hpp"
 #include "core/types.hpp"
@@ -24,10 +25,13 @@ int main(int argc, char *argv[]) {
 	auto bus = std::make_unique<SystemBus>();
 	auto ram = std::make_shared<Ram>();
 	auto ppu = std::make_shared<PPUStub>();
+	auto cartridge = std::make_shared<Cartridge>();
+
 	bus->connect_ram(ram);
 	bus->connect_ppu(ppu);
+	bus->connect_cartridge(cartridge);
 	bus->power_on();
-	bus->reset();
+	// Note: power_on() already triggers reset sequence, so no separate reset() call needed
 
 	// Create and run GUI
 	nes::gui::GuiApplication gui_app;
@@ -39,6 +43,7 @@ int main(int argc, char *argv[]) {
 
 	// Set emulator references
 	gui_app.set_bus(bus.get());
+	gui_app.set_cartridge(cartridge.get());
 	// gui_app.set_cpu(cpu.get()); // TODO: Create CPU instance
 
 	// Run the GUI

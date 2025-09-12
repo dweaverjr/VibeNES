@@ -4,6 +4,7 @@
 #include "gui/panels/cpu_state_panel.hpp"
 #include "gui/panels/disassembler_panel.hpp"
 #include "gui/panels/memory_viewer_panel.hpp"
+#include "gui/panels/rom_loader_panel.hpp"
 #include <SDL2/SDL.h>
 
 struct ImGuiIO;
@@ -12,6 +13,7 @@ struct ImGuiIO;
 namespace nes {
 class CPU6502;
 class SystemBus;
+class Cartridge;
 } // namespace nes
 
 namespace nes::gui {
@@ -44,6 +46,11 @@ class GuiApplication {
 		bus_ = bus;
 	}
 
+	// Set the cartridge reference for ROM loading
+	void set_cartridge(nes::Cartridge *cartridge) {
+		cartridge_ = cartridge;
+	}
+
   private:
 	// SDL2 resources
 	SDL_Window *window_;
@@ -59,11 +66,13 @@ class GuiApplication {
 	// Emulator references
 	const nes::CPU6502 *cpu_;
 	const nes::SystemBus *bus_;
+	nes::Cartridge *cartridge_;
 
 	// GUI panels
 	std::unique_ptr<CPUStatePanel> cpu_panel_;
 	std::unique_ptr<DisassemblerPanel> disassembler_panel_;
 	std::unique_ptr<MemoryViewerPanel> memory_panel_;
+	std::unique_ptr<RomLoaderPanel> rom_loader_panel_;
 
 	// Private methods
 	bool initialize_sdl();

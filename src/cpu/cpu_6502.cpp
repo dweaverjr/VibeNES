@@ -25,11 +25,14 @@ void CPU6502::tick(CpuCycle cycles) {
 	}
 }
 void CPU6502::reset() {
+	// Manual reset (reset button pressed during operation)
+	// This should trigger reset while preserving some operational context
+
 	// Trigger a reset interrupt rather than immediately setting PC
 	// This ensures proper reset vector handling
 	trigger_reset();
 
-	// Clear any other pending interrupts
+	// Clear any other pending interrupts (reset takes priority)
 	interrupt_state_.irq_pending = false;
 	interrupt_state_.nmi_pending = false;
 
@@ -37,19 +40,35 @@ void CPU6502::reset() {
 }
 
 void CPU6502::power_on() {
-	// Power-on reset
-	accumulator_ = 0;
-	x_register_ = 0;
-	y_register_ = 0;
-	stack_pointer_ = 0xFF;
+	// On real NES, most CPU registers have undefined values on power-up
+	// Only a few specific behaviors are guaranteed
 
-	// Status register power-on state
-	status_.status_register_ = 0x20;	  // Only unused flag set
-	status_.flags.interrupt_flag_ = true; // Interrupts disabled
+	// Registers start with random/undefined values (simulate this)
+	// Note: In real hardware these would be truly random, but we'll use
+	// deterministic values for consistent debugging
+	accumulator_ = 0x00; // Could be anything
+	x_register_ = 0x00;	 // Could be anything
+	y_register_ = 0x00;	 // Could be anything
 
-	// Program counter will be set by reset
-	program_counter_ = 0;
+	// Stack pointer: Real hardware behavior varies, but often starts around 0xFD
+	stack_pointer_ = 0xFD; // More realistic than 0xFF
+
+	// Status register: Most bits undefined, but some have known behavior
+	status_.status_register_ = 0x20;	  // Unused flag always set
+	status_.flags.interrupt_flag_ = true; // Interrupts disabled on power-up
+
+	// Program counter: Undefined until reset vector is read
+	program_counter_ = 0x0000; // Will be set by reset sequence
+
+	// Clear cycle counter
 	cycles_remaining_ = CpuCycle{0};
+
+	// Clear interrupt state
+	interrupt_state_.clear_all();
+
+	// *** CRITICAL: Power-on automatically triggers reset sequence ***
+	// This is what actually sets PC from reset vector and completes initialization
+	trigger_reset();
 }
 
 const char *CPU6502::get_name() const noexcept {
