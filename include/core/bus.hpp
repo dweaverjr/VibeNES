@@ -53,6 +53,7 @@ class SystemBus final : public Component {
 	[[nodiscard]] bool is_ram_address(Address address) const noexcept;
 	[[nodiscard]] bool is_ppu_address(Address address) const noexcept;
 	[[nodiscard]] bool is_apu_address(Address address) const noexcept;
+	[[nodiscard]] bool is_apu_read_address(Address address) const noexcept;
 	[[nodiscard]] bool is_controller_address(Address address) const noexcept;
 	[[nodiscard]] bool is_cartridge_address(Address address) const noexcept;
 

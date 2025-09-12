@@ -7,11 +7,13 @@ namespace nes::gui {
 CPUStatePanel::CPUStatePanel() : visible_(true) {
 }
 
-void CPUStatePanel::render(const nes::CPU6502 *cpu) {
+void CPUStatePanel::render(nes::CPU6502 *cpu) {
 	if (!visible_ || !cpu)
 		return;
 
 	if (ImGui::Begin("CPU State", &visible_)) {
+		render_controls(cpu);
+		ImGui::Separator();
 		render_registers(cpu);
 		ImGui::Separator();
 		render_flags(cpu);
@@ -74,6 +76,31 @@ void CPUStatePanel::render_stack_info(const nes::CPU6502 *cpu) {
 	ImGui::Text("Stack Info:");
 	ImGui::TextColored(RetroTheme::get_address_color(), "Stack Pointer: $01%02X", cpu->get_stack_pointer());
 	ImGui::TextColored(RetroTheme::get_address_color(), "Stack Top: $01FF");
+}
+
+void CPUStatePanel::render_controls(nes::CPU6502 *cpu) {
+	ImGui::Separator();
+	ImGui::Text("CPU Debug Controls:");
+
+	// Step button - execute next instruction
+	if (ImGui::Button("Step Instruction")) {
+		cpu->execute_instruction();
+	}
+
+	ImGui::SameLine();
+
+	// Reset button - trigger CPU reset
+	if (ImGui::Button("Reset CPU")) {
+		cpu->trigger_reset();
+	}
+
+	ImGui::SameLine();
+
+	// Helper text
+	ImGui::TextDisabled("(?)");
+	if (ImGui::IsItemHovered()) {
+		ImGui::SetTooltip("Step: Execute one CPU instruction\nReset: Restart CPU from reset vector");
+	}
 }
 
 } // namespace nes::gui

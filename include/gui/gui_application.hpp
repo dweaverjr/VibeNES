@@ -37,7 +37,7 @@ class GuiApplication {
 	void shutdown();
 
 	// Set the CPU reference for debugging
-	void set_cpu(const nes::CPU6502 *cpu) {
+	void set_cpu(nes::CPU6502 *cpu) {
 		cpu_ = cpu;
 	}
 
@@ -64,7 +64,7 @@ class GuiApplication {
 	bool show_demo_window_;
 
 	// Emulator references
-	const nes::CPU6502 *cpu_;
+	nes::CPU6502 *cpu_;
 	const nes::SystemBus *bus_;
 	nes::Cartridge *cartridge_;
 

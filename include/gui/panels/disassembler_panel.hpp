@@ -38,6 +38,8 @@ class DisassemblerPanel {
 	// Helper methods
 	void render_controls();
 	void render_instruction_list(const nes::CPU6502 *cpu, const nes::SystemBus *bus);
+	void render_single_instruction(uint16_t addr, uint16_t current_pc, const nes::SystemBus *bus);
+	std::vector<uint16_t> find_instructions_before_pc(uint16_t pc, const nes::SystemBus *bus, int count);
 };
 
 } // namespace nes::gui

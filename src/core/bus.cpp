@@ -101,8 +101,8 @@ Byte SystemBus::read(Address address) const {
 		return last_bus_value_; // Open bus
 	}
 
-	// APU/IO: $4000-$401F
-	if (is_apu_address(address)) {
+	// APU/IO: $4000-$4015 (excluding $4017 which is controller 2 for reads)
+	if (is_apu_read_address(address)) {
 		if (apu_) {
 			last_bus_value_ = apu_->read(address);
 			return last_bus_value_;
@@ -110,7 +110,7 @@ Byte SystemBus::read(Address address) const {
 		return last_bus_value_; // Open bus
 	}
 
-	// Controllers: $4016-$4017
+	// Controllers: $4016 (controller 1), $4017 (controller 2 read)
 	if (is_controller_address(address)) {
 		if (controllers_) {
 			last_bus_value_ = controllers_->read(address);
@@ -161,7 +161,7 @@ void SystemBus::write(Address address, Byte value) {
 		return;
 	}
 
-	// APU/IO: $4000-$401F
+	// APU/IO: $4000-$4015, $4017 (writes go to APU frame counter)
 	if (is_apu_address(address)) {
 		if (apu_) {
 			apu_->write(address, value);
@@ -169,7 +169,7 @@ void SystemBus::write(Address address, Byte value) {
 		return;
 	}
 
-	// Controllers: $4016-$4017
+	// Controllers: $4016 (controller 1 strobe/data), $4017 handled by APU for writes
 	if (is_controller_address(address)) {
 		if (controllers_) {
 			controllers_->write(address, value);
@@ -236,11 +236,15 @@ bool SystemBus::is_ppu_address(Address address) const noexcept {
 }
 
 bool SystemBus::is_apu_address(Address address) const noexcept {
-	return address >= 0x4000 && address <= 0x401F;
+	return (address >= 0x4000 && address <= 0x4015) || address == 0x4017;
+}
+
+bool SystemBus::is_apu_read_address(Address address) const noexcept {
+	return address >= 0x4000 && address <= 0x4015; // Exclude $4017 for reads
 }
 
 bool SystemBus::is_controller_address(Address address) const noexcept {
-	return address == 0x4016 || address == 0x4017;
+	return address == 0x4016 || address == 0x4017; // $4016=Controller1, $4017=Controller2(read)
 }
 
 bool SystemBus::is_cartridge_address(Address address) const noexcept {

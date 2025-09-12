@@ -19,7 +19,7 @@ class CPUStatePanel {
 	~CPUStatePanel() = default;
 
 	// Render the CPU state panel
-	void render(const nes::CPU6502 *cpu);
+	void render(nes::CPU6502 *cpu);
 
 	// Show/hide panel
 	void set_visible(bool visible) {
@@ -33,6 +33,7 @@ class CPUStatePanel {
 	bool visible_;
 
 	// Helper methods
+	void render_controls(nes::CPU6502 *cpu);
 	void render_registers(const nes::CPU6502 *cpu);
 	void render_flags(const nes::CPU6502 *cpu);
 	void render_stack_info(const nes::CPU6502 *cpu);
