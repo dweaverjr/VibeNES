@@ -3,12 +3,18 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/third_party/imgui",
+                "${workspaceFolder}/third_party/imgui/backends",
+                "C:/msys64/ucrt64/include/SDL2",
+                "C:/msys64/ucrt64/include"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
-                "_UNICODE"
+                "_UNICODE",
+                "NES_GUI_ENABLED"
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "cStandard": "c23",

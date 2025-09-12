@@ -85,7 +85,10 @@
             "problemMatcher": [
                 "$gcc"
             ],
-            "group": "build",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
             "detail": "Debug build with GUI support using ImGui and SDL2"
         },
         {

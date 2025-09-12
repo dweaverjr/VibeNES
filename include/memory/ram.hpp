@@ -28,9 +28,13 @@ class Ram final : public Component {
 	}
 
 	void power_on() override {
-		// Simulate random power-on state
-		// For deterministic testing, we'll zero it
-		memory_.fill(0x00);
+		// Simulate realistic random power-on state
+		// Real NES RAM contains garbage values on power-up
+		for (std::size_t i = 0; i < memory_.size(); ++i) {
+			// Generate pseudo-random garbage pattern
+			// Using simple LCG for deterministic but varied results
+			memory_[i] = static_cast<Byte>((i * 17 + 42) ^ (i >> 3) ^ 0xAA);
+		}
 	}
 
 	[[nodiscard]] const char *get_name() const noexcept override {

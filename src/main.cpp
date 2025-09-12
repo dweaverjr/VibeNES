@@ -26,11 +26,6 @@ int main(int argc, char *argv[]) {
 	bus->power_on();
 	bus->reset();
 
-	// Initialize with some test data
-	bus->write(0x0000, 0xEA); // NOP instruction
-	bus->write(0x0001, 0xA9); // LDA immediate
-	bus->write(0x0002, 0x42); // Value
-
 	// Create and run GUI
 	nes::gui::GuiApplication gui_app;
 

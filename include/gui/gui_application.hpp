@@ -4,7 +4,7 @@
 #include "gui/panels/cpu_state_panel.hpp"
 #include "gui/panels/disassembler_panel.hpp"
 #include "gui/panels/memory_viewer_panel.hpp"
-#include <SDL.h>
+#include <SDL2/SDL.h>
 
 struct ImGuiIO;
 
