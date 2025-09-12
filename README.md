@@ -10,58 +10,102 @@ A cycle-accurate Nintendo Entertainment System (NES) emulator written in C++23, 
 
 ## Current Status
 
-### ✅ CPU (6502) - **10/10 Timing Accuracy**
-- [x] Basic instruction execution framework
-- [x] Core addressing modes (immediate, absolute, zero page, indexed, indirect)
-- [x] Page boundary crossing detection and penalties
-- [x] Cycle-accurate timing for all addressing modes
-- [x] Comprehensive test coverage with edge case validation
-- [x] **146/151 official opcodes implemented (96.7% complete)**
-  - [x] Load/Store Operations (32 opcodes) ✅
-  - [x] Arithmetic Operations (16 opcodes) ✅
-  - [x] Logical Operations (24 opcodes) ✅
-  - [x] Shift/Rotate Operations (20 opcodes) ✅
-  - [x] Compare Operations (9 opcodes) ✅
-  - [x] Transfer Operations (4/6 opcodes) - Missing TXS, TSX
-  - [x] Increment/Decrement Operations (12 opcodes) ✅
-  - [x] Branch Operations (8 opcodes) ✅
-  - [x] Jump/Subroutine Operations (5 opcodes) ✅
-  - [x] Stack Operations (4 opcodes) ✅
-  - [x] Status Flag Operations (7 opcodes) ✅
-  - [x] System Operations (1/4 opcodes) - Missing BRK, BIT (2 variants)
-  - [x] No Operation (1 opcode) ✅
-- [ ] Complete instruction set (5 opcodes remaining)
-- [ ] Interrupt handling (IRQ/NMI)
+### ✅ CPU (6502) - **Complete Implementation**
+- [x] Complete instruction execution framework with all 256 opcodes
+- [x] All addressing modes (immediate, absolute, zero page, indexed, indirect)
+- [x] Page boundary crossing detection and cycle penalties
+- [x] Cycle-accurate timing for all instructions and addressing modes
+- [x] Hardware-accurate startup behavior and reset sequence
+- [x] **Complete 6502 instruction set including illegal opcodes**
+  - [x] Load/Store Operations ✅
+  - [x] Arithmetic Operations ✅
+  - [x] Logical Operations ✅
+  - [x] Shift/Rotate Operations ✅
+  - [x] Compare Operations ✅
+  - [x] Transfer Operations ✅
+  - [x] Increment/Decrement Operations ✅
+  - [x] Branch Operations ✅
+  - [x] Jump/Subroutine Operations ✅
+  - [x] Stack Operations ✅
+  - [x] Status Flag Operations ✅
+  - [x] System Operations ✅
+  - [x] No Operation ✅
 
-### 🚧 Memory System
+### ✅ Memory System - **Complete**
 - [x] System bus with proper address decoding
 - [x] RAM with mirroring (0x0000-0x1FFF)
+- [x] PPU register mapping (0x2000-0x3FFF)
+- [x] APU/Controller register mapping (0x4000-0x401F)
+- [x] Dual-purpose register handling (APU Frame Counter / Controller 2)
 - [x] Open bus behavior for unmapped regions
-- [ ] PPU memory integration
-- [ ] Cartridge memory mapping
+- [x] Cartridge memory mapping (0x4020-0xFFFF)
 
-### 📋 PPU (2C02) - Planned
-- [ ] Basic register interface
-- [ ] Dot-based rendering pipeline
-- [ ] Sprite evaluation and rendering
-- [ ] Background tile rendering
+### ✅ PPU (2C02) - **Complete Phase 1-4 Implementation**
+- [x] Complete PPU register interface with proper timing
+- [x] Cycle-accurate dot-based rendering pipeline (341 dots × 262 scanlines)
+- [x] Background rendering with nametables and pattern tables
+- [x] Sprite evaluation and rendering with sprite 0 hit detection
+- [x] Advanced NES scrolling system with proper VRAM address handling
+- [x] Palette system with authentic NES colors
+- [x] Frame buffer generation for display output
 
-### 📋 APU (2A03) - Planned
-- [ ] Audio channel implementations
-- [ ] Frame counter and sequencing
+### ✅ Cartridge System - **Complete with iNES Support**
+- [x] iNES ROM file format parsing with header validation
+- [x] Mapper 0 (NROM) complete implementation
+- [x] Cartridge factory pattern for extensible mapper support
+- [x] CHR ROM/RAM access for PPU pattern tables
+- [x] PRG ROM bank management
+- [x] GUI file browser integration for ROM loading
+
+### ✅ Debug System - **Complete GUI Framework**
+- [x] SDL2 + ImGui integration with retro aesthetics
+- [x] Real-time CPU state monitoring (registers, flags, stack)
+- [x] Interactive memory viewer with search and navigation
+- [x] Complete 6502 disassembler (all 256 opcodes with addressing modes)
+- [x] Step-by-step CPU execution controls
+- [x] Dockable panel system for flexible debugging layout
+- [x] ROM loading interface with drag-and-drop support
+
+### ⚠️ APU (2A03) - **Stub Implementation**
+- [x] Register interface for CPU compatibility
+- [x] Frame counter basic functionality
+- [ ] Audio channel implementations (pulse, triangle, noise, DMC)
 - [ ] Audio mixing and output
+- [ ] Sample-accurate synthesis
 
-### 📋 Cartridge System - Planned
-- [ ] ROM loading (iNES format)
-- [ ] Basic mappers (000, 001, 002, 003, 004)
-- [ ] Bank switching mechanics
+### 🎯 Next Priority: Audio Implementation**
+- [ ] Complete APU channel implementations
+- [ ] Audio output integration
+- [ ] Frame buffer display in GUI
+- [ ] Additional mapper support (MMC1, MMC3)
+- [ ] Save state functionality
 
-## Architecture Components
-- **CPU (6502)**: Cycle-accurate 6502 processor emulation
-- **PPU (Picture Processing Unit)**: Pixel-perfect graphics rendering
-- **APU (Audio Processing Unit)**: Accurate sound synthesis
-- **Mappers**: Various cartridge mapper implementations
-- **Bus**: Memory mapping and component interconnection
+## Key Features Implemented
+
+### Complete 6502 CPU Emulation
+- **All 256 opcodes**: Legal and illegal instructions with proper cycle timing
+- **Hardware accuracy**: Authentic startup behavior and reset sequences
+- **Comprehensive disassembler**: Real-time instruction analysis with all addressing modes
+- **Interactive debugging**: Step-by-step execution with register monitoring
+
+### Advanced PPU Graphics System
+- **Cycle-accurate rendering**: 341-dot scanline timing with proper frame structure
+- **Complete background system**: Nametable rendering with pattern table lookups
+- **Sprite system**: 8-sprite-per-scanline evaluation with sprite 0 hit detection
+- **NES scrolling**: Authentic 15-bit VRAM address register system
+- **Palette support**: Hardware-accurate color generation
+
+### Robust Cartridge System
+- **iNES ROM format**: Complete header parsing and validation
+- **Mapper 0 (NROM)**: Full implementation with CHR/PRG ROM support
+- **Extensible design**: Factory pattern ready for additional mappers
+- **GUI integration**: Drag-and-drop ROM loading interface
+
+### Professional Debug Interface
+- **Modern GUI**: SDL2 + ImGui with authentic retro styling
+- **Real-time monitoring**: Live CPU state, memory contents, and execution flow
+- **Interactive tools**: Memory search, navigation, and hex editing capabilities
+- **Modular panels**: Dockable interface for customizable debugging layout
 
 ## Detailed Project Structure
 
@@ -251,21 +295,59 @@ class SystemBus {
 
 ### Build Commands
 ```bash
-# Debug build
+# Using VS Code Tasks (Recommended)
 Ctrl+Shift+P -> "Tasks: Run Task" -> "Debug Build"
-
-# Release build
 Ctrl+Shift+P -> "Tasks: Run Task" -> "Release Build"
+Ctrl+Shift+P -> "Tasks: Run Task" -> "Run Debug"
 
-# Or use F5 to build and debug
+# Or use F5 to build and debug directly
 ```
+
+### Quick Start
+1. Open project in VS Code
+2. Build with `Ctrl+Shift+P` -> "Tasks: Run Task" -> "Debug Build"
+3. Run with `Ctrl+Shift+P` -> "Tasks: Run Task" -> "Run Debug"
+4. Load a ROM file using the GUI interface
+5. Use CPU debugging controls to step through execution
+
+## Screenshots
+
+### Main Debug Interface
+*Complete debugging environment with CPU state, memory viewer, and disassembler*
+
+### PPU Visualization
+*Real-time graphics rendering with pattern table and nametable display*
+
+### ROM Loading
+*Integrated ROM browser with iNES header validation*
+
+## Technical Achievements
+
+### CPU Implementation Highlights
+- **Complete instruction set**: All 256 opcodes including undocumented instructions
+- **Cycle accuracy**: Proper timing for all addressing modes and page boundary penalties
+- **Hardware fidelity**: Authentic power-on state and reset behavior
+- **Debug integration**: Real-time register monitoring and step execution
+
+### PPU Implementation Highlights
+- **Phase-based development**: Systematic implementation following NES PPU specification
+- **Authentic scrolling**: Complex 15-bit VRAM address register system
+- **Sprite accuracy**: Proper 8-sprite evaluation with sprite 0 hit timing
+- **Memory integration**: Complete PPU memory map with proper mirroring
+
+### Software Engineering Excellence
+- **Modern C++23**: Extensive use of concepts, ranges, and strong typing
+- **Component architecture**: Modular design with clean interfaces
+- **Comprehensive testing**: Extensive test coverage for CPU instruction accuracy
+- **Professional tooling**: Complete debugging suite with GUI integration
 
 ## Architecture Overview
 
 This structure provides clear separation of concerns while maintaining the tight coupling needed for cycle-accurate emulation. Each component can be developed and tested independently while ensuring proper system-wide timing.
 
 The design emphasizes:
-- **Accuracy over speed** (initially)
+- **Accuracy over speed** (initially) - Hardware-faithful emulation
 - **Modularity** for easy testing and debugging
-- **Modern C++** for maintainable code
+- **Modern C++** for maintainable and efficient code
 - **Extensibility** for adding new mappers and features
+- **Developer experience** with comprehensive debugging tools
