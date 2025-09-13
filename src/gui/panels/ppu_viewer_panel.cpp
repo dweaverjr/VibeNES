@@ -12,7 +12,7 @@ namespace nes::gui {
 PPUViewerPanel::PPUViewerPanel()
 	: visible_(true), display_mode_(PPUDisplayMode::FRAME_COMPLETE), main_display_texture_(0),
 	  pattern_table_texture_(0), nametable_texture_(0), selected_pattern_table_(0), selected_nametable_(0),
-	  selected_palette_(0), display_scale_(2.0f), textures_initialized_(false) {
+	  selected_palette_(0), display_scale_(2.0f), pattern_table_dirty_(true), textures_initialized_(false) {
 
 	// Allocate buffers for texture data
 	pattern_table_buffer_ = std::make_unique<uint32_t[]>(256 * 128); // 2 pattern tables side by side
@@ -150,30 +150,118 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 }
 
 void PPUViewerPanel::render_pattern_tables(nes::PPU *ppu, nes::Cartridge *cartridge) {
+	// Ensure textures are initialized before we try to use them
+	if (!textures_initialized_) {
+		initialize_textures();
+	}
+
 	ImGui::Text("Pattern Tables (CHR ROM/RAM)");
 
-	// Pattern table selection
+	// Constrain content to available width
+	float content_width = ImGui::GetContentRegionAvail().x;
+
+	// Pattern table selection - keep on same line if space allows
 	ImGui::Text("Pattern Table:");
 	ImGui::SameLine();
 	ImGui::RadioButton("$0000", &selected_pattern_table_, 0);
 	ImGui::SameLine();
 	ImGui::RadioButton("$1000", &selected_pattern_table_, 1);
 
-	// Palette selection for visualization
-	ImGui::Text("Palette for visualization:");
-	ImGui::SameLine();
+	// Palette selection for visualization - constrain slider width
+	ImGui::Text("Visualization Palette:");
+	ImGui::SetNextItemWidth(std::min(150.0f, content_width * 0.6f));
 	ImGui::SliderInt("##palette", &selected_palette_, 0, 7);
 
 	// Generate and display pattern table visualization
-	if (cartridge) {
-		generate_pattern_table_visualization(ppu, cartridge);
+	// Static variables for ROM change detection and clearing flags
+	static const nes::Cartridge *last_cartridge = nullptr;
+	static size_t last_chr_size = 0;
+	static bool need_clear_when_no_rom = true;
+	static bool need_clear_when_no_cartridge = true;
 
-		if (pattern_table_texture_ != 0) {
-			ImVec2 display_size(128 * 2.0f, 128 * 2.0f); // 16x16 tiles, 8x8 each
-			ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(pattern_table_texture_)), display_size);
+	if (cartridge) {
+		if (!cartridge->is_loaded()) {
+			ImGui::Text("Cartridge present but no ROM loaded");
+			// Clear pattern table when no ROM is loaded
+			if (need_clear_when_no_rom) {
+				std::memset(pattern_table_buffer_.get(), 0, 256 * 128 * sizeof(uint32_t));
+				update_pattern_table_texture();
+				need_clear_when_no_rom = false;
+				// Reset ROM tracking when unloaded so next ROM will be detected as change
+				last_cartridge = nullptr;
+				last_chr_size = 0;
+			}
+		} else {
+			// Reset clearing flags when ROM is loaded
+			need_clear_when_no_rom = true;
+			need_clear_when_no_cartridge = true;
+
+			const auto &rom_data = cartridge->get_rom_data();
+			ImGui::Text("ROM: %d CHR pages (%d bytes)", static_cast<int>(rom_data.chr_rom_pages),
+						static_cast<int>(rom_data.chr_rom.size()));
+
+			if (rom_data.chr_rom_pages == 0) {
+				ImGui::Text("Using CHR RAM (no CHR ROM)");
+			}
+
+			// Detect ROM changes by checking CHR ROM size or cartridge pointer
+			bool rom_changed = (last_cartridge != cartridge) || (last_chr_size != rom_data.chr_rom.size());
+
+			if (rom_changed) {
+				printf("ROM change detected: cartridge %p->%p, chr_size %zu->%zu\n",
+					   static_cast<const void *>(last_cartridge), static_cast<const void *>(cartridge), last_chr_size,
+					   rom_data.chr_rom.size());
+			}
+
+			// Only regenerate when settings change, ROM changes, or first time
+			static int last_pattern_table = -1;
+			static int last_palette = -1;
+			bool settings_changed =
+				(last_pattern_table != selected_pattern_table_) || (last_palette != selected_palette_);
+
+			if (pattern_table_dirty_ || settings_changed || rom_changed) {
+				generate_pattern_table_visualization(ppu, cartridge);
+				update_pattern_table_texture(); // Upload to OpenGL
+				pattern_table_dirty_ = false;
+				last_pattern_table = selected_pattern_table_;
+				last_palette = selected_palette_;
+				last_cartridge = cartridge;
+				last_chr_size = rom_data.chr_rom.size();
+
+				if (rom_changed) {
+					printf("ROM changed detected - refreshing pattern tables\n");
+				}
+			}
+
+			if (pattern_table_texture_ != 0) {
+				// Scale display to fit available space - single pattern table is square (1:1 ratio)
+				float max_width = content_width - 20.0f;		   // Leave some margin
+				float display_width = std::min(max_width, 400.0f); // Max 400 pixels wide for square
+				float display_height = display_width;			   // 1:1 ratio for single pattern table
+
+				// Only show left half of texture (128x128) since we only render to that area
+				ImVec2 uv0(0.0f, 0.0f); // Top-left
+				ImVec2 uv1(0.5f, 1.0f); // Bottom at half-width (128 out of 256)
+				ImVec2 display_size(display_width, display_height);
+				ImGui::Text("Pattern Table %d (128x128, scaled to %.0fx%.0f):", selected_pattern_table_, display_width,
+							display_height);
+				ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(pattern_table_texture_)), display_size, uv0,
+							 uv1);
+			} else {
+				ImGui::Text("Pattern table texture not initialized");
+			}
 		}
 	} else {
 		ImGui::Text("No cartridge loaded");
+		// Clear pattern table when no cartridge is loaded
+		if (need_clear_when_no_cartridge) {
+			std::memset(pattern_table_buffer_.get(), 0, 256 * 128 * sizeof(uint32_t));
+			update_pattern_table_texture();
+			need_clear_when_no_cartridge = false;
+			// Reset ROM tracking when cartridge is removed so next cartridge will be detected as change
+			last_cartridge = nullptr;
+			last_chr_size = 0;
+		}
 	}
 }
 
@@ -359,10 +447,15 @@ void PPUViewerPanel::render_timing_info(nes::PPU *ppu) {
 }
 
 void PPUViewerPanel::initialize_textures() {
+	printf("Initializing OpenGL textures...\n");
+
 	// Generate OpenGL textures
 	glGenTextures(1, &main_display_texture_);
 	glGenTextures(1, &pattern_table_texture_);
 	glGenTextures(1, &nametable_texture_);
+
+	printf("Generated textures: main=%u, pattern=%u, nametable=%u\n", main_display_texture_, pattern_table_texture_,
+		   nametable_texture_);
 
 	// Setup main display texture (256x240)
 	glBindTexture(GL_TEXTURE_2D, main_display_texture_);
@@ -383,6 +476,7 @@ void PPUViewerPanel::initialize_textures() {
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 480, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
 	textures_initialized_ = true;
+	printf("Texture initialization complete!\n");
 }
 
 void PPUViewerPanel::cleanup_textures() {
@@ -402,6 +496,18 @@ void PPUViewerPanel::update_main_display_texture(const uint32_t *frame_buffer) {
 	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 240, GL_RGBA, GL_UNSIGNED_BYTE, frame_buffer);
 }
 
+void PPUViewerPanel::update_pattern_table_texture() {
+	if (pattern_table_texture_ == 0 || !pattern_table_buffer_) {
+		printf("Pattern table texture update failed: texture=%u, buffer=%p\n", pattern_table_texture_,
+			   pattern_table_buffer_.get());
+		return;
+	}
+
+	printf("Updating pattern table texture (256x128)...\n");
+	glBindTexture(GL_TEXTURE_2D, pattern_table_texture_);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 128, GL_RGBA, GL_UNSIGNED_BYTE, pattern_table_buffer_.get());
+}
+
 void PPUViewerPanel::generate_pattern_table_visualization(nes::PPU *ppu, nes::Cartridge *cartridge) {
 	if (!ppu || !cartridge) {
 		// Clear buffer if no data available
@@ -409,57 +515,94 @@ void PPUViewerPanel::generate_pattern_table_visualization(nes::PPU *ppu, nes::Ca
 		return;
 	}
 
-	// Pattern table layout: 256x128 pixels
-	// Left half (0-127x): Pattern table 0 ($0000-$0FFF)
-	// Right half (128-255x): Pattern table 1 ($1000-$1FFF)
+	// One-time debug output to verify CHR ROM is working
+	static bool debug_printed = false;
+	if (!debug_printed && cartridge->is_loaded()) {
+		printf("CHR ROM Debug (first time only):\n");
+		for (int i = 0; i < 16; i++) {
+			uint8_t value = ppu->read_chr_rom(i);
+			printf("  CHR[$%04X] = $%02X", i, value);
+			if ((i + 1) % 8 == 0)
+				printf("\n");
+		}
+		printf("CHR ROM samples: $0100=%02X, $1000=%02X\n", ppu->read_chr_rom(0x0100), ppu->read_chr_rom(0x1000));
 
-	for (int table = 0; table < 2; table++) {
-		uint16_t base_address = table * 0x1000; // $0000 or $1000
-		int x_offset = table * 128;				// Left or right half
+		// Compare first tile of each pattern table
+		printf("Pattern Table 0 first tile (tile 0):\n");
+		for (int i = 0; i < 16; i++) {
+			printf("  $%04X: %02X\n", i, ppu->read_chr_rom(i));
+		}
+		printf("Pattern Table 1 first tile (tile 0):\n");
+		for (int i = 0x1000; i < 0x1010; i++) {
+			printf("  $%04X: %02X\n", i, ppu->read_chr_rom(i));
+		}
 
-		// Each pattern table is 16x16 tiles, each tile is 8x8 pixels
-		for (int tile_y = 0; tile_y < 16; tile_y++) {
-			for (int tile_x = 0; tile_x < 16; tile_x++) {
-				uint8_t tile_index = tile_y * 16 + tile_x;
-				uint16_t tile_address = base_address + (tile_index * 16);
+		debug_printed = true;
+	}
 
-				// Render 8x8 tile
-				for (int pixel_y = 0; pixel_y < 8; pixel_y++) {
-					// Read pattern data for this row
-					uint8_t plane0 = ppu->read_chr_rom(tile_address + pixel_y);
-					uint8_t plane1 = ppu->read_chr_rom(tile_address + pixel_y + 8);
+	// Pattern table layout: 128x128 pixels (single pattern table)
+	// Display only the selected pattern table ($0000 or $1000)
 
-					for (int pixel_x = 0; pixel_x < 8; pixel_x++) {
-						// Extract 2-bit pixel value
-						uint8_t bit_pos = 7 - pixel_x;
-						uint8_t pixel_value = ((plane0 >> bit_pos) & 1) | (((plane1 >> bit_pos) & 1) << 1);
+	uint16_t base_address = selected_pattern_table_ * 0x1000; // $0000 or $1000 based on selection
 
-						// Calculate screen position
-						int screen_x = x_offset + (tile_x * 8) + pixel_x;
-						int screen_y = (tile_y * 8) + pixel_y;
-						int buffer_index = screen_y * 256 + screen_x;
+	// Each pattern table is 16x16 tiles, each tile is 8x8 pixels
+	for (int tile_y = 0; tile_y < 16; tile_y++) {
+		for (int tile_x = 0; tile_x < 16; tile_x++) {
+			uint8_t tile_index = tile_y * 16 + tile_x;
+			uint16_t tile_address = base_address + (tile_index * 16);
 
-						// Convert to color using selected palette
-						uint32_t color;
-						if (pixel_value == 0) {
-							// Transparent pixels show as dark gray
-							color = 0xFF404040;
-						} else {
-							// Use palette 0 + selected background palette for visualization
-							color = get_pattern_pixel_color(pixel_value, selected_palette_, ppu);
-						}
+			// Render 8x8 tile
+			for (int pixel_y = 0; pixel_y < 8; pixel_y++) {
+				// Read pattern data for this row
+				uint16_t plane0_addr = tile_address + pixel_y;
+				uint16_t plane1_addr = tile_address + pixel_y + 8;
+				uint8_t plane0 = ppu->read_chr_rom(plane0_addr);
+				uint8_t plane1 = ppu->read_chr_rom(plane1_addr);
 
-						pattern_table_buffer_[buffer_index] = color;
+				for (int pixel_x = 0; pixel_x < 8; pixel_x++) {
+					// Extract 2-bit pixel value
+					uint8_t bit_pos = 7 - pixel_x;
+					uint8_t pixel_value = ((plane0 >> bit_pos) & 1) | (((plane1 >> bit_pos) & 1) << 1);
+
+					// Calculate screen position (single pattern table, so no x_offset)
+					int screen_x = (tile_x * 8) + pixel_x;
+					int screen_y = (tile_y * 8) + pixel_y;
+					int buffer_index = screen_y * 256 + screen_x; // Still use 256-wide buffer
+
+					// Convert to color using selected palette
+					uint32_t color;
+					if (pixel_value == 0) {
+						// Transparent pixels show as dark gray
+						color = 0xFF404040;
+					} else {
+						// Use palette 0 + selected background palette for visualization
+						color = get_pattern_pixel_color(pixel_value, selected_palette_, ppu);
 					}
+
+					pattern_table_buffer_[buffer_index] = color;
 				}
 			}
 		}
 	}
 
-	// Upload to OpenGL texture
-	if (pattern_table_texture_ != 0) {
-		glBindTexture(GL_TEXTURE_2D, pattern_table_texture_);
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 128, GL_RGBA, GL_UNSIGNED_BYTE, pattern_table_buffer_.get());
+	// Clear the right half of the buffer since we're only showing one pattern table
+	for (int y = 0; y < 128; y++) {
+		for (int x = 128; x < 256; x++) {
+			int buffer_index = y * 256 + x;
+			pattern_table_buffer_[buffer_index] = 0xFF000000; // Black
+		}
+	}
+
+	// Debug: Check if we generated any non-zero pixel data
+	static bool debug_texture_once = false;
+	if (!debug_texture_once) {
+		int non_zero_pixels = 0;
+		for (int i = 0; i < 256 * 128; i++) {
+			if (pattern_table_buffer_[i] != 0)
+				non_zero_pixels++;
+		}
+		printf("Pattern table texture: %d non-zero pixels out of %d total\n", non_zero_pixels, 256 * 128);
+		debug_texture_once = true;
 	}
 }
 
@@ -477,29 +620,29 @@ void PPUViewerPanel::generate_nametable_visualization(nes::PPU *ppu) {
 }
 
 uint32_t PPUViewerPanel::get_pattern_pixel_color(uint8_t pixel_value, uint8_t palette_index, nes::PPU *ppu) {
-	if (!ppu || pixel_value == 0) {
+	// Suppress unused parameter warnings (using fixed palette for now)
+	(void)palette_index;
+	(void)ppu;
+
+	if (pixel_value == 0) {
 		// Transparent pixels show as dark gray for visibility
-		return 0xFF404040;
+		return 0xFF202020;
 	}
 
-	// Get the actual palette RAM data
-	const auto &palette_ram = ppu->get_memory().get_palette_ram();
+	// For pattern table visualization, use a fixed palette to ensure visibility
+	// This is independent of the actual PPU palette RAM
+	static const uint32_t visualization_palette[4] = {
+		0xFF202020, // 0: Dark gray (transparent)
+		0xFF808080, // 1: Medium gray
+		0xFFB0B0B0, // 2: Light gray
+		0xFFFFFFFF	// 3: White
+	};
 
-	// Background palettes start at index 0, each palette is 4 colors
-	// Palette index 0-3 for background palettes
-	uint8_t palette_base = (palette_index & 0x03) * 4;
-	uint8_t color_index = palette_ram[palette_base + pixel_value];
-
-	// Debug: Check palette data for the first few calls
-	static int debug_count = 0;
-	if (debug_count < 5) {
-		printf("Pattern pixel: value=%d, palette_idx=%d, palette_base=%d, color_idx=%d\n", pixel_value, palette_index,
-			   palette_base, color_index);
-		debug_count++;
+	if (pixel_value >= 4) {
+		pixel_value = 3; // Clamp to valid range
 	}
 
-	// Convert NES color index to RGBA
-	return NESPalette::get_rgba_color(color_index);
+	return visualization_palette[pixel_value];
 }
 
 } // namespace nes::gui

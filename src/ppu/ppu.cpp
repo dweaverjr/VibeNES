@@ -580,6 +580,13 @@ uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority) {
 				uint8_t bg_pixel = get_background_pixel_at_current_position();
 				if (check_sprite_0_hit(bg_pixel, palette_index, current_x)) {
 					status_register_ |= PPUConstants::PPUSTATUS_SPRITE0_MASK;
+					// Debug sprite 0 hit
+					static int hit_count = 0;
+					if (hit_count < 5) {
+						printf("SPRITE 0 HIT! Scanline=%d X=%d BG=%d SPR=%d\n", current_scanline_, current_x, bg_pixel,
+							   palette_index);
+						hit_count++;
+					}
 				}
 			}
 
@@ -665,6 +672,13 @@ void PPU::evaluate_sprites_for_scanline() {
 			// Track sprite 0
 			if (sprite_index == 0) {
 				sprite_0_on_scanline_ = true;
+				// Debug sprite 0 setup
+				static bool debug_sprite0 = true;
+				if (debug_sprite0 && current_scanline_ < 10) {
+					printf("Sprite 0 found on scanline %d: pos=(%d,%d) tile=$%02X attr=$%02X\n", current_scanline_,
+						   sprite.x_position, sprite.y_position, sprite.tile_index, oam_data[base_addr + 2]);
+					debug_sprite0 = false;
+				}
 			}
 
 			sprite_count_current_scanline_++;

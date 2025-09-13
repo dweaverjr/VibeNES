@@ -86,7 +86,7 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 			step_callback(); // Use the provided step callback for proper coordination
 		} else {
 			// Fallback to direct CPU execution if no callback provided
-			cpu->execute_instruction();
+			(void)cpu->execute_instruction(); // Discard return value for manual stepping
 		}
 	}
 	ImGui::PopButtonRepeat();
@@ -100,7 +100,7 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 			if (step_callback) {
 				step_callback();
 			} else {
-				cpu->execute_instruction();
+				(void)cpu->execute_instruction(); // Discard return value for fast stepping
 			}
 		}
 	}

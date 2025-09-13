@@ -42,25 +42,7 @@ class GuiApplication {
 	// Shutdown and cleanup
 	void shutdown();
 
-	// Set the CPU reference for debugging
-	void set_cpu(nes::CPU6502 *cpu) {
-		cpu_ = cpu;
-	}
-
-	// Set the system bus reference for memory viewing
-	void set_bus(nes::SystemBus *bus) {
-		bus_ = bus;
-	}
-
-	// Set the cartridge reference for ROM loading
-	void set_cartridge(nes::Cartridge *cartridge) {
-		cartridge_ = cartridge;
-	}
-
-	// Set the PPU reference for graphics debugging
-	void set_ppu(nes::PPU *ppu) {
-		ppu_ = ppu;
-	}
+	// Components are now internally managed - no external setters needed
 
 	// Setup ROM loading callbacks
 	void setup_callbacks();
@@ -83,10 +65,10 @@ class GuiApplication {
 	float emulation_speed_; // Speed multiplier (1.0 = normal speed)
 
 	// Emulator references
-	nes::CPU6502 *cpu_;
-	nes::SystemBus *bus_;
-	nes::Cartridge *cartridge_;
-	nes::PPU *ppu_;
+	std::shared_ptr<nes::CPU6502> cpu_;
+	std::shared_ptr<nes::SystemBus> bus_;
+	std::shared_ptr<nes::Cartridge> cartridge_;
+	std::shared_ptr<nes::PPU> ppu_;
 
 	// GUI panels
 	std::unique_ptr<CPUStatePanel> cpu_panel_;
@@ -107,6 +89,7 @@ class GuiApplication {
 	// Private methods
 	bool initialize_sdl();
 	bool initialize_imgui();
+	void initialize_emulation_components();
 	void handle_events();
 	void render_frame();
 	void render_main_menu_bar();

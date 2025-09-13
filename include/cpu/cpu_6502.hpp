@@ -31,7 +31,7 @@ class CPU6502 final : public Component {
 	[[nodiscard]] const char *get_name() const noexcept override;
 
 	// CPU execution
-	void execute_instruction();
+	[[nodiscard]] int execute_instruction(); // Returns number of cycles consumed
 
 	// Interrupt handling
 	void trigger_nmi() noexcept;   ///< Trigger Non-Maskable Interrupt (PPU VBlank, etc.)
