@@ -3,8 +3,13 @@
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
+#include <vector>
 
 namespace nes::gui {
+
+RomLoaderPanel::RomLoaderPanel() {
+	find_default_rom_directory();
+}
 
 void RomLoaderPanel::render(nes::Cartridge *cartridge) {
 	if (!cartridge) {
@@ -33,6 +38,19 @@ void RomLoaderPanel::render_file_browser(nes::Cartridge *cartridge) {
 	// Current directory display
 	ImGui::Text("Directory: %s", current_directory_.c_str());
 
+	// Navigation buttons
+	ImGui::SameLine();
+	if (ImGui::Button("..")) {
+		std::filesystem::path parent = std::filesystem::path(current_directory_).parent_path();
+		if (!parent.empty()) {
+			current_directory_ = parent.string();
+		}
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Refresh")) {
+		// Just trigger a refresh by doing nothing - the directory listing will update
+	}
+
 	// Create directory if it doesn't exist
 	if (!std::filesystem::exists(current_directory_)) {
 		if (ImGui::Button("Create ROMs Directory")) {
@@ -50,6 +68,19 @@ void RomLoaderPanel::render_file_browser(nes::Cartridge *cartridge) {
 	if (ImGui::BeginListBox("##files", ImVec2(-1, 200))) {
 		try {
 			for (const auto &entry : std::filesystem::directory_iterator(current_directory_)) {
+				if (entry.is_directory()) {
+					// Show directories first
+					std::string dirname = "[DIR] " + entry.path().filename().string();
+
+					if (ImGui::Selectable(dirname.c_str(), false)) {
+						current_directory_ = entry.path().string();
+						selected_file_.clear(); // Clear file selection when changing directories
+					}
+				}
+			}
+
+			// Show files
+			for (const auto &entry : std::filesystem::directory_iterator(current_directory_)) {
 				if (entry.is_regular_file()) {
 					std::string filename = entry.path().filename().string();
 
@@ -65,6 +96,9 @@ void RomLoaderPanel::render_file_browser(nes::Cartridge *cartridge) {
 						if (is_selected && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
 							if (cartridge->load_rom(selected_file_)) {
 								std::cout << "ROM loaded successfully: " << filename << std::endl;
+								if (rom_loaded_callback_) {
+									rom_loaded_callback_();
+								}
 							}
 						}
 					}
@@ -137,6 +171,9 @@ void RomLoaderPanel::render_load_button(nes::Cartridge *cartridge) {
 	if (ImGui::Button("Load ROM", ImVec2(100, 30))) {
 		if (cartridge->load_rom(selected_file_)) {
 			std::cout << "ROM loaded successfully!" << std::endl;
+			if (rom_loaded_callback_) {
+				rom_loaded_callback_();
+			}
 		} else {
 			std::cerr << "Failed to load ROM: " << selected_file_ << std::endl;
 		}
@@ -174,6 +211,26 @@ std::string RomLoaderPanel::get_file_extension(const std::string &filename) cons
 		return "";
 	}
 	return filename.substr(dot_pos);
+}
+
+void RomLoaderPanel::find_default_rom_directory() {
+	// Try multiple possible ROM locations
+	std::vector<std::string> possible_paths = {
+		"./build/debug/roms",	// Debug build location
+		"./build/release/roms", // Release build location
+		"./roms",				// Root project directory
+		".",					// Current directory
+	};
+
+	for (const auto &path : possible_paths) {
+		if (std::filesystem::exists(path) && std::filesystem::is_directory(path)) {
+			current_directory_ = path;
+			return;
+		}
+	}
+
+	// Default to build/debug/roms if nothing exists
+	current_directory_ = "./build/debug/roms";
 }
 
 } // namespace nes::gui

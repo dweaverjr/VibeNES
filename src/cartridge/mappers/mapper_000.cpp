@@ -1,4 +1,5 @@
 #include "cartridge/mappers/mapper_000.hpp"
+#include <iostream>
 
 namespace nes {
 
@@ -25,7 +26,8 @@ Byte Mapper000::cpu_read(Address address) const {
 		return 0xFF; // Beyond ROM bounds
 	}
 
-	return prg_rom_[rom_address];
+	Byte value = prg_rom_[rom_address];
+	return value;
 }
 
 void Mapper000::cpu_write(Address address, Byte value) {

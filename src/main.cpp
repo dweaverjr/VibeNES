@@ -38,8 +38,19 @@ int main(int argc, char *argv[]) {
 	// Connect cartridge to PPU for CHR ROM/RAM access
 	ppu->connect_cartridge(cartridge);
 
+	// Connect CPU to PPU for NMI generation
+	ppu->connect_cpu(cpu.get());
+
 	bus->power_on();
 	// Note: power_on() already triggers reset sequence, so no separate reset() call needed
+
+	// Set up a test reset vector for debugging (without a ROM loaded)
+	// This will allow the CPU to start at a known address for testing
+	bus->write(0xFFFC, 0x00); // Reset vector low byte
+	bus->write(0xFFFD, 0x80); // Reset vector high byte -> PC will be $8000
+
+	// Trigger a reset now that we have a proper reset vector
+	cpu->trigger_reset();
 
 	// Create and run GUI
 	nes::gui::GuiApplication gui_app;
@@ -54,6 +65,9 @@ int main(int argc, char *argv[]) {
 	gui_app.set_cartridge(cartridge.get());
 	gui_app.set_cpu(cpu.get());
 	gui_app.set_ppu(ppu.get());
+
+	// Setup callbacks for component coordination
+	gui_app.setup_callbacks();
 
 	// Run the GUI
 	gui_app.run();

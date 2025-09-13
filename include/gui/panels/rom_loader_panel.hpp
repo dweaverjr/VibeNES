@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 
 // Forward declarations
@@ -15,11 +16,16 @@ namespace nes::gui {
  */
 class RomLoaderPanel {
   public:
-	RomLoaderPanel() = default;
+	RomLoaderPanel();
 	~RomLoaderPanel() = default;
 
 	// Render the panel
 	void render(nes::Cartridge *cartridge);
+
+	// Set callback for when ROM is successfully loaded
+	void set_rom_loaded_callback(std::function<void()> callback) {
+		rom_loaded_callback_ = std::move(callback);
+	}
 
 	// Panel visibility
 	void set_visible(bool visible) {
@@ -34,8 +40,11 @@ class RomLoaderPanel {
 
 	// File browser state
 	std::string selected_file_;
-	std::string current_directory_ = "./roms";
+	std::string current_directory_;
 	std::string filter_extension_ = ".nes";
+
+	// Callback for ROM loading events
+	std::function<void()> rom_loaded_callback_;
 
 	// ROM info display
 	void render_file_browser(nes::Cartridge *cartridge);
@@ -45,6 +54,7 @@ class RomLoaderPanel {
 	// Helper functions
 	bool is_nes_file(const std::string &filename) const;
 	std::string get_file_extension(const std::string &filename) const;
+	void find_default_rom_directory();
 };
 
 } // namespace nes::gui

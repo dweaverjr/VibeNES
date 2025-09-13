@@ -1,6 +1,7 @@
 #include "ppu/ppu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
+#include "cpu/cpu_6502.hpp"
 #include "ppu/nes_palette.hpp"
 #include <cstring>
 
@@ -10,7 +11,7 @@ PPU::PPU()
 	: current_cycle_(0), current_scanline_(0), frame_counter_(0), frame_ready_(false), control_register_(0),
 	  mask_register_(0), status_register_(0), oam_address_(0), vram_address_(0), temp_vram_address_(0),
 	  fine_x_scroll_(0), write_toggle_(false), read_buffer_(0), sprite_count_current_scanline_(0),
-	  sprite_0_on_scanline_(false), bus_(nullptr), cartridge_(nullptr) {
+	  sprite_0_on_scanline_(false), bus_(nullptr), cpu_(nullptr), cartridge_(nullptr) {
 	power_on();
 }
 
@@ -405,9 +406,9 @@ void PPU::clear_frame_buffer() {
 void PPU::check_nmi() {
 	// Generate NMI if VBlank is set and NMI is enabled
 	if ((status_register_ & PPUConstants::PPUSTATUS_VBLANK_MASK) &&
-		(control_register_ & PPUConstants::PPUCTRL_NMI_MASK) && bus_) {
-		// Signal NMI to CPU through the bus
-		// This will be implemented when the bus interface is updated
+		(control_register_ & PPUConstants::PPUCTRL_NMI_MASK) && cpu_) {
+		// Signal NMI to CPU
+		cpu_->trigger_nmi();
 	}
 }
 

@@ -7,11 +7,11 @@ namespace nes::gui {
 CPUStatePanel::CPUStatePanel() : visible_(true) {
 }
 
-void CPUStatePanel::render(nes::CPU6502 *cpu) {
+void CPUStatePanel::render(nes::CPU6502 *cpu, std::function<void()> step_callback) {
 	if (!cpu)
 		return;
 
-	render_controls(cpu);
+	render_controls(cpu, step_callback);
 	ImGui::Separator();
 	render_registers(cpu);
 	ImGui::Separator();
@@ -75,14 +75,36 @@ void CPUStatePanel::render_stack_info(const nes::CPU6502 *cpu) {
 	ImGui::TextColored(RetroTheme::get_address_color(), "Stack Top: $01FF");
 }
 
-void CPUStatePanel::render_controls(nes::CPU6502 *cpu) {
+void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> step_callback) {
 	ImGui::Separator();
 	ImGui::Text("CPU Debug Controls:");
 
-	// Step button - execute next instruction
+	// Step button - execute next instruction (with repeat when held)
+	ImGui::PushButtonRepeat(true);
 	if (ImGui::Button("Step Instruction")) {
-		cpu->execute_instruction();
+		if (step_callback) {
+			step_callback(); // Use the provided step callback for proper coordination
+		} else {
+			// Fallback to direct CPU execution if no callback provided
+			cpu->execute_instruction();
+		}
 	}
+	ImGui::PopButtonRepeat();
+
+	ImGui::SameLine();
+
+	// Fast step button for rapid stepping (with repeat when held)
+	ImGui::PushButtonRepeat(true);
+	if (ImGui::Button("Step 100x")) {
+		for (int i = 0; i < 100; ++i) {
+			if (step_callback) {
+				step_callback();
+			} else {
+				cpu->execute_instruction();
+			}
+		}
+	}
+	ImGui::PopButtonRepeat();
 
 	ImGui::SameLine();
 

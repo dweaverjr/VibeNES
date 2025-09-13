@@ -22,6 +22,7 @@ class DisassemblerPanel;
 class MemoryViewerPanel;
 class RomLoaderPanel;
 class PPUViewerPanel;
+class TimingPanel;
 
 /**
  * Main GUI application class that manages the SDL2 window and ImGui context
@@ -47,7 +48,7 @@ class GuiApplication {
 	}
 
 	// Set the system bus reference for memory viewing
-	void set_bus(const nes::SystemBus *bus) {
+	void set_bus(nes::SystemBus *bus) {
 		bus_ = bus;
 	}
 
@@ -61,6 +62,9 @@ class GuiApplication {
 		ppu_ = ppu;
 	}
 
+	// Setup ROM loading callbacks
+	void setup_callbacks();
+
   private:
 	// SDL2 resources
 	SDL_Window *window_;
@@ -72,13 +76,15 @@ class GuiApplication {
 	// Application state
 	bool running_;
 	bool show_demo_window_;
-	bool show_ppu_window_;
-	bool show_pattern_tables_window_;
-	bool show_nametables_window_;
+
+	// Emulation state
+	bool emulation_running_;
+	bool emulation_paused_;
+	float emulation_speed_; // Speed multiplier (1.0 = normal speed)
 
 	// Emulator references
 	nes::CPU6502 *cpu_;
-	const nes::SystemBus *bus_;
+	nes::SystemBus *bus_;
 	nes::Cartridge *cartridge_;
 	nes::PPU *ppu_;
 
@@ -88,6 +94,7 @@ class GuiApplication {
 	std::unique_ptr<MemoryViewerPanel> memory_panel_;
 	std::unique_ptr<RomLoaderPanel> rom_loader_panel_;
 	std::unique_ptr<PPUViewerPanel> ppu_viewer_panel_;
+	std::unique_ptr<TimingPanel> timing_panel_;
 
 	// Layout constants
 	static constexpr int WINDOW_WIDTH = 1600;
@@ -104,6 +111,10 @@ class GuiApplication {
 	void render_frame();
 	void render_main_menu_bar();
 	void cleanup();
+
+	// Emulation control
+	void step_emulation();
+	void step_frame();
 };
 
 } // namespace nes::gui

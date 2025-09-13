@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/types.hpp"
+#include <functional>
 
 // Forward declarations
 namespace nes {
@@ -19,7 +20,7 @@ class CPUStatePanel {
 	~CPUStatePanel() = default;
 
 	// Render the CPU state panel
-	void render(nes::CPU6502 *cpu);
+	void render(nes::CPU6502 *cpu, std::function<void()> step_callback = nullptr);
 
 	// Show/hide panel
 	void set_visible(bool visible) {
@@ -33,7 +34,7 @@ class CPUStatePanel {
 	bool visible_;
 
 	// Helper methods
-	void render_controls(nes::CPU6502 *cpu);
+	void render_controls(nes::CPU6502 *cpu, std::function<void()> step_callback = nullptr);
 	void render_registers(const nes::CPU6502 *cpu);
 	void render_flags(const nes::CPU6502 *cpu);
 	void render_stack_info(const nes::CPU6502 *cpu);

@@ -12,6 +12,7 @@ namespace nes {
 // Forward declarations
 class SystemBus;
 class Cartridge;
+class CPU6502;
 
 /// Scanline phases for PPU timing
 enum class ScanlinePhase {
@@ -55,6 +56,11 @@ class PPU : public Component {
 	// Connect to system bus for NMI generation
 	void connect_bus(SystemBus *bus) {
 		bus_ = bus;
+	}
+
+	// Connect to CPU for NMI interrupt generation
+	void connect_cpu(CPU6502 *cpu) {
+		cpu_ = cpu;
 	}
 
 	// Connect to cartridge for CHR ROM/RAM access
@@ -131,6 +137,7 @@ class PPU : public Component {
 
 	// External connections
 	SystemBus *bus_;					   // For NMI generation
+	CPU6502 *cpu_;						   // For triggering NMI interrupts
 	std::shared_ptr<Cartridge> cartridge_; // For CHR ROM/RAM access
 
 	// Internal tick function - called once per PPU cycle

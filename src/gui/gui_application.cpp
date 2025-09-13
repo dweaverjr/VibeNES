@@ -1,4 +1,5 @@
 #include "gui/gui_application.hpp"
+#include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "gui/style/retro_theme.hpp"
@@ -10,6 +11,7 @@
 #include "gui/panels/memory_viewer_panel.hpp"
 #include "gui/panels/ppu_viewer_panel.hpp"
 #include "gui/panels/rom_loader_panel.hpp"
+#include "gui/panels/timing_panel.hpp"
 
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
@@ -24,10 +26,11 @@ namespace nes::gui {
 
 GuiApplication::GuiApplication()
 	: window_(nullptr), gl_context_(nullptr), io_(nullptr), running_(false), show_demo_window_(false),
-	  show_ppu_window_(false), show_pattern_tables_window_(false), show_nametables_window_(false), cpu_(nullptr),
-	  bus_(nullptr), cartridge_(nullptr), ppu_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
+	  emulation_running_(false), emulation_paused_(true), emulation_speed_(1.0f), cpu_(nullptr), bus_(nullptr),
+	  cartridge_(nullptr), ppu_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
 	  disassembler_panel_(std::make_unique<DisassemblerPanel>()), memory_panel_(std::make_unique<MemoryViewerPanel>()),
-	  rom_loader_panel_(std::make_unique<RomLoaderPanel>()), ppu_viewer_panel_(std::make_unique<PPUViewerPanel>()) {
+	  rom_loader_panel_(std::make_unique<RomLoaderPanel>()), ppu_viewer_panel_(std::make_unique<PPUViewerPanel>()),
+	  timing_panel_(std::make_unique<TimingPanel>()) {
 }
 
 GuiApplication::~GuiApplication() {
@@ -111,6 +114,13 @@ void GuiApplication::run() {
 
 	while (running_) {
 		handle_events();
+
+		// Emulation loop - run CPU and coordinate with PPU timing
+		if (emulation_running_ && !emulation_paused_ && cpu_ && ppu_) {
+			// Use bus coordination for proper timing
+			bus_->tick(cpu_cycles(1));
+		}
+
 		render_frame();
 	}
 }
@@ -159,7 +169,7 @@ void GuiApplication::render_frame() {
 		const float right_start = LEFT_WIDTH + CENTER_WIDTH;
 		const float content_height = static_cast<float>(WINDOW_HEIGHT) - HEADER_HEIGHT;
 
-		// LEFT COLUMN - ROM Loader and CPU State
+		// LEFT COLUMN - ROM Loader, CPU State, and Timing
 		ImGui::SetCursorPos(ImVec2(left_start, 0));
 		if (ImGui::BeginChild("LeftColumn", ImVec2(LEFT_WIDTH, content_height), true)) {
 			// ROM Loader Section (top 1/3)
@@ -175,12 +185,25 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// CPU State Section (bottom 2/3)
-			if (ImGui::BeginChild("CPUStateSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.66f - 15), true)) {
+			// CPU State Section (middle 1/3)
+			if (ImGui::BeginChild("CPUStateSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.33f), true)) {
 				ImGui::Text("CPU STATE");
 				ImGui::Separator();
 				if (cpu_panel_) {
-					cpu_panel_->render(cpu_);
+					// Pass step_emulation as callback so CPU panel uses proper coordination
+					cpu_panel_->render(cpu_, [this]() { step_emulation(); });
+				}
+			}
+			ImGui::EndChild();
+
+			ImGui::Spacing();
+
+			// Timing Panel Section (bottom 1/3)
+			if (ImGui::BeginChild("TimingSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.33f - 20), true)) {
+				ImGui::Text("TIMING & CLOCK");
+				ImGui::Separator();
+				if (timing_panel_) {
+					timing_panel_->render(cpu_, ppu_, bus_);
 				}
 			}
 			ImGui::EndChild();
@@ -190,8 +213,8 @@ void GuiApplication::render_frame() {
 		// CENTER COLUMN - NES Display and PPU Registers
 		ImGui::SetCursorPos(ImVec2(center_start, 0));
 		if (ImGui::BeginChild("CenterColumn", ImVec2(CENTER_WIDTH, content_height), true)) {
-			// NES Display Section (top 2/3)
-			if (ImGui::BeginChild("NESDisplaySection", ImVec2(CENTER_WIDTH - 10, content_height * 0.66f), true)) {
+			// NES Display Section (top 50%)
+			if (ImGui::BeginChild("NESDisplaySection", ImVec2(CENTER_WIDTH - 10, content_height * 0.5f), true)) {
 				ImGui::Text("NES DISPLAY");
 				ImGui::Separator();
 				// This will show the main game display
@@ -203,8 +226,40 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// PPU Registers Section (bottom 1/3)
-			if (ImGui::BeginChild("PPURegistersSection", ImVec2(CENTER_WIDTH - 10, content_height * 0.33f - 15),
+			// Memory/Disassembly Section (top 50%)
+			if (ImGui::BeginChild("MemoryDisassemblySection", ImVec2(CENTER_WIDTH - 10, content_height * 0.50f),
+								  true)) {
+				// Split this section in half
+				float section_width = (CENTER_WIDTH - 20) / 2.0f;
+
+				// Left half: Memory viewer
+				if (ImGui::BeginChild("MemoryViewer", ImVec2(section_width, 0), true)) {
+					ImGui::Text("MEMORY VIEWER");
+					ImGui::Separator();
+					if (memory_panel_) {
+						memory_panel_->render(bus_);
+					}
+				}
+				ImGui::EndChild();
+
+				ImGui::SameLine();
+
+				// Right half: Disassembler
+				if (ImGui::BeginChild("Disassembler", ImVec2(section_width, 0), true)) {
+					ImGui::Text("DISASSEMBLER");
+					ImGui::Separator();
+					if (disassembler_panel_) {
+						disassembler_panel_->render(cpu_, bus_);
+					}
+				}
+				ImGui::EndChild();
+			}
+			ImGui::EndChild();
+
+			ImGui::Spacing();
+
+			// PPU Registers Section (bottom 50%)
+			if (ImGui::BeginChild("PPURegistersSection", ImVec2(CENTER_WIDTH - 10, content_height * 0.50f - 15),
 								  true)) {
 				ImGui::Text("PPU REGISTERS & STATUS");
 				ImGui::Separator();
@@ -217,27 +272,27 @@ void GuiApplication::render_frame() {
 		}
 		ImGui::EndChild();
 
-		// RIGHT COLUMN - Memory Viewer and Disassembler
+		// RIGHT COLUMN - PPU Pattern Tables and Palettes
 		ImGui::SetCursorPos(ImVec2(right_start, 0));
 		if (ImGui::BeginChild("RightColumn", ImVec2(RIGHT_WIDTH, content_height), true)) {
-			// Memory Viewer Section (top 1/2)
-			if (ImGui::BeginChild("MemoryViewerSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.5f), true)) {
-				ImGui::Text("MEMORY VIEWER");
+			// Pattern Tables Section (top 60%)
+			if (ImGui::BeginChild("PatternTablesSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.6f), true)) {
+				ImGui::Text("PATTERN TABLES");
 				ImGui::Separator();
-				if (memory_panel_) {
-					memory_panel_->render(bus_);
+				if (ppu_viewer_panel_) {
+					ppu_viewer_panel_->render_pattern_tables(ppu_, cartridge_);
 				}
 			}
 			ImGui::EndChild();
 
 			ImGui::Spacing();
 
-			// Disassembler Section (bottom 1/2)
-			if (ImGui::BeginChild("DisassemblerSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.5f - 15), true)) {
-				ImGui::Text("DISASSEMBLER");
+			// Palette Section (bottom 40%)
+			if (ImGui::BeginChild("PaletteSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.4f - 15), true)) {
+				ImGui::Text("PPU PALETTES");
 				ImGui::Separator();
-				if (disassembler_panel_) {
-					disassembler_panel_->render(cpu_, bus_);
+				if (ppu_viewer_panel_) {
+					ppu_viewer_panel_->render_palette_viewer(ppu_);
 				}
 			}
 			ImGui::EndChild();
@@ -251,28 +306,6 @@ void GuiApplication::render_frame() {
 	// Show demo window if requested (as overlay)
 	if (show_demo_window_) {
 		ImGui::ShowDemoWindow(&show_demo_window_);
-	}
-
-	// Show PPU debugging windows if requested
-	if (show_ppu_window_ && ppu_viewer_panel_) {
-		if (ImGui::Begin("PPU Debugger", &show_ppu_window_)) {
-			ppu_viewer_panel_->render(ppu_, cartridge_);
-		}
-		ImGui::End();
-	}
-
-	if (show_pattern_tables_window_ && ppu_viewer_panel_) {
-		if (ImGui::Begin("Pattern Tables", &show_pattern_tables_window_)) {
-			ppu_viewer_panel_->render_pattern_tables(ppu_, cartridge_);
-		}
-		ImGui::End();
-	}
-
-	if (show_nametables_window_ && ppu_viewer_panel_) {
-		if (ImGui::Begin("Nametables", &show_nametables_window_)) {
-			ppu_viewer_panel_->render_nametables(ppu_);
-		}
-		ImGui::End();
 	}
 
 	// Rendering
@@ -294,12 +327,50 @@ void GuiApplication::render_main_menu_bar() {
 			ImGui::EndMenu();
 		}
 
+		if (ImGui::BeginMenu("Emulation")) {
+			bool rom_loaded = cartridge_ && cartridge_->is_loaded();
+
+			if (!rom_loaded) {
+				ImGui::BeginDisabled();
+			}
+
+			if (ImGui::MenuItem("Start/Resume", "F5", !emulation_paused_)) {
+				emulation_paused_ = false;
+				emulation_running_ = true;
+			}
+
+			if (ImGui::MenuItem("Pause", "F6", emulation_paused_)) {
+				emulation_paused_ = true;
+			}
+
+			if (ImGui::MenuItem("Step", "F7")) {
+				if (cpu_) {
+					step_emulation();
+				}
+			}
+
+			if (ImGui::MenuItem("Step Frame", "F9")) {
+				if (cpu_) {
+					step_frame();
+				}
+			}
+
+			if (ImGui::MenuItem("Reset", "F8")) {
+				if (cpu_) {
+					cpu_->reset();
+					emulation_paused_ = true;
+				}
+			}
+
+			if (!rom_loaded) {
+				ImGui::EndDisabled();
+			}
+
+			ImGui::EndMenu();
+		}
+
 		if (ImGui::BeginMenu("View")) {
 			ImGui::MenuItem("ImGui Demo", nullptr, &show_demo_window_);
-			ImGui::Separator();
-			ImGui::MenuItem("PPU Debugger", nullptr, &show_ppu_window_);
-			ImGui::MenuItem("Pattern Tables", nullptr, &show_pattern_tables_window_);
-			ImGui::MenuItem("Nametables", nullptr, &show_nametables_window_);
 			ImGui::EndMenu();
 		}
 
@@ -333,6 +404,64 @@ void GuiApplication::cleanup() {
 	}
 
 	SDL_Quit();
+}
+
+void GuiApplication::step_emulation() {
+	if (!bus_ || !cpu_ || !ppu_)
+		return;
+
+	static int step_count = 0;
+	step_count++;
+
+	// Give enough cycles for a typical instruction (most are 2-7 cycles)
+	// The CPU will consume what it needs and accumulate the rest
+	// Note: We need to step the CPU directly, not through the bus
+	cpu_->execute_instruction();
+
+	// Also tick the bus components to keep them synchronized
+	// Use the cycles the CPU actually consumed
+	bus_->tick(cpu_cycles(7));
+}
+
+void GuiApplication::step_frame() {
+	if (!bus_ || !cpu_ || !ppu_)
+		return;
+
+	// Run emulation for approximately one frame worth of cycles
+	// NES runs at ~1.79 MHz CPU, ~60 FPS, so about 29,830 cycles per frame
+	// We'll use a smaller chunk to simulate frame stepping
+	bus_->tick(cpu_cycles(1000));
+}
+
+void GuiApplication::setup_callbacks() {
+	if (rom_loader_panel_ && cpu_) {
+		rom_loader_panel_->set_rom_loaded_callback([this]() {
+			// When a ROM is loaded, trigger a reset to set the PC to the reset vector
+			cpu_->trigger_reset();
+			// Process the reset immediately by stepping once
+			cpu_->execute_instruction();
+
+			// Debug: Check if PPU can read CHR ROM data
+			if (ppu_ && cartridge_) {
+				printf("ROM loaded - cartridge connected: %s, cartridge loaded: %s\n", cartridge_ ? "YES" : "NO",
+					   (cartridge_ && cartridge_->is_loaded()) ? "YES" : "NO");
+
+				// Test reading a pattern table byte
+				if (cartridge_->is_loaded()) {
+					uint8_t test_byte_0 = ppu_->read_chr_rom(0x0000);
+					uint8_t test_byte_1 = ppu_->read_chr_rom(0x0001);
+					uint8_t test_byte_10 = ppu_->read_chr_rom(0x0010);
+					uint8_t test_byte_100 = ppu_->read_chr_rom(0x0100);
+					printf("PPU CHR ROM test reads: $0000=%02X, $0001=%02X, $0010=%02X, $0100=%02X\n", test_byte_0,
+						   test_byte_1, test_byte_10, test_byte_100);
+
+					// Also test direct cartridge read
+					uint8_t direct_read = cartridge_->ppu_read(0x0000);
+					printf("Direct cartridge ppu_read($0000): $%02X\n", direct_read);
+				}
+			}
+		});
+	}
 }
 
 } // namespace nes::gui

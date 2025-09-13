@@ -134,7 +134,11 @@ void CPU6502::handle_reset() {
 	consume_cycles(7);
 
 	// Read reset vector from $FFFC-$FFFD
-	program_counter_ = read_word(RESET_VECTOR);
+	Byte low_byte = read_byte(RESET_VECTOR);
+	Byte high_byte = read_byte(RESET_VECTOR + 1);
+	Address reset_address = make_word(low_byte, high_byte);
+
+	program_counter_ = reset_address;
 
 	// Reset CPU state
 	stack_pointer_ -= 3;				  // Stack pointer decrements by 3 during reset (simulates 3 pushes)

@@ -4,7 +4,7 @@
 
 namespace nes::gui {
 
-MemoryViewerPanel::MemoryViewerPanel() : visible_(true), start_address_(0x0000), bytes_per_row_(16), rows_to_show_(16) {
+MemoryViewerPanel::MemoryViewerPanel() : visible_(true), start_address_(0x0000), bytes_per_row_(8), rows_to_show_(16) {
 }
 
 void MemoryViewerPanel::render(const nes::SystemBus *bus) {

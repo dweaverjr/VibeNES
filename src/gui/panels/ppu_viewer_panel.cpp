@@ -490,6 +490,14 @@ uint32_t PPUViewerPanel::get_pattern_pixel_color(uint8_t pixel_value, uint8_t pa
 	uint8_t palette_base = (palette_index & 0x03) * 4;
 	uint8_t color_index = palette_ram[palette_base + pixel_value];
 
+	// Debug: Check palette data for the first few calls
+	static int debug_count = 0;
+	if (debug_count < 5) {
+		printf("Pattern pixel: value=%d, palette_idx=%d, palette_base=%d, color_idx=%d\n", pixel_value, palette_index,
+			   palette_base, color_index);
+		debug_count++;
+	}
+
 	// Convert NES color index to RGBA
 	return NESPalette::get_rgba_color(color_index);
 }
