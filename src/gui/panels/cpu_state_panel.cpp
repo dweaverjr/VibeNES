@@ -8,19 +8,16 @@ CPUStatePanel::CPUStatePanel() : visible_(true) {
 }
 
 void CPUStatePanel::render(nes::CPU6502 *cpu) {
-	if (!visible_ || !cpu)
+	if (!cpu)
 		return;
 
-	if (ImGui::Begin("CPU State", &visible_)) {
-		render_controls(cpu);
-		ImGui::Separator();
-		render_registers(cpu);
-		ImGui::Separator();
-		render_flags(cpu);
-		ImGui::Separator();
-		render_stack_info(cpu);
-	}
-	ImGui::End();
+	render_controls(cpu);
+	ImGui::Separator();
+	render_registers(cpu);
+	ImGui::Separator();
+	render_flags(cpu);
+	ImGui::Separator();
+	render_stack_info(cpu);
 }
 
 void CPUStatePanel::render_registers(const nes::CPU6502 *cpu) {

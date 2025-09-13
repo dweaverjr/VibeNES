@@ -110,4 +110,8 @@ ImVec4 RetroTheme::get_hex_color() {
 	return NES_WHITE;
 }
 
+ImVec4 RetroTheme::get_value_color() {
+	return NES_GREEN;
+}
+
 } // namespace nes::gui

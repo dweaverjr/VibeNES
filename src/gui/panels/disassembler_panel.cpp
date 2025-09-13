@@ -51,15 +51,12 @@ DisassemblerPanel::DisassemblerPanel()
 }
 
 void DisassemblerPanel::render(const nes::CPU6502 *cpu, const nes::SystemBus *bus) {
-	if (!visible_ || !cpu || !bus)
+	if (!cpu || !bus)
 		return;
 
-	if (ImGui::Begin("Disassembler", &visible_)) {
-		render_controls();
-		ImGui::Separator();
-		render_instruction_list(cpu, bus);
-	}
-	ImGui::End();
+	render_controls();
+	ImGui::Separator();
+	render_instruction_list(cpu, bus);
 }
 
 void DisassemblerPanel::render_controls() {

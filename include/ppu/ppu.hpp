@@ -84,6 +84,14 @@ class PPU : public Component {
 		return status_register_;
 	}
 
+	// Memory access for debugging
+	const PPUMemory &get_memory() const {
+		return memory_;
+	}
+
+	// CHR ROM access (for pattern table visualization)
+	uint8_t read_chr_rom(uint16_t address) const;
+
   private:
 	// Timing state
 	uint16_t current_cycle_;	// Current PPU cycle (0-340)

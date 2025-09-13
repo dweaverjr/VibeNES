@@ -53,6 +53,7 @@ int main(int argc, char *argv[]) {
 	gui_app.set_bus(bus.get());
 	gui_app.set_cartridge(cartridge.get());
 	gui_app.set_cpu(cpu.get());
+	gui_app.set_ppu(ppu.get());
 
 	// Run the GUI
 	gui_app.run();

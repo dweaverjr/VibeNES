@@ -39,6 +39,9 @@ class RetroTheme {
 
 	/// Get color for hexadecimal values
 	static ImVec4 get_hex_color();
+
+	/// Get color for general values
+	static ImVec4 get_value_color();
 };
 
 } // namespace nes::gui

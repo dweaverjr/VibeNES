@@ -7,29 +7,26 @@
 namespace nes::gui {
 
 void RomLoaderPanel::render(nes::Cartridge *cartridge) {
-	if (!visible_ || !cartridge) {
+	if (!cartridge) {
 		return;
 	}
 
-	if (ImGui::Begin("ROM Loader", &visible_)) {
-		// File browser section
-		if (ImGui::CollapsingHeader("File Browser", ImGuiTreeNodeFlags_DefaultOpen)) {
-			render_file_browser(cartridge);
-		}
-
-		ImGui::Separator();
-
-		// ROM information section
-		if (ImGui::CollapsingHeader("ROM Information", ImGuiTreeNodeFlags_DefaultOpen)) {
-			render_rom_info(cartridge);
-		}
-
-		ImGui::Separator();
-
-		// Load button
-		render_load_button(cartridge);
+	// File browser section
+	if (ImGui::CollapsingHeader("File Browser", ImGuiTreeNodeFlags_DefaultOpen)) {
+		render_file_browser(cartridge);
 	}
-	ImGui::End();
+
+	ImGui::Separator();
+
+	// ROM information section
+	if (ImGui::CollapsingHeader("ROM Information", ImGuiTreeNodeFlags_DefaultOpen)) {
+		render_rom_info(cartridge);
+	}
+
+	ImGui::Separator();
+
+	// Load button
+	render_load_button(cartridge);
 }
 
 void RomLoaderPanel::render_file_browser(nes::Cartridge *cartridge) {

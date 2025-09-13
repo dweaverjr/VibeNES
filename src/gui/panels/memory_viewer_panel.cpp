@@ -8,15 +8,12 @@ MemoryViewerPanel::MemoryViewerPanel() : visible_(true), start_address_(0x0000),
 }
 
 void MemoryViewerPanel::render(const nes::SystemBus *bus) {
-	if (!visible_ || !bus)
+	if (!bus)
 		return;
 
-	if (ImGui::Begin("Memory Viewer", &visible_)) {
-		render_controls();
-		ImGui::Separator();
-		render_memory_grid(bus);
-	}
-	ImGui::End();
+	render_controls();
+	ImGui::Separator();
+	render_memory_grid(bus);
 }
 
 void MemoryViewerPanel::render_controls() {
