@@ -59,6 +59,11 @@ class PPUViewerPanel {
 		return display_mode_;
 	}
 
+	// Force refresh of pattern tables (useful when ROM is changed/unloaded)
+	void refresh_pattern_tables() {
+		pattern_table_dirty_ = true;
+	}
+
   private:
 	bool visible_;
 	PPUDisplayMode display_mode_;
@@ -77,6 +82,7 @@ class PPUViewerPanel {
 	int selected_nametable_;	 // 0-3
 	int selected_palette_;		 // 0-7
 	float display_scale_;		 // Display scaling factor
+	bool pattern_table_dirty_;	 // Flag to track when to regenerate pattern table
 
 	// Rendering methods
 	void render_main_display(nes::PPU *ppu);
@@ -88,6 +94,7 @@ class PPUViewerPanel {
 	void initialize_textures();
 	void cleanup_textures();
 	void update_main_display_texture(const uint32_t *frame_buffer);
+	void update_pattern_table_texture();
 	void generate_pattern_table_visualization(nes::PPU *ppu, nes::Cartridge *cartridge);
 	void generate_nametable_visualization(nes::PPU *ppu);
 	uint32_t get_pattern_pixel_color(uint8_t pixel_value, uint8_t palette_index, nes::PPU *ppu);

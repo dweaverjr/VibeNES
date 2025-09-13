@@ -1,6 +1,7 @@
 #include "core/bus.hpp"
-#include "apu/apu_stub.hpp"
+#include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
+#include "cpu/cpu_6502.hpp"
 #include "input/controller_stub.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
@@ -9,7 +10,8 @@
 
 namespace nes {
 
-SystemBus::SystemBus() : ram_{nullptr}, ppu_{nullptr}, apu_{nullptr}, controllers_{nullptr}, cartridge_{nullptr} {
+SystemBus::SystemBus()
+	: ram_{nullptr}, ppu_{nullptr}, apu_{nullptr}, controllers_{nullptr}, cartridge_{nullptr}, cpu_{nullptr} {
 }
 
 void SystemBus::tick(CpuCycle cycles) {
@@ -204,8 +206,12 @@ void SystemBus::connect_ppu(std::shared_ptr<PPU> ppu) {
 	ppu_ = std::move(ppu);
 }
 
-void SystemBus::connect_apu(std::shared_ptr<APUStub> apu) {
+void SystemBus::connect_apu(std::shared_ptr<APU> apu) {
 	apu_ = std::move(apu);
+	// Connect CPU to APU for IRQ handling if both are available
+	if (cpu_ && apu_) {
+		apu_->connect_cpu(cpu_.get());
+	}
 }
 
 void SystemBus::connect_controllers(std::shared_ptr<ControllerStub> controllers) {
@@ -214,6 +220,14 @@ void SystemBus::connect_controllers(std::shared_ptr<ControllerStub> controllers)
 
 void SystemBus::connect_cartridge(std::shared_ptr<Cartridge> cartridge) {
 	cartridge_ = std::move(cartridge);
+}
+
+void SystemBus::connect_cpu(std::shared_ptr<CPU6502> cpu) {
+	cpu_ = std::move(cpu);
+	// Connect CPU to APU for IRQ handling if both are available
+	if (cpu_ && apu_) {
+		apu_->connect_cpu(cpu_.get());
+	}
 }
 
 void SystemBus::debug_print_memory_map() const {

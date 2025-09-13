@@ -21,7 +21,7 @@ void CPU6502::tick(CpuCycle cycles) {
 
 	// Execute instructions while we have cycles
 	while (cycles_remaining_.count() > 0) {
-		execute_instruction();
+		(void)execute_instruction(); // Discard return value in tick context
 	}
 }
 void CPU6502::reset() {
@@ -189,7 +189,10 @@ void CPU6502::handle_irq() {
 	program_counter_ = read_word(IRQ_VECTOR);
 }
 
-void CPU6502::execute_instruction() {
+int CPU6502::execute_instruction() {
+	// Track cycles before execution
+	int cycles_before = cycles_remaining_.count();
+
 	// Check for pending interrupts before instruction fetch
 	if (has_pending_interrupt()) {
 		InterruptType pending = interrupt_state_.get_pending_interrupt();
@@ -212,7 +215,8 @@ void CPU6502::execute_instruction() {
 
 		if (should_process) {
 			process_interrupts();
-			return; // Interrupt handling consumes cycles, don't execute instruction
+			// Return cycles consumed by interrupt processing
+			return cycles_before - cycles_remaining_.count();
 		}
 	}
 
@@ -1022,6 +1026,9 @@ void CPU6502::execute_instruction() {
 		cycles_remaining_ -= CpuCycle{2};
 		break;
 	}
+
+	// Return the number of cycles consumed by this instruction
+	return cycles_before - cycles_remaining_.count();
 }
 
 // Memory access methods

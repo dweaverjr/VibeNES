@@ -1,4 +1,4 @@
-#include "apu/apu_stub.hpp"
+#include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
 #include "core/component.hpp"
@@ -22,37 +22,7 @@ int main(int argc, char *argv[]) {
 #ifdef NES_GUI_ENABLED
 	std::cout << "VibeNES GUI - Starting debugger interface...\n";
 
-	// Create basic emulator components for testing
-	auto bus = std::make_unique<SystemBus>();
-	auto ram = std::make_shared<Ram>();
-	auto ppu = std::make_shared<PPU>();
-	auto apu = std::make_shared<APUStub>();
-	auto cartridge = std::make_shared<Cartridge>();
-	auto cpu = std::make_unique<CPU6502>(bus.get());
-
-	bus->connect_ram(ram);
-	bus->connect_ppu(ppu);
-	bus->connect_apu(apu);
-	bus->connect_cartridge(cartridge);
-
-	// Connect cartridge to PPU for CHR ROM/RAM access
-	ppu->connect_cartridge(cartridge);
-
-	// Connect CPU to PPU for NMI generation
-	ppu->connect_cpu(cpu.get());
-
-	bus->power_on();
-	// Note: power_on() already triggers reset sequence, so no separate reset() call needed
-
-	// Set up a test reset vector for debugging (without a ROM loaded)
-	// This will allow the CPU to start at a known address for testing
-	bus->write(0xFFFC, 0x00); // Reset vector low byte
-	bus->write(0xFFFD, 0x80); // Reset vector high byte -> PC will be $8000
-
-	// Trigger a reset now that we have a proper reset vector
-	cpu->trigger_reset();
-
-	// Create and run GUI
+	// Create and run GUI - components are internally managed
 	nes::gui::GuiApplication gui_app;
 
 	if (!gui_app.initialize()) {
@@ -60,12 +30,7 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	// Set emulator references
-	gui_app.set_bus(bus.get());
-	gui_app.set_cartridge(cartridge.get());
-	gui_app.set_cpu(cpu.get());
-	gui_app.set_ppu(ppu.get());
-
+	// Components are now internally managed by GuiApplication
 	// Setup callbacks for component coordination
 	gui_app.setup_callbacks();
 

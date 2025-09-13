@@ -1,8 +1,10 @@
 #include "gui/gui_application.hpp"
+#include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "gui/style/retro_theme.hpp"
+#include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
 
 // Panel includes
@@ -46,6 +48,9 @@ bool GuiApplication::initialize() {
 		cleanup();
 		return false;
 	}
+
+	// Initialize core emulation components
+	initialize_emulation_components();
 
 	return true;
 }
@@ -107,6 +112,45 @@ bool GuiApplication::initialize_imgui() {
 	}
 
 	return true;
+}
+
+void GuiApplication::initialize_emulation_components() {
+	// Create components in dependency order
+	bus_ = std::make_shared<nes::SystemBus>();
+
+	// Create memory components
+	auto ram = std::make_shared<nes::Ram>();
+	auto apu = std::make_shared<nes::APU>();
+
+	// Create other core components
+	cartridge_ = std::make_shared<nes::Cartridge>();
+	ppu_ = std::make_shared<nes::PPU>();
+	cpu_ = std::make_shared<nes::CPU6502>(bus_.get()); // CPU needs bus reference
+
+	// Connect components to bus
+	bus_->connect_ram(ram);
+	bus_->connect_ppu(ppu_);
+	bus_->connect_apu(apu);
+	bus_->connect_cartridge(cartridge_);
+	bus_->connect_cpu(cpu_); // Connect CPU to bus for APU IRQ handling
+
+	// Connect cartridge to PPU for CHR ROM access
+	ppu_->connect_cartridge(cartridge_);
+
+	// Connect CPU to PPU for NMI generation
+	ppu_->connect_cpu(cpu_.get());
+
+	// Initialize system
+	bus_->power_on();
+
+	// Set up a test reset vector for debugging (without a ROM loaded)
+	bus_->write(0xFFFC, 0x00); // Reset vector low byte
+	bus_->write(0xFFFD, 0x80); // Reset vector high byte -> PC will be $8000
+
+	// Trigger a reset now that we have a proper reset vector
+	cpu_->trigger_reset();
+
+	printf("Emulation components initialized and connected\n");
 }
 
 void GuiApplication::run() {
@@ -178,7 +222,7 @@ void GuiApplication::render_frame() {
 				ImGui::Separator();
 				// Render ROM loader content directly (no longer a popup)
 				if (rom_loader_panel_) {
-					rom_loader_panel_->render(cartridge_);
+					rom_loader_panel_->render(cartridge_.get());
 				}
 			}
 			ImGui::EndChild();
@@ -191,7 +235,7 @@ void GuiApplication::render_frame() {
 				ImGui::Separator();
 				if (cpu_panel_) {
 					// Pass step_emulation as callback so CPU panel uses proper coordination
-					cpu_panel_->render(cpu_, [this]() { step_emulation(); });
+					cpu_panel_->render(cpu_.get(), [this]() { step_emulation(); });
 				}
 			}
 			ImGui::EndChild();
@@ -203,7 +247,7 @@ void GuiApplication::render_frame() {
 				ImGui::Text("TIMING & CLOCK");
 				ImGui::Separator();
 				if (timing_panel_) {
-					timing_panel_->render(cpu_, ppu_, bus_);
+					timing_panel_->render(cpu_.get(), ppu_.get(), bus_.get());
 				}
 			}
 			ImGui::EndChild();
@@ -237,7 +281,7 @@ void GuiApplication::render_frame() {
 					ImGui::Text("MEMORY VIEWER");
 					ImGui::Separator();
 					if (memory_panel_) {
-						memory_panel_->render(bus_);
+						memory_panel_->render(bus_.get());
 					}
 				}
 				ImGui::EndChild();
@@ -249,7 +293,7 @@ void GuiApplication::render_frame() {
 					ImGui::Text("DISASSEMBLER");
 					ImGui::Separator();
 					if (disassembler_panel_) {
-						disassembler_panel_->render(cpu_, bus_);
+						disassembler_panel_->render(cpu_.get(), bus_.get());
 					}
 				}
 				ImGui::EndChild();
@@ -265,7 +309,7 @@ void GuiApplication::render_frame() {
 				ImGui::Separator();
 				if (ppu_viewer_panel_) {
 					// Show just the registers content
-					ppu_viewer_panel_->render_registers_only(ppu_);
+					ppu_viewer_panel_->render_registers_only(ppu_.get());
 				}
 			}
 			ImGui::EndChild();
@@ -280,7 +324,7 @@ void GuiApplication::render_frame() {
 				ImGui::Text("PATTERN TABLES");
 				ImGui::Separator();
 				if (ppu_viewer_panel_) {
-					ppu_viewer_panel_->render_pattern_tables(ppu_, cartridge_);
+					ppu_viewer_panel_->render_pattern_tables(ppu_.get(), cartridge_.get());
 				}
 			}
 			ImGui::EndChild();
@@ -292,7 +336,7 @@ void GuiApplication::render_frame() {
 				ImGui::Text("PPU PALETTES");
 				ImGui::Separator();
 				if (ppu_viewer_panel_) {
-					ppu_viewer_panel_->render_palette_viewer(ppu_);
+					ppu_viewer_panel_->render_palette_viewer(ppu_.get());
 				}
 			}
 			ImGui::EndChild();
@@ -413,14 +457,12 @@ void GuiApplication::step_emulation() {
 	static int step_count = 0;
 	step_count++;
 
-	// Give enough cycles for a typical instruction (most are 2-7 cycles)
-	// The CPU will consume what it needs and accumulate the rest
-	// Note: We need to step the CPU directly, not through the bus
-	cpu_->execute_instruction();
+	// Execute exactly one CPU instruction and get the cycles it consumed
+	int cycles_consumed = cpu_->execute_instruction();
 
-	// Also tick the bus components to keep them synchronized
-	// Use the cycles the CPU actually consumed
-	bus_->tick(cpu_cycles(7));
+	// Advance PPU and other components by the exact number of cycles the CPU used
+	// This maintains perfect cycle-accurate synchronization between CPU and PPU
+	bus_->tick(cpu_cycles(cycles_consumed));
 }
 
 void GuiApplication::step_frame() {
@@ -439,7 +481,7 @@ void GuiApplication::setup_callbacks() {
 			// When a ROM is loaded, trigger a reset to set the PC to the reset vector
 			cpu_->trigger_reset();
 			// Process the reset immediately by stepping once
-			cpu_->execute_instruction();
+			(void)cpu_->execute_instruction(); // Discard return value for reset processing
 
 			// Debug: Check if PPU can read CHR ROM data
 			if (ppu_ && cartridge_) {

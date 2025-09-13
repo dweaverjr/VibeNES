@@ -79,14 +79,15 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 	ImGui::Separator();
 	ImGui::Text("CPU Debug Controls:");
 
+	// First row of step buttons
 	// Step button - execute next instruction (with repeat when held)
 	ImGui::PushButtonRepeat(true);
-	if (ImGui::Button("Step Instruction")) {
+	if (ImGui::Button("Step 1x")) {
 		if (step_callback) {
 			step_callback(); // Use the provided step callback for proper coordination
 		} else {
 			// Fallback to direct CPU execution if no callback provided
-			cpu->execute_instruction();
+			(void)cpu->execute_instruction(); // Discard return value for manual stepping
 		}
 	}
 	ImGui::PopButtonRepeat();
@@ -100,7 +101,51 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 			if (step_callback) {
 				step_callback();
 			} else {
-				cpu->execute_instruction();
+				(void)cpu->execute_instruction(); // Discard return value for fast stepping
+			}
+		}
+	}
+	ImGui::PopButtonRepeat();
+
+	ImGui::SameLine();
+
+	// Ultra fast step button for very rapid stepping (with repeat when held)
+	ImGui::PushButtonRepeat(true);
+	if (ImGui::Button("Step 1000x")) {
+		for (int i = 0; i < 1000; ++i) {
+			if (step_callback) {
+				step_callback();
+			} else {
+				(void)cpu->execute_instruction(); // Discard return value for ultra fast stepping
+			}
+		}
+	}
+	ImGui::PopButtonRepeat();
+
+	// Second row of step buttons
+	// Mega step button for extremely rapid stepping (with repeat when held)
+	ImGui::PushButtonRepeat(true);
+	if (ImGui::Button("Step 10,000x")) {
+		for (int i = 0; i < 10000; ++i) {
+			if (step_callback) {
+				step_callback();
+			} else {
+				(void)cpu->execute_instruction(); // Discard return value for mega fast stepping
+			}
+		}
+	}
+	ImGui::PopButtonRepeat();
+
+	ImGui::SameLine();
+
+	// Giga step button for massively rapid stepping (with repeat when held)
+	ImGui::PushButtonRepeat(true);
+	if (ImGui::Button("Step 100,000x")) {
+		for (int i = 0; i < 100000; ++i) {
+			if (step_callback) {
+				step_callback();
+			} else {
+				(void)cpu->execute_instruction(); // Discard return value for giga fast stepping
 			}
 		}
 	}
@@ -118,7 +163,13 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 	// Helper text
 	ImGui::TextDisabled("(?)");
 	if (ImGui::IsItemHovered()) {
-		ImGui::SetTooltip("Step: Execute one CPU instruction\nReset: Restart CPU from reset vector");
+		ImGui::SetTooltip("Step 1x: Execute one CPU instruction\n"
+						  "Step 100x: Execute 100 CPU instructions\n"
+						  "Step 1000x: Execute 1000 CPU instructions\n"
+						  "Step 10,000x: Execute 10,000 CPU instructions\n"
+						  "Step 100,000x: Execute 100,000 CPU instructions\n"
+						  "Reset: Restart CPU from reset vector\n"
+						  "(Hold buttons to repeat rapidly)");
 	}
 }
 
