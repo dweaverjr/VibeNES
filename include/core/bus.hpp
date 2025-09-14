@@ -60,6 +60,9 @@ class SystemBus final : public Component {
 	[[nodiscard]] bool is_controller_address(Address address) const noexcept;
 	[[nodiscard]] bool is_cartridge_address(Address address) const noexcept;
 
+	// DMA implementation
+	void perform_oam_dma(Byte page);
+
 	// Test memory for high addresses (temporary solution for testing)
 	// TODO: Replace with proper cartridge ROM when implemented
 	mutable std::array<Byte, 0x8000> test_high_memory_{};

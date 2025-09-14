@@ -163,6 +163,12 @@ void SystemBus::write(Address address, Byte value) {
 		return;
 	}
 
+	// OAM DMA: $4014 (sprite DMA transfer) - Check before APU!
+	if (address == 0x4014) {
+		perform_oam_dma(value);
+		return;
+	}
+
 	// APU/IO: $4000-$4015, $4017 (writes go to APU frame counter)
 	if (is_apu_address(address)) {
 		if (apu_) {
@@ -263,6 +269,38 @@ bool SystemBus::is_controller_address(Address address) const noexcept {
 
 bool SystemBus::is_cartridge_address(Address address) const noexcept {
 	return address >= 0x4020; // Address is 16-bit, so it's always <= 0xFFFF
+}
+
+void SystemBus::perform_oam_dma(Byte page) {
+	// OAM DMA transfers 256 bytes from page $XX00-$XXFF to PPU OAM
+	// Takes 513 cycles (or 514 if on odd CPU cycle)
+	// DMA starts at current OAM address and wraps around
+
+	if (!ppu_) {
+		return;
+	}
+
+	Address base_address = static_cast<Address>(page) << 8; // page * 256
+
+	// Debug output for major DMA transfers
+	static Byte last_dma_page = 0xFF;
+	if (page != last_dma_page) {
+		printf("OAM DMA: Transferring $%02X00-$%02XFF to PPU OAM\n", page, page);
+		last_dma_page = page;
+	}
+
+	// Transfer 256 bytes to OAM using PPU register interface
+	// Note: OAM address is preserved and auto-increments with each write
+	for (uint16_t i = 0; i < 256; i++) {
+		Address source_addr = base_address + i;
+		Byte data = read(source_addr);
+
+		// Write data through OAMDATA register (auto-increments OAM address)
+		ppu_->write_register(0x2004, data); // OAMDATA
+	}
+
+	// TODO: Add CPU cycle penalty for DMA (513/514 cycles)
+	// This would require coordinating with the CPU to add cycles
 }
 
 } // namespace nes
