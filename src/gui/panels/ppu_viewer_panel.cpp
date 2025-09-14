@@ -10,9 +10,9 @@
 namespace nes::gui {
 
 PPUViewerPanel::PPUViewerPanel()
-	: visible_(true), display_mode_(PPUDisplayMode::FRAME_COMPLETE), main_display_texture_(0),
-	  pattern_table_texture_(0), nametable_texture_(0), selected_pattern_table_(0), selected_nametable_(0),
-	  selected_palette_(0), display_scale_(2.0f), pattern_table_dirty_(true), textures_initialized_(false) {
+	: visible_(true), display_mode_(PPUDisplayMode::REAL_TIME), main_display_texture_(0), pattern_table_texture_(0),
+	  nametable_texture_(0), selected_pattern_table_(0), selected_nametable_(0), selected_palette_(0),
+	  display_scale_(2.0f), pattern_table_dirty_(true), textures_initialized_(false) {
 
 	// Allocate buffers for texture data
 	pattern_table_buffer_ = std::make_unique<uint32_t[]>(256 * 128); // 2 pattern tables side by side
@@ -115,7 +115,22 @@ void PPUViewerPanel::render_display_controls() {
 }
 
 void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
+	// Debug: Simple check if this method is being called
+	static int render_call_count = 0;
+	if (render_call_count < 5) {
+		printf("DEBUG: render_main_display called (call #%d)\n", ++render_call_count);
+	}
+
 	ImGui::Text("NES Video Output (256x240)");
+
+	// Debug frame status
+	ImGui::Text("Frame ready: %s", ppu->is_frame_ready() ? "YES" : "NO");
+	ImGui::Text("Frame count: %llu", ppu->get_frame_count());
+	ImGui::Text("Frame buffer valid: %s", ppu->get_frame_buffer() ? "YES" : "NO");
+
+	// Display current mode
+	const char *mode_names[] = {"FRAME_COMPLETE", "REAL_TIME", "SCANLINE_STEP"};
+	ImGui::Text("Display mode: %s", mode_names[static_cast<int>(display_mode_)]);
 
 	// Check if we should update the display based on mode
 	bool should_update = false;
@@ -132,8 +147,24 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 		break;
 	}
 
+	ImGui::Text("Should update: %s", should_update ? "YES" : "NO");
+
+	// Add mode switching buttons
+	if (ImGui::Button("Frame Complete Mode")) {
+		display_mode_ = PPUDisplayMode::FRAME_COMPLETE;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Real Time Mode")) {
+		display_mode_ = PPUDisplayMode::REAL_TIME;
+	}
+
 	if (should_update && ppu->get_frame_buffer()) {
 		update_main_display_texture(ppu->get_frame_buffer());
+		// Clear the frame ready flag after we've processed the frame
+		if (display_mode_ == PPUDisplayMode::FRAME_COMPLETE && ppu->is_frame_ready()) {
+			printf("DEBUG: Clearing frame ready flag\n");
+			ppu->clear_frame_ready();
+		}
 	}
 
 	// Display the texture
@@ -145,7 +176,17 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 		ImGui::Text("Frame: %llu, Scanline: %d, Cycle: %d", ppu->get_frame_count(), ppu->get_current_scanline(),
 					ppu->get_current_cycle());
 	} else {
-		ImGui::Text("No frame data available");
+		ImGui::Text("Main display texture not initialized (texture ID: %u)", main_display_texture_);
+		ImGui::Text("Textures initialized: %s", textures_initialized_ ? "YES" : "NO");
+		if (ImGui::Button("Force Initialize Textures")) {
+			initialize_textures();
+		}
+	}
+
+	// Test button to force frame buffer update
+	if (ImGui::Button("Force Update Display") && ppu->get_frame_buffer()) {
+		printf("FORCE: Updating display texture...\n");
+		update_main_display_texture(ppu->get_frame_buffer());
 	}
 }
 
@@ -457,11 +498,23 @@ void PPUViewerPanel::initialize_textures() {
 	printf("Generated textures: main=%u, pattern=%u, nametable=%u\n", main_display_texture_, pattern_table_texture_,
 		   nametable_texture_);
 
+	// Check for OpenGL errors
+	GLenum error = glGetError();
+	if (error != GL_NO_ERROR) {
+		printf("OpenGL error after texture generation: %u\n", error);
+	}
+
 	// Setup main display texture (256x240)
 	glBindTexture(GL_TEXTURE_2D, main_display_texture_);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 240, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+	// Check for OpenGL errors
+	error = glGetError();
+	if (error != GL_NO_ERROR) {
+		printf("OpenGL error after main display texture setup: %u\n", error);
+	}
 
 	// Setup pattern table texture (256x128)
 	glBindTexture(GL_TEXTURE_2D, pattern_table_texture_);
@@ -494,6 +547,12 @@ void PPUViewerPanel::update_main_display_texture(const uint32_t *frame_buffer) {
 
 	glBindTexture(GL_TEXTURE_2D, main_display_texture_);
 	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 240, GL_RGBA, GL_UNSIGNED_BYTE, frame_buffer);
+
+	// Check for OpenGL errors
+	GLenum error = glGetError();
+	if (error != GL_NO_ERROR) {
+		printf("OpenGL error during texture update: %u\n", error);
+	}
 }
 
 void PPUViewerPanel::update_pattern_table_texture() {

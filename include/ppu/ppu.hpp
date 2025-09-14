@@ -64,9 +64,7 @@ class PPU : public Component {
 	}
 
 	// Connect to cartridge for CHR ROM/RAM access
-	void connect_cartridge(std::shared_ptr<Cartridge> cartridge) {
-		cartridge_ = cartridge;
-	}
+	void connect_cartridge(std::shared_ptr<Cartridge> cartridge);
 
 	// Debug/inspection methods
 	uint16_t get_current_scanline() const {
@@ -124,6 +122,29 @@ class PPU : public Component {
 	// Frame buffer (256x240 pixels, 32-bit RGBA)
 	std::array<uint32_t, 256 * 240> frame_buffer_;
 
+	// Background shift registers (2-tile lookahead like real hardware)
+	struct BackgroundShiftRegisters {
+		uint16_t pattern_low_shift;	   // Low bit plane shift register
+		uint16_t pattern_high_shift;   // High bit plane shift register
+		uint16_t attribute_low_shift;  // Attribute low bit shift register
+		uint16_t attribute_high_shift; // Attribute high bit shift register
+
+		// Latches for next tile data
+		uint8_t next_tile_id;
+		uint8_t next_tile_attribute;
+		uint8_t next_tile_pattern_low;
+		uint8_t next_tile_pattern_high;
+	} bg_shift_registers_;
+
+	// Current tile fetching state (matches hardware timing)
+	struct TileFetchState {
+		uint8_t fetch_cycle; // Which fetch cycle we're in (0-7)
+		uint8_t current_tile_id;
+		uint8_t current_attribute;
+		uint8_t current_pattern_low;
+		uint8_t current_pattern_high;
+	} tile_fetch_state_;
+
 	// Sprite evaluation state (for current scanline)
 	struct ScanlineSprite {
 		Sprite sprite_data;
@@ -178,6 +199,18 @@ class PPU : public Component {
 	uint16_t fetch_pattern_data(uint8_t tile_index, uint8_t fine_y, bool background_table);
 	uint8_t get_background_palette_index(uint16_t pattern_data, uint8_t attribute, uint8_t fine_x);
 	uint32_t get_palette_color(uint8_t palette_index);
+
+	// Hardware-accurate background tile fetching
+	void fetch_background_tile_data();
+	void shift_background_registers();
+	void load_shift_registers();
+	uint8_t get_background_pixel_from_shift_registers();
+	void perform_tile_fetch_cycle();
+
+	// VRAM address updates during rendering
+	void update_vram_address_rendering();
+	void handle_horizontal_scroll_update();
+	void handle_vertical_scroll_update();
 
 	// Sprite rendering (Phase 3)
 	void render_sprite_pixel();

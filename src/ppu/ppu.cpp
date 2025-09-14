@@ -1,9 +1,11 @@
 #include "ppu/ppu.hpp"
 #include "cartridge/cartridge.hpp"
+#include "cartridge/mappers/mapper.hpp"
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "ppu/nes_palette.hpp"
 #include <cstring>
+#include <iostream>
 
 namespace nes {
 
@@ -12,7 +14,23 @@ PPU::PPU()
 	  mask_register_(0), status_register_(0), oam_address_(0), vram_address_(0), temp_vram_address_(0),
 	  fine_x_scroll_(0), write_toggle_(false), read_buffer_(0), sprite_count_current_scanline_(0),
 	  sprite_0_on_scanline_(false), bus_(nullptr), cpu_(nullptr), cartridge_(nullptr) {
+
+	// Initialize background shift registers
+	bg_shift_registers_ = {};
+	tile_fetch_state_ = {};
+
 	power_on();
+}
+
+void PPU::connect_cartridge(std::shared_ptr<Cartridge> cartridge) {
+	cartridge_ = cartridge;
+
+	// Update nametable mirroring mode based on cartridge
+	if (cartridge_) {
+		auto mirroring = cartridge_->get_mirroring();
+		bool vertical = (mirroring == Mapper::Mirroring::Vertical);
+		memory_.set_mirroring_mode(vertical);
+	}
 }
 
 void PPU::power_on() {
@@ -34,6 +52,10 @@ void PPU::power_on() {
 	fine_x_scroll_ = 0;
 	write_toggle_ = false;
 	read_buffer_ = 0;
+
+	// Initialize background shift registers to prevent artifacts
+	bg_shift_registers_ = {};
+	tile_fetch_state_ = {};
 
 	// Initialize memory
 	memory_.power_on();
@@ -151,31 +173,86 @@ void PPU::write_register(uint16_t address, uint8_t value) {
 
 // Scanline processing (Phase 4 with proper scrolling timing)
 void PPU::process_visible_scanline() {
+	// Hardware-accurate PPU processing for visible scanlines
+
+	// Initialize shift registers at the start of the scanline and pre-load first tiles
+	if (current_cycle_ == 0 && is_rendering_enabled()) {
+		// DON'T clear shift registers - they should contain pre-loaded data from pre-render scanline
+		// The NES hardware maintains shift register state between scanlines
+	}
+
+	// During the first 8 cycles, we need to fetch the first two tiles
+	// to populate the shift registers before visible rendering starts
+	if (current_cycle_ < 8 && is_rendering_enabled() && is_background_enabled()) {
+		perform_tile_fetch_cycle();
+
+		// Load shift registers at the end of each tile fetch during pre-fetch
+		if ((current_cycle_ & 7) == 7) {
+			load_shift_registers();
+		}
+	}
+
 	// Sprite evaluation happens during cycles 64-256
 	if (current_cycle_ == 64 && is_rendering_enabled()) {
 		evaluate_sprites_for_scanline();
 	}
 
-	// Render visible pixels (cycles 0-255)
+	// Background and sprite rendering during visible cycles (0-255)
 	if (current_cycle_ < PPUTiming::VISIBLE_PIXELS && is_rendering_enabled()) {
+		// Shift background registers every cycle for smooth scrolling
+		if (is_background_enabled()) {
+			shift_background_registers();
+		}
+
+		// Render the pixel using shift registers
 		render_pixel();
 
-		// Background fetching and VRAM address updates during rendering
-		if (is_background_enabled()) {
-			// Increment coarse X every 8 pixels (when fetching new tile)
+		// Background tile fetching and VRAM updates (every 8 cycles, continuing from pre-fetch)
+		if (is_background_enabled() && current_cycle_ >= 8) {
+			perform_tile_fetch_cycle();
+		}
+
+		// VRAM address increments happen at the END of each tile fetch cycle
+		// This occurs at cycles 8, 16, 24, 32, etc. (after pattern data is fetched)
+		if (is_background_enabled() && ((current_cycle_ & 7) == 0) && current_cycle_ > 0) {
+			increment_coarse_x();
+
+			// Load shift registers immediately after tile fetch completes
+			load_shift_registers();
+		}
+	} // HBLANK period: Critical VRAM address updates and tile fetching for next scanline
+	else if (current_cycle_ >= 256 && current_cycle_ < 341 && is_rendering_enabled()) {
+		// At cycle 256: Increment fine Y (move to next row)
+		if (current_cycle_ == 256) {
+			increment_fine_y();
+		}
+
+		// At cycle 257: Copy horizontal scroll from temp to current
+		// This resets the horizontal position for the next scanline
+		if (current_cycle_ == 257) {
+			copy_horizontal_scroll();
+		}
+
+		// Continue background tile fetching for next scanline (cycles 320-335)
+		// These are the first two tiles that will be rendered on the next scanline
+		if (current_cycle_ >= 320 && current_cycle_ < 336 && is_background_enabled()) {
+			perform_tile_fetch_cycle();
+
+			// Increment coarse X for these pre-fetch cycles too
 			if ((current_cycle_ & 7) == 7) {
 				increment_coarse_x();
 			}
 		}
-	}
 
-	// At end of visible scanline, copy horizontal scroll from temp
-	if (current_cycle_ == 256 && is_rendering_enabled()) {
-		increment_fine_y(); // Move to next row
-	}
-
-	if (current_cycle_ == 257 && is_rendering_enabled()) {
-		copy_horizontal_scroll(); // Reset horizontal scroll for next scanline
+		// Additional tile fetch at cycles 336-339 for odd frame timing
+		// (Real hardware behavior for frame synchronization)
+		if (current_cycle_ >= 336 && current_cycle_ < 340 && is_background_enabled()) {
+			// Fetch nametable bytes for timing (results unused)
+			if (current_cycle_ == 337 || current_cycle_ == 339) {
+				uint16_t nt_addr = get_current_nametable_address();
+				memory_.read_vram(nt_addr); // Dummy read for timing
+			}
+		}
 	}
 }
 void PPU::process_post_render_scanline() {
@@ -201,20 +278,44 @@ void PPU::process_pre_render_scanline() {
 
 	// Copy vertical scroll from temp address to current at specific cycles
 	if (is_rendering_enabled()) {
+		// Initialize shift registers at start of pre-render to prepare for next frame
+		if (current_cycle_ == 0) {
+			bg_shift_registers_.pattern_low_shift = 0;
+			bg_shift_registers_.pattern_high_shift = 0;
+			bg_shift_registers_.attribute_low_shift = 0;
+			bg_shift_registers_.attribute_high_shift = 0;
+		}
+
 		// Copy horizontal scroll
 		if (current_cycle_ == 257) {
 			copy_horizontal_scroll();
 		}
 
 		// Copy vertical scroll during cycles 280-304
+		// This is CRITICAL - it copies the nametable selection from PPUCTRL!
 		if (current_cycle_ >= 280 && current_cycle_ <= 304) {
 			copy_vertical_scroll();
 		}
 
-		// Background tile fetching simulation during pre-render
+		// Background tile fetching simulation during pre-render (dummy fetches)
 		if (current_cycle_ < 256 && is_background_enabled()) {
+			perform_tile_fetch_cycle();
+
+			// Increment coarse X at the end of each tile fetch (cycles 8, 16, 24, etc.)
+			if ((current_cycle_ & 7) == 0 && current_cycle_ > 0) {
+				increment_coarse_x();
+			}
+		}
+
+		// Critical: Continue fetching during HBLANK (cycles 320-335)
+		// These fetches prepare the first two tiles for the next frame and must be precise
+		if (current_cycle_ >= 320 && current_cycle_ < 336 && is_background_enabled()) {
+			perform_tile_fetch_cycle();
+
+			// Increment coarse X and load shift registers for the initial tiles of next frame
 			if ((current_cycle_ & 7) == 7) {
 				increment_coarse_x();
+				load_shift_registers();
 			}
 		}
 
@@ -312,15 +413,19 @@ void PPU::write_ppuscroll(uint8_t value) {
 }
 
 void PPU::write_ppuaddr(uint8_t value) {
+	printf("PPUADDR write: $%02X (toggle=%d)\n", value, write_toggle_);
+
 	if (!write_toggle_) {
 		// First write: high byte
 		temp_vram_address_ = (temp_vram_address_ & 0x00FF) | ((static_cast<uint16_t>(value) & 0x3F) << 8);
 		write_toggle_ = true;
+		printf("  High byte: temp_vram=$%04X\n", temp_vram_address_);
 	} else {
 		// Second write: low byte
 		temp_vram_address_ = (temp_vram_address_ & 0xFF00) | value;
 		vram_address_ = temp_vram_address_;
 		write_toggle_ = false;
+		printf("  Low byte: temp_vram=$%04X, vram=$%04X\n", temp_vram_address_, vram_address_);
 	}
 }
 
@@ -519,9 +624,11 @@ uint16_t PPU::fetch_pattern_data(uint8_t tile_index, uint8_t fine_y, bool backgr
 	uint8_t low_byte = 0x00;
 	uint8_t high_byte = 0x00;
 
-	// Read from cartridge CHR ROM/RAM
+	// Read from cartridge CHR ROM/RAM with support for dynamic banking
 	if (cartridge_) {
+		// Read low bit plane
 		low_byte = cartridge_->ppu_read(pattern_addr);
+		// Read high bit plane
 		high_byte = cartridge_->ppu_read(pattern_addr + 8);
 	}
 
@@ -542,8 +649,9 @@ uint8_t PPU::get_background_palette_index(uint16_t pattern_data, uint8_t attribu
 		return 0;
 	}
 
-	// Otherwise, use background palette
-	return 0x10 + (attribute * 4) + pixel_value;
+	// Background palettes are at 0x00-0x0F (not 0x10+ like sprites)
+	// Each palette has 4 colors, attribute selects which palette (0-3)
+	return (attribute * 4) + pixel_value;
 }
 
 uint32_t PPU::get_palette_color(uint8_t palette_index) {
@@ -564,6 +672,12 @@ uint32_t PPU::get_palette_color(uint8_t palette_index) {
 
 uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority) {
 	uint8_t current_x = current_cycle_;
+
+	// Check for left-edge clipping first
+	if (current_x < 8 && !(mask_register_ & PPUConstants::PPUMASK_SHOW_SPRITES_LEFT_MASK)) {
+		sprite_priority = false;
+		return 0; // Sprites clipped in leftmost 8 pixels
+	}
 
 	sprite_priority = false; // Default: sprite in front
 
@@ -738,7 +852,8 @@ uint8_t PPU::fetch_sprite_pattern_data_raw(uint8_t tile_index, uint8_t fine_y, b
 	uint16_t pattern_base = sprite_table ? 0x1000 : 0x0000;
 	uint16_t pattern_addr = pattern_base + (tile_index * 16) + fine_y;
 
-	// Read from cartridge CHR ROM/RAM
+	// Read from cartridge CHR ROM/RAM with support for dynamic banking
+	// This allows mappers to switch CHR banks during sprite evaluation
 	if (cartridge_) {
 		return cartridge_->ppu_read(pattern_addr);
 	}
@@ -842,6 +957,7 @@ void PPU::update_vram_address_y() {
 void PPU::copy_horizontal_scroll() {
 	// Copy horizontal scroll bits from temp to current VRAM address
 	// Copies: coarse X (bits 0-4) and horizontal nametable (bit 10)
+
 	vram_address_ = (vram_address_ & 0xFBE0) | (temp_vram_address_ & 0x041F);
 }
 
@@ -884,16 +1000,37 @@ void PPU::increment_fine_y() {
 
 uint16_t PPU::get_current_nametable_address() {
 	// Extract nametable address from current VRAM address
-	return 0x2000 | (vram_address_ & 0x0FFF);
+	// Use only coarse X, coarse Y, and nametable select (NOT fine Y)
+	// Fine Y is used for pattern table row selection, not nametable addressing
+	uint16_t addr = 0x2000 | (vram_address_ & 0x0FFF & ~0x7000);
+
+	// Ensure address is within nametable range
+	if (addr > 0x2FFF) {
+		addr = 0x2000 + (addr & 0x3FF); // Wrap to valid nametable
+	}
+
+	return addr;
 }
 
 uint16_t PPU::get_current_attribute_address() {
 	// Calculate attribute table address from current VRAM address
-	return 0x23C0 | (vram_address_ & 0x0C00) | ((vram_address_ >> 4) & 0x38) | ((vram_address_ >> 2) & 0x07);
+	// Attribute tables are at +0x3C0 from each nametable base
+	uint16_t base_addr = 0x23C0 | (vram_address_ & 0x0C00); // Preserve nametable selection
+	uint16_t attr_offset = ((vram_address_ >> 4) & 0x38) | ((vram_address_ >> 2) & 0x07);
+
+	uint16_t addr = base_addr | attr_offset;
+
+	// Ensure attribute address is within valid range
+	if ((addr & 0x3FF) >= 0x3C0) {
+		return addr;
+	} else {
+		// Force to attribute table if calculation went wrong
+		return base_addr;
+	}
 }
 
 uint8_t PPU::get_fine_y_scroll() {
-	// Extract fine Y scroll from VRAM address
+	// Extract fine Y scroll from VRAM address (bits 12-14)
 	return (vram_address_ & 0x7000) >> 12;
 }
 
@@ -902,37 +1039,13 @@ uint8_t PPU::get_fine_y_scroll() {
 // =============================================================================
 
 uint8_t PPU::get_background_pixel_at_current_position() {
-	// Use proper NES scrolling system instead of simplified approach
+	// Check for left-edge clipping first
+	if (current_cycle_ < 8 && !(mask_register_ & PPUConstants::PPUMASK_SHOW_BG_LEFT_MASK)) {
+		return 0; // Background clipped in leftmost 8 pixels
+	}
 
-	// During rendering, the PPU fetches tiles using the current VRAM address
-	// The fine X scroll is separate and applied during pixel output
-
-	// Get tile address from current VRAM address register
-	uint16_t nametable_addr = get_current_nametable_address();
-	uint8_t tile_index = fetch_nametable_byte(nametable_addr);
-
-	// Get attribute from current VRAM address
-	uint16_t attribute_addr = get_current_attribute_address();
-	uint8_t attribute_byte = memory_.read_vram(attribute_addr);
-
-	// Extract 2-bit palette for this tile within the attribute byte
-	uint8_t coarse_x = vram_address_ & 0x1F;
-	uint8_t coarse_y = (vram_address_ & 0x3E0) >> 5;
-	uint8_t shift = ((coarse_y & 2) << 1) | (coarse_x & 2);
-	uint8_t attribute = (attribute_byte >> shift) & 0x03;
-
-	// Get fine Y from VRAM address
-	uint8_t fine_y = get_fine_y_scroll();
-
-	// Fetch pattern data
-	bool background_table = (control_register_ & PPUConstants::PPUCTRL_BG_PATTERN_MASK) != 0;
-	uint16_t pattern_data = fetch_pattern_data(tile_index, fine_y, background_table);
-
-	// Apply fine X scroll for pixel selection within tile
-	uint8_t fine_x = (current_cycle_ + fine_x_scroll_) & 0x07;
-
-	// Get palette index for this pixel
-	return get_background_palette_index(pattern_data, attribute, fine_x);
+	// Use hardware-accurate shift registers for pixel output
+	return get_background_pixel_from_shift_registers();
 }
 
 uint8_t PPU::read_chr_rom(uint16_t address) const {
@@ -941,6 +1054,136 @@ uint8_t PPU::read_chr_rom(uint16_t address) const {
 		return cartridge_->ppu_read(address & 0x1FFF);
 	}
 	return 0x00; // No cartridge connected
+}
+
+// =============================================================================
+// Hardware-Accurate Background Tile Fetching and Shift Registers
+// =============================================================================
+
+void PPU::shift_background_registers() {
+	// Shift all background registers left by 1 bit (like real hardware)
+	bg_shift_registers_.pattern_low_shift <<= 1;
+	bg_shift_registers_.pattern_high_shift <<= 1;
+	bg_shift_registers_.attribute_low_shift <<= 1;
+	bg_shift_registers_.attribute_high_shift <<= 1;
+}
+
+void PPU::load_shift_registers() {
+	// Load the next tile data into the shift registers (every 8 cycles)
+	// This gives us the 2-tile lookahead that real hardware has
+
+	// Debug: Log shift register loading for interesting scanlines only
+	// Real NES hardware: New tile data is loaded into the LOW 8 bits
+	// Every pixel cycle, shift registers shift LEFT, and we read from bit 15
+	// This creates the proper 2-tile pipeline: current tile shifts out high bits,
+	// next tile shifts up from low bits
+	bg_shift_registers_.pattern_low_shift =
+		(bg_shift_registers_.pattern_low_shift & 0xFF00) | bg_shift_registers_.next_tile_pattern_low;
+	bg_shift_registers_.pattern_high_shift =
+		(bg_shift_registers_.pattern_high_shift & 0xFF00) | bg_shift_registers_.next_tile_pattern_high;
+
+	// Attribute bits are expanded to 8 bits for the tile and loaded into low 8 bits
+	uint8_t attr_bits = bg_shift_registers_.next_tile_attribute & 0x03;
+	uint8_t attr_low = (attr_bits & 0x01) ? 0xFF : 0x00;
+	uint8_t attr_high = (attr_bits & 0x02) ? 0xFF : 0x00;
+
+	bg_shift_registers_.attribute_low_shift = (bg_shift_registers_.attribute_low_shift & 0xFF00) | attr_low;
+	bg_shift_registers_.attribute_high_shift = (bg_shift_registers_.attribute_high_shift & 0xFF00) | attr_high;
+}
+
+uint8_t PPU::get_background_pixel_from_shift_registers() {
+	// Extract pixel from shift registers using fine X scroll
+	// The shift registers are 16-bit, with the current tile in the high 8 bits
+	// and the next tile in the low 8 bits. Fine X scroll (0-7) selects which
+	// bit within the current tile to use.
+
+	uint8_t shift_amount = 15 - fine_x_scroll_;
+
+	uint8_t pattern_low = (bg_shift_registers_.pattern_low_shift >> shift_amount) & 0x01;
+	uint8_t pattern_high = (bg_shift_registers_.pattern_high_shift >> shift_amount) & 0x01;
+	uint8_t attr_low = (bg_shift_registers_.attribute_low_shift >> shift_amount) & 0x01;
+	uint8_t attr_high = (bg_shift_registers_.attribute_high_shift >> shift_amount) & 0x01;
+
+	// Combine pattern bits for pixel value
+	uint8_t pixel_value = (pattern_high << 1) | pattern_low;
+
+	// If pixel is transparent, return backdrop color
+	if (pixel_value == 0) {
+		return 0;
+	}
+
+	// Combine attribute bits for palette selection
+	uint8_t palette = (attr_high << 1) | attr_low;
+
+	// Background palettes are at 0x00-0x0F
+	return (palette * 4) + pixel_value;
+}
+
+void PPU::perform_tile_fetch_cycle() {
+	// Perform one cycle of the 8-cycle tile fetch sequence
+	uint8_t cycle_in_tile = current_cycle_ & 0x07;
+
+	switch (cycle_in_tile) {
+	case 1: // Fetch nametable byte
+	{
+		uint16_t nt_addr = get_current_nametable_address();
+		tile_fetch_state_.current_tile_id = memory_.read_vram(nt_addr);
+	} break;
+
+	case 3: // Fetch attribute byte
+	{
+		uint16_t attr_addr = get_current_attribute_address();
+		uint8_t attr_byte = memory_.read_vram(attr_addr);
+
+		// Extract 2-bit palette for current tile position
+		uint8_t coarse_x = vram_address_ & 0x1F;
+		uint8_t coarse_y = (vram_address_ >> 5) & 0x1F;
+
+		// Calculate which 2x2 group within the 4x4 attribute area
+		uint8_t sub_x = (coarse_x & 2) >> 1; // 0 or 1
+		uint8_t sub_y = (coarse_y & 2) >> 1; // 0 or 1
+		uint8_t shift = (sub_y * 2 + sub_x) * 2;
+
+		tile_fetch_state_.current_attribute = (attr_byte >> shift) & 0x03;
+	} break;
+
+	case 5: // Fetch pattern table low byte
+	{
+		bool bg_table = (control_register_ & PPUConstants::PPUCTRL_BG_PATTERN_MASK) != 0;
+		uint16_t pattern_base = bg_table ? 0x1000 : 0x0000;
+		uint8_t fine_y = get_fine_y_scroll();
+		uint16_t pattern_addr = pattern_base + (tile_fetch_state_.current_tile_id * 16) + fine_y;
+
+		// Support for mid-frame CHR bank switching
+		// Each CHR read goes through the cartridge, allowing mappers to handle banking
+		tile_fetch_state_.current_pattern_low = cartridge_ ? cartridge_->ppu_read(pattern_addr) : 0;
+	} break;
+
+	case 7: // Fetch pattern table high byte and store tile data
+	{
+		bool bg_table = (control_register_ & PPUConstants::PPUCTRL_BG_PATTERN_MASK) != 0;
+		uint16_t pattern_base = bg_table ? 0x1000 : 0x0000;
+		uint8_t fine_y = get_fine_y_scroll();
+		uint16_t pattern_addr = pattern_base + (tile_fetch_state_.current_tile_id * 16) + fine_y + 8;
+
+		// Support for mid-frame CHR bank switching
+		// Each CHR read goes through the cartridge, allowing mappers to handle banking
+		tile_fetch_state_.current_pattern_high = cartridge_ ? cartridge_->ppu_read(pattern_addr) : 0;
+
+		// Store the fetched data into the "next" latches
+		// Shift registers will be loaded at cycle end (0, 8, 16, etc.)
+		bg_shift_registers_.next_tile_id = tile_fetch_state_.current_tile_id;
+		bg_shift_registers_.next_tile_attribute = tile_fetch_state_.current_attribute;
+		bg_shift_registers_.next_tile_pattern_low = tile_fetch_state_.current_pattern_low;
+		bg_shift_registers_.next_tile_pattern_high = tile_fetch_state_.current_pattern_high;
+
+		// Debug: Log what tile we just fetched for interesting scanlines
+	} break;
+
+	default:
+		// Other cycles do nothing for background fetching
+		break;
+	}
 }
 
 } // namespace nes

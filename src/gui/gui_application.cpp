@@ -261,10 +261,10 @@ void GuiApplication::render_frame() {
 			if (ImGui::BeginChild("NESDisplaySection", ImVec2(CENTER_WIDTH - 10, content_height * 0.5f), true)) {
 				ImGui::Text("NES DISPLAY");
 				ImGui::Separator();
-				// This will show the main game display
-				ImGui::Text("Game display will go here...");
-				ImGui::Text("Resolution: 256x240 NES pixels");
-				ImGui::Text("Scaled to fit available space");
+				// Render the actual NES display
+				if (ppu_viewer_panel_) {
+					ppu_viewer_panel_->render_main_display(ppu_.get());
+				}
 			}
 			ImGui::EndChild();
 

@@ -43,6 +43,9 @@ class PPUViewerPanel {
 	void render_palette_viewer(nes::PPU *ppu);
 	void render_sprite_viewer(nes::PPU *ppu);
 
+	// Render the main NES display
+	void render_main_display(nes::PPU *ppu);
+
 	// Show/hide panel
 	void set_visible(bool visible) {
 		visible_ = visible;
@@ -85,7 +88,6 @@ class PPUViewerPanel {
 	bool pattern_table_dirty_;	 // Flag to track when to regenerate pattern table
 
 	// Rendering methods
-	void render_main_display(nes::PPU *ppu);
 	void render_display_controls();
 	void render_ppu_registers(nes::PPU *ppu);
 	void render_timing_info(nes::PPU *ppu);

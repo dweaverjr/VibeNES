@@ -8,47 +8,6 @@
                 "-fdiagnostics-color=always",
                 "-g3",
                 "-O0",
-                "-pedantic-errors",
-                "-Werror",
-                "-Wall",
-                "-Weffc++",
-                "-Wextra",
-                "-Wconversion",
-                "-Wsign-conversion",
-                "-Wshadow",
-                "-Wformat=2",
-                "-std=c++23",
-                "${workspaceFolder}/src/main.cpp",
-                "${workspaceFolder}/src/core/bus.cpp",
-                "${workspaceFolder}/src/apu/apu.cpp",
-                "${workspaceFolder}/src/cpu/cpu_6502.cpp",
-                "${workspaceFolder}/src/ppu/ppu.cpp",
-                "${workspaceFolder}/src/ppu/ppu_memory.cpp",
-                "${workspaceFolder}/src/ppu/nes_palette.cpp",
-                "-I${workspaceFolder}/include",
-                "-o",
-                "${workspaceFolder}/build/debug/VibeNES.exe"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "detail": "Debug build with full optimization disabled and debug symbols"
-        },
-        {
-            "type": "cppbuild",
-            "label": "Debug Build with GUI",
-            "command": "c:\\msys64\\ucrt64\\bin\\g++.exe",
-            "args": [
-                "-fdiagnostics-color=always",
-                "-g3",
-                "-O0",
                 "-std=c++23",
                 "-Wall",
                 "-Wextra",
@@ -101,7 +60,7 @@
             ],
             "group": {
                 "kind": "build",
-                "isDefault": false
+                "isDefault": true
             },
             "detail": "Debug build with GUI support using ImGui and SDL2"
         },
@@ -160,10 +119,10 @@
         {
             "type": "shell",
             "label": "Run Debug",
-            "command": "${workspaceFolder}/build/debug/VibeNES.exe",
+            "command": "${workspaceFolder}/build/debug/VibeNES_GUI.exe",
             "group": "test",
             "dependsOn": "Debug Build",
-            "detail": "Build and run debug version"
+            "detail": "Build and run debug version with GUI"
         },
         {
             "type": "cppbuild",
@@ -189,12 +148,18 @@
                 "${workspaceFolder}/tests/cpu/nestest_validation.cpp",
                 "${workspaceFolder}/tests/cpu/undocumented_opcodes_tests.cpp",
                 "${workspaceFolder}/tests/cpu/interrupt_tests.cpp",
+                "${workspaceFolder}/tests/ppu/test_ppu_2c02.cpp",
+                "${workspaceFolder}/tests/ppu/vram_address_tests.cpp",
+                "${workspaceFolder}/tests/ppu/scrolling_tests.cpp",
+                "${workspaceFolder}/tests/ppu/sprite_tests.cpp",
+                "${workspaceFolder}/tests/ppu/timing_tests.cpp",
+                "${workspaceFolder}/tests/ppu/memory_mapping_tests.cpp",
                 "${workspaceFolder}/src/core/bus.cpp",
                 "${workspaceFolder}/src/apu/apu.cpp",
                 "${workspaceFolder}/src/cpu/cpu_6502.cpp",
                 "${workspaceFolder}/src/ppu/ppu.cpp",
                 "${workspaceFolder}/src/ppu/ppu_memory.cpp",
-                "${workspaceFolder}/src/ppu/nes_palette.cpp",
+                "${workspaceFolder}/src/memory/ram.cpp",
                 "-I${workspaceFolder}/include",
                 "-I${workspaceFolder}/tests",
                 "-o",
@@ -210,7 +175,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "detail": "Build all unit tests including CPU tests with Catch2 framework. NOTE: Add new test and source .cpp files to the args list when created (exclude main.cpp from src)"
+            "detail": "Build all unit tests including CPU and PPU tests with Catch2 framework. NOTE: Add new test and source .cpp files to the args list when created (exclude main.cpp from src)"
         },
         {
             "type": "shell",
@@ -230,59 +195,6 @@
             ],
             "group": "test",
             "detail": "Run all unit tests with verbose output"
-        },
-        {
-            "label": "Build and Run GUI",
-            "type": "shell",
-            "command": "c:\\msys64\\ucrt64\\bin\\g++.exe",
-            "args": [
-                "-fdiagnostics-color=always",
-                "-g3",
-                "-O0",
-                "-std=c++23",
-                "-Wall",
-                "-Wextra",
-                "${workspaceFolder}/src/main.cpp",
-                "${workspaceFolder}/src/core/bus.cpp",
-                "${workspaceFolder}/src/apu/apu.cpp",
-                "${workspaceFolder}/src/cpu/cpu_6502.cpp",
-                "${workspaceFolder}/src/ppu/ppu.cpp",
-                "${workspaceFolder}/src/ppu/ppu_memory.cpp",
-                "${workspaceFolder}/src/cartridge/cartridge.cpp",
-                "${workspaceFolder}/src/cartridge/rom_loader.cpp",
-                "${workspaceFolder}/src/cartridge/mappers/mapper_000.cpp",
-                "${workspaceFolder}/src/gui/gui_application.cpp",
-                "${workspaceFolder}/src/gui/style/retro_theme.cpp",
-                "${workspaceFolder}/src/gui/panels/cpu_state_panel.cpp",
-                "${workspaceFolder}/src/gui/panels/disassembler_panel.cpp",
-                "${workspaceFolder}/src/gui/panels/memory_viewer_panel.cpp",
-                "${workspaceFolder}/src/gui/panels/rom_loader_panel.cpp",
-                "${workspaceFolder}/src/gui/panels/ppu_viewer_panel.cpp",
-                "${workspaceFolder}/src/gui/panels/timing_panel.cpp",
-                "${workspaceFolder}/third_party/imgui/imgui.cpp",
-                "${workspaceFolder}/third_party/imgui/imgui_demo.cpp",
-                "${workspaceFolder}/third_party/imgui/imgui_draw.cpp",
-                "${workspaceFolder}/third_party/imgui/imgui_tables.cpp",
-                "${workspaceFolder}/third_party/imgui/imgui_widgets.cpp",
-                "${workspaceFolder}/third_party/imgui/backends/imgui_impl_sdl2.cpp",
-                "${workspaceFolder}/third_party/imgui/backends/imgui_impl_opengl3.cpp",
-                "-I${workspaceFolder}/include",
-                "-I${workspaceFolder}/third_party/imgui",
-                "-I${workspaceFolder}/third_party/imgui/backends",
-                "-IC:/msys64/ucrt64/include/SDL2",
-                "-IC:/msys64/ucrt64/include",
-                "-LC:/msys64/ucrt64/lib",
-                "-lmingw32",
-                "-lSDL2main",
-                "-lSDL2",
-                "-lSDL2_image",
-                "-lSDL2_ttf",
-                "-lopengl32",
-                "-DNES_GUI_ENABLED",
-                "-o",
-                "${workspaceFolder}/build/debug/VibeNES_GUI.exe"
-            ],
-            "group": "build"
         }
     ],
     "version": "2.0.0"
