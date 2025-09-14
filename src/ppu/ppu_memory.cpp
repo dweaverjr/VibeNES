@@ -85,19 +85,26 @@ uint16_t PPUMemory::map_nametable_address(uint16_t address) {
 	uint16_t offset = address - PPUMemoryMap::NAMETABLE_0_START;
 
 	// Handle mirroring based on cartridge mirroring mode
+	// NES has only 2KB VRAM which holds 2 nametables
 	if (vertical_mirroring_) {
 		// Vertical mirroring: nametables 0 and 2 share memory, 1 and 3 share memory
+		// NT0 ($2000-$23FF) -> VRAM $0000-$03FF
+		// NT1 ($2400-$27FF) -> VRAM $0400-$07FF
+		// NT2 ($2800-$2BFF) -> VRAM $0000-$03FF (mirror of NT0)
+		// NT3 ($2C00-$2FFF) -> VRAM $0400-$07FF (mirror of NT1)
 		if (offset >= 0x800) {
 			offset -= 0x800; // Mirror nametables 2,3 to 0,1
 		}
 	} else {
 		// Horizontal mirroring: nametables 0 and 1 share memory, 2 and 3 share memory
-		if (offset >= 0x400 && offset < 0x800) {
-			offset -= 0x400; // Mirror nametable 1 to 0
-		} else if (offset >= 0xC00) {
-			offset -= 0x800; // Mirror nametable 3 to 1
-		} else if (offset >= 0x800) {
-			offset -= 0x400; // Mirror nametable 2 to 1
+		// NT0 ($2000-$23FF) -> VRAM $0000-$03FF
+		// NT1 ($2400-$27FF) -> VRAM $0000-$03FF (mirror of NT0)
+		// NT2 ($2800-$2BFF) -> VRAM $0400-$07FF
+		// NT3 ($2C00-$2FFF) -> VRAM $0400-$07FF (mirror of NT2)
+		if (offset >= 0x800) {
+			offset -= 0x400; // Map nametables 2,3 to upper 1KB
+		} else if (offset >= 0x400) {
+			offset -= 0x400; // Map nametable 1 to lower 1KB (mirror of NT0)
 		}
 	}
 

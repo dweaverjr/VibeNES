@@ -20,7 +20,8 @@ class MemoryMappingTestFixture {
 		ppu_memory = std::make_shared<PPUMemory>();
 
 		bus->connect_ram(ram);
-		ppu = std::make_unique<PPU>(bus.get());
+		ppu = std::make_unique<PPU>();
+		ppu->connect_bus(bus.get());
 		ppu->reset();
 	}
 
@@ -88,7 +89,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Pattern Table Mapping", "[ppu][memor
 
 		// Advance to VBlank
 		while (ppu->get_current_scanline() != 241) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 
 		uint8_t data = read_vram(0x0100);
@@ -337,7 +338,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 
 		// Advance to visible scanline
 		while (ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 
 		// Try to access VRAM during rendering
@@ -354,7 +355,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 
 		// Advance to visible scanline
 		while (ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 
 		// Palette access should still work during rendering
@@ -369,11 +370,11 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 
 		// Advance to sprite evaluation time (cycles 65-256)
 		while (ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 
 		while (ppu->get_current_cycle() < 65) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 
 		// OAM writes should be ignored during sprite evaluation

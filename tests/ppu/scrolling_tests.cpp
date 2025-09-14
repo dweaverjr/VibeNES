@@ -19,7 +19,8 @@ class ScrollTestFixture {
 		ppu_memory = std::make_shared<PPUMemory>();
 
 		bus->connect_ram(ram);
-		ppu = std::make_unique<PPU>(bus.get());
+		ppu = std::make_unique<PPU>();
+		ppu->connect_bus(bus.get());
 		ppu->reset();
 	}
 
@@ -43,19 +44,19 @@ class ScrollTestFixture {
 
 	void advance_to_scanline(int target_scanline) {
 		while (ppu->get_current_scanline() < target_scanline) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
 	void advance_to_cycle(int target_cycle) {
 		while (ppu->get_current_cycle() < target_cycle) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
 	void advance_ppu_cycles(int cycles) {
 		for (int i = 0; i < cycles; i++) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 

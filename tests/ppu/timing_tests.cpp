@@ -19,7 +19,8 @@ class TimingTestFixture {
 		ppu_memory = std::make_shared<PPUMemory>();
 
 		bus->connect_ram(ram);
-		ppu = std::make_unique<PPU>(bus.get());
+		ppu = std::make_unique<PPU>();
+		ppu->connect_bus(bus.get());
 		ppu->reset();
 	}
 
@@ -33,26 +34,26 @@ class TimingTestFixture {
 
 	void advance_to_scanline(int target_scanline) {
 		while (ppu->get_current_scanline() < target_scanline) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
 	void advance_to_cycle(int target_cycle) {
 		while (ppu->get_current_cycle() < target_cycle) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
 	void advance_ppu_cycles(int cycles) {
 		for (int i = 0; i < cycles; i++) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
 	void advance_full_frame() {
-		int start_frame = ppu->get_current_frame();
-		while (ppu->get_current_frame() == start_frame) {
-			ppu->clock();
+		uint64_t start_frame = ppu->get_frame_count();
+		while (ppu->get_frame_count() == start_frame) {
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
@@ -65,11 +66,11 @@ class TimingTestFixture {
 
 TEST_CASE_METHOD(TimingTestFixture, "Frame Timing", "[ppu][timing][frame]") {
 	SECTION("Frame should have correct total cycles") {
-		int start_frame = ppu->get_current_frame();
+		uint64_t start_frame = ppu->get_frame_count();
 		int cycle_count = 0;
 
-		while (ppu->get_current_frame() == start_frame) {
-			ppu->clock();
+		while (ppu->get_frame_count() == start_frame) {
+			ppu->tick(CpuCycle{1});
 			cycle_count++;
 		}
 
@@ -87,10 +88,10 @@ TEST_CASE_METHOD(TimingTestFixture, "Frame Timing", "[ppu][timing][frame]") {
 		advance_full_frame();
 
 		int odd_frame_cycles = 0;
-		int start_frame = ppu->get_current_frame();
+		uint64_t start_frame = ppu->get_frame_count();
 
-		while (ppu->get_current_frame() == start_frame) {
-			ppu->clock();
+		while (ppu->get_frame_count() == start_frame) {
+			ppu->tick(CpuCycle{1});
 			odd_frame_cycles++;
 		}
 
@@ -99,10 +100,10 @@ TEST_CASE_METHOD(TimingTestFixture, "Frame Timing", "[ppu][timing][frame]") {
 
 		// Next frame (even) should be full length
 		int even_frame_cycles = 0;
-		start_frame = ppu->get_current_frame();
+		start_frame = ppu->get_frame_count();
 
-		while (ppu->get_current_frame() == start_frame) {
-			ppu->clock();
+		while (ppu->get_frame_count() == start_frame) {
+			ppu->tick(CpuCycle{1});
 			even_frame_cycles++;
 		}
 

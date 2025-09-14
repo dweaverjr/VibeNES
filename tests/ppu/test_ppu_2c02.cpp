@@ -25,7 +25,8 @@ class PPUTestFixture {
 		bus->connect_ram(ram);
 
 		// Create PPU
-		ppu = std::make_unique<PPU>(bus.get());
+		ppu = std::make_unique<PPU>();
+		ppu->connect_bus(bus.get());
 
 		// Initialize PPU state
 		ppu->reset();
@@ -70,14 +71,14 @@ class PPUTestFixture {
 	// Helper function to advance PPU by specific number of cycles
 	void advance_ppu_cycles(int cycles) {
 		for (int i = 0; i < cycles; i++) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
 	// Helper function to advance to specific scanline
 	void advance_to_scanline(int target_scanline) {
 		while (ppu->get_current_scanline() < target_scanline) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 

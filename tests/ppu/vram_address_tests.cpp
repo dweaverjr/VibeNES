@@ -20,7 +20,8 @@ class VRAMAddressTestFixture {
 		ppu_memory = std::make_shared<PPUMemory>();
 
 		bus->connect_ram(ram);
-		ppu = std::make_unique<PPU>(bus.get());
+		ppu = std::make_unique<PPU>();
+		ppu->connect_bus(bus.get());
 		ppu->reset();
 	}
 
@@ -44,7 +45,7 @@ class VRAMAddressTestFixture {
 
 	void advance_ppu_cycles(int cycles) {
 		for (int i = 0; i < cycles; i++) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 

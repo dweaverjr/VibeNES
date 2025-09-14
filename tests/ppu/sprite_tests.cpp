@@ -20,7 +20,8 @@ class SpriteTestFixture {
 		ppu_memory = std::make_shared<PPUMemory>();
 
 		bus->connect_ram(ram);
-		ppu = std::make_unique<PPU>(bus.get());
+		ppu = std::make_unique<PPU>();
+		ppu->connect_bus(bus.get());
 		ppu->reset();
 
 		// Clear OAM
@@ -53,19 +54,19 @@ class SpriteTestFixture {
 
 	void advance_to_scanline(int target_scanline) {
 		while (ppu->get_current_scanline() < target_scanline) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
 	void advance_to_cycle(int target_cycle) {
 		while (ppu->get_current_cycle() < target_cycle) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
 	void advance_ppu_cycles(int cycles) {
 		for (int i = 0; i < cycles; i++) {
-			ppu->clock();
+			ppu->tick(CpuCycle{1});
 		}
 	}
 
@@ -293,7 +294,7 @@ TEST_CASE_METHOD(SpriteTestFixture, "Sprite Timing", "[ppu][sprites][timing]") {
 		// During sprite evaluation
 		advance_to_cycle(65);
 		advance_ppu_cycles(191); // Through cycle 256
-		// Sprite evaluation should be complete
+								 // Sprite evaluation should be complete
 	}
 
 	SECTION("Sprite rendering should occur during visible cycles") {
@@ -362,7 +363,7 @@ TEST_CASE_METHOD(SpriteTestFixture, "OAM DMA", "[ppu][sprites][oam_dma]") {
 	SECTION("OAM DMA should copy 256 bytes") {
 		// Set up some data in RAM at page $02
 		for (uint16_t addr = 0x0200; addr < 0x0300; addr++) {
-			bus->write_bus(addr, static_cast<uint8_t>(addr & 0xFF));
+			bus->write(addr, static_cast<uint8_t>(addr & 0xFF));
 		}
 
 		// Trigger OAM DMA
