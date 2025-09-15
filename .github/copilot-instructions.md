@@ -30,9 +30,10 @@ You are helping develop a cycle-accurate Nintendo Entertainment System (NES) emu
 - **Memory System**: ✅ Complete NES memory map with proper APU/controller dual-purpose register handling
 - **Cartridge System**: ✅ Complete iNES ROM loading with Mapper 0 (NROM) support and GUI file browser
 - **PPU (Picture Processing Unit)**: ✅ Complete Phase 1-4 implementation with cycle-accurate rendering
-- **GUI Framework**: ✅ SDL2 + ImGui integration with debugging panels and ROM loading interface
-- **Testing Framework**: ✅ Comprehensive test suite with Catch2
-- **Build System**: ✅ VS Code tasks for debug/release builds
+- **GUI Framework**: ✅ SDL2 + ImGui integration with 6 debugging panels and ROM loading interface
+- **Testing Framework**: ✅ Comprehensive test suite with Catch2 including 12 PPU test files
+- **Build System**: ✅ VS Code tasks for debug/release builds with proper ImGui/SDL2 integration
+- **Mapper Foundation**: ⚠️ Mapper 0 (NROM) complete, infrastructure ready for Mappers 1-4 (stub files created)
 
 ## CPU State GUI Development Plan
 **Current Phase**: Phase 3 - Advanced Debugging Features Complete
@@ -101,11 +102,11 @@ $3F20-$3FFF: Palette RAM mirrors
 - **CPU (6502)**: ✅ Complete implementation with all 256 opcodes and hardware-accurate startup
 - **PPU (Picture Processing Unit)**: ✅ Complete Phase 1-4 implementation with cycle-accurate rendering
 - **APU (Audio Processing Unit)**: ⚠️ Stub implementation (functional for register access)
-- **Mappers**: ✅ Mapper 0 (NROM) complete, factory pattern established
+- **Mappers**: ✅ Mapper 0 (NROM) complete implementation, ⚠️ Mappers 1-4 stub files created but not implemented
 - **Bus**: ✅ Complete memory mapping with dual-purpose register handling
-- **Cartridge System**: ✅ Complete iNES ROM loading with GUI integration
+- **Cartridge System**: ✅ Complete iNES ROM loading with GUI integration, mapper factory pattern with runtime mapper selection
 - **Disassembler**: ✅ Complete 6502 disassembler covering all opcodes
-- **GUI Framework**: ✅ Complete SDL2 + ImGui debugging interface
+- **GUI Framework**: ✅ Complete SDL2 + ImGui debugging interface with 6 specialized panels (CPU state, disassembler, memory viewer, ROM loader, PPU viewer, timing)
 
 ### Build and Testing Commands
 - **VS Code Tasks** (Preferred method):
@@ -113,12 +114,19 @@ $3F20-$3FFF: Palette RAM mirrors
   - **Run All Tests**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Tests"
   - **Run Tests Verbose**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Tests Verbose"
   - **Debug Build**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Debug Build"
+  - **Run Debug**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Debug"
 
   Note: The VS Code task system automatically includes all necessary test and source files:
   - All test files: `tests/test_main.cpp tests/catch2/catch_amalgamated.cpp tests/**/*.cpp`
   - All required source files: `src/**/*.cpp` (exclude main.cpp for tests)
   - Include paths: `-Iinclude -Itests`
   - Output: `build/debug/VibeNES_All_Tests.exe`
+
+### Key Build Notes
+- **Debug Build**: Includes full GUI with 6 debugging panels (CPU state, disassembler, memory viewer, ROM loader, PPU viewer, timing)
+- **Test Build**: Includes 12 PPU test files and comprehensive CPU instruction tests
+- **Dependencies**: SDL2, ImGui (included in third_party/), Catch2 (amalgamated)
+- **Stub Mapper Files**: Empty .cpp files exist for Mappers 1-4, ready for implementation
 
 ### CPU Implementation Best Practices
 - **Manual PC management**: For multi-byte instructions, read bytes individually and increment PC explicitly
@@ -166,6 +174,13 @@ When tests fail with unexpected behavior (wrong values, "unknown opcode" errors)
    // GOOD - Within RAM range
    bus->write(0x0500, 0x42);  // Stored in actual RAM
    ```
+
+### Mapper System Architecture
+- **Current Implementation**: Only Mapper 0 (NROM) is fully implemented
+- **Infrastructure Ready**: Stub files exist for Mappers 1-4 (MMC1, UxROM, CNROM, MMC3)
+- **Factory Pattern**: `Cartridge::create_mapper()` handles runtime mapper selection
+- **Base Class**: `Mapper` interface defines CPU/PPU memory access and mirroring
+- **Empty Files**: `mapper_factory.cpp`, `mapper.cpp`, and `mapper_00[1-4].cpp` exist but are empty - ready for implementation
 
 ### Memory System Patterns
 - **Address space partitioning**: RAM (0x0000-0x1FFF), PPU (0x2000-0x3FFF), APU (0x4000-0x401F), Open bus elsewhere
