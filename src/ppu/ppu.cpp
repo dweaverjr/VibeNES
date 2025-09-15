@@ -380,20 +380,6 @@ void PPU::write_oamaddr(uint8_t value) {
 }
 
 void PPU::write_oamdata(uint8_t value) {
-	// Debug sprite 0 OAM writes
-	if (oam_address_ < 4) {
-		static bool debug_oam = true;
-		if (debug_oam) {
-			const char *field_names[] = {"Y", "Tile", "Attr", "X"};
-			printf("Sprite 0 OAM[%d] (%s) = $%02X\n", oam_address_, field_names[oam_address_], value);
-			if (oam_address_ == 3) {
-				printf("Sprite 0 setup complete: Y=%d, Tile=$%02X, Attr=$%02X, X=%d\n", memory_.get_oam()[0],
-					   memory_.get_oam()[1], memory_.get_oam()[2], value);
-				debug_oam = false; // Only show first setup
-			}
-		}
-	}
-
 	memory_.write_oam(oam_address_, value);
 	oam_address_++; // Auto-increment OAM address
 }
@@ -413,19 +399,15 @@ void PPU::write_ppuscroll(uint8_t value) {
 }
 
 void PPU::write_ppuaddr(uint8_t value) {
-	printf("PPUADDR write: $%02X (toggle=%d)\n", value, write_toggle_);
-
 	if (!write_toggle_) {
 		// First write: high byte
 		temp_vram_address_ = (temp_vram_address_ & 0x00FF) | ((static_cast<uint16_t>(value) & 0x3F) << 8);
 		write_toggle_ = true;
-		printf("  High byte: temp_vram=$%04X\n", temp_vram_address_);
 	} else {
 		// Second write: low byte
 		temp_vram_address_ = (temp_vram_address_ & 0xFF00) | value;
 		vram_address_ = temp_vram_address_;
 		write_toggle_ = false;
-		printf("  Low byte: temp_vram=$%04X, vram=$%04X\n", temp_vram_address_, vram_address_);
 	}
 }
 
@@ -528,15 +510,6 @@ void PPU::check_nmi() {
 		(control_register_ & PPUConstants::PPUCTRL_NMI_MASK) && cpu_) {
 		// Signal NMI to CPU
 		cpu_->trigger_nmi();
-
-		// Debug NMI generation
-		static uint64_t last_nmi_frame = 0;
-		if (frame_counter_ > last_nmi_frame + 1000) {
-			printf("NMI generated at frame %llu (VBlank=%s, NMI_EN=%s)\n", frame_counter_,
-				   (status_register_ & PPUConstants::PPUSTATUS_VBLANK_MASK) ? "ON" : "OFF",
-				   (control_register_ & PPUConstants::PPUCTRL_NMI_MASK) ? "ON" : "OFF");
-			last_nmi_frame = frame_counter_;
-		}
 	}
 }
 
@@ -717,13 +690,6 @@ uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority) {
 				uint8_t bg_pixel = get_background_pixel_at_current_position();
 				if (check_sprite_0_hit(bg_pixel, palette_index, current_x)) {
 					status_register_ |= PPUConstants::PPUSTATUS_SPRITE0_MASK;
-					// Debug sprite 0 hit
-					static int hit_count = 0;
-					if (hit_count < 5) {
-						printf("SPRITE 0 HIT! Scanline=%d X=%d BG=%d SPR=%d\n", current_scanline_, current_x, bg_pixel,
-							   palette_index);
-						hit_count++;
-					}
 				}
 			}
 
@@ -809,37 +775,6 @@ void PPU::evaluate_sprites_for_scanline() {
 			// Track sprite 0
 			if (sprite_index == 0) {
 				sprite_0_on_scanline_ = true;
-				// Debug sprite 0 position changes (only actual changes)
-				static uint8_t last_x = 255, last_y = 255, last_tile = 255;
-				static bool first_log = true;
-				static uint64_t last_status_frame = 0;
-
-				// Log actual position/tile changes
-				if (sprite.x_position != last_x || sprite.y_position != last_y || sprite.tile_index != last_tile ||
-					first_log) {
-					printf("Sprite 0 ACTUAL change: (%d,%d) tile=$%02X attr=$%02X frame=%llu scanline=%d\n",
-						   sprite.x_position, sprite.y_position, sprite.tile_index, oam_data[base_addr + 2],
-						   frame_counter_, current_scanline_);
-
-					// Check if this position can generate hits
-					if (sprite.x_position > 0 && sprite.y_position > 0) {
-						printf("  -> Sprite 0 now at valid hit position!\n");
-					} else {
-						printf("  -> Still at invalid position for hits (X=0 or Y=0)\n");
-					}
-
-					last_x = sprite.x_position;
-					last_y = sprite.y_position;
-					last_tile = sprite.tile_index;
-					first_log = false;
-					last_status_frame = frame_counter_;
-				}
-				// Periodic status update (every 1000 frames if no changes)
-				else if (frame_counter_ > last_status_frame + 1000) {
-					printf("Sprite 0 status: Still at (%d,%d) after %llu frames\n", sprite.x_position,
-						   sprite.y_position, frame_counter_);
-					last_status_frame = frame_counter_;
-				}
 			}
 
 			sprite_count_current_scanline_++;
@@ -1072,7 +1007,6 @@ void PPU::load_shift_registers() {
 	// Load the next tile data into the shift registers (every 8 cycles)
 	// This gives us the 2-tile lookahead that real hardware has
 
-	// Debug: Log shift register loading for interesting scanlines only
 	// Real NES hardware: New tile data is loaded into the LOW 8 bits
 	// Every pixel cycle, shift registers shift LEFT, and we read from bit 15
 	// This creates the proper 2-tile pipeline: current tile shifts out high bits,
@@ -1176,8 +1110,6 @@ void PPU::perform_tile_fetch_cycle() {
 		bg_shift_registers_.next_tile_attribute = tile_fetch_state_.current_attribute;
 		bg_shift_registers_.next_tile_pattern_low = tile_fetch_state_.current_pattern_low;
 		bg_shift_registers_.next_tile_pattern_high = tile_fetch_state_.current_pattern_high;
-
-		// Debug: Log what tile we just fetched for interesting scanlines
 	} break;
 
 	default:
