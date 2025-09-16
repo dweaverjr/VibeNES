@@ -20,9 +20,10 @@ class VRAMAddressTestFixture {
 		ppu_memory = std::make_shared<PPUMemory>();
 
 		bus->connect_ram(ram);
-		ppu = std::make_unique<PPU>();
+		ppu = std::make_shared<PPU>();
+		bus->connect_ppu(ppu);
 		ppu->connect_bus(bus.get());
-		ppu->reset();
+		ppu->power_on();
 	}
 
 	void write_ppu_register(uint16_t address, uint8_t value) {
@@ -53,7 +54,7 @@ class VRAMAddressTestFixture {
 	std::unique_ptr<SystemBus> bus;
 	std::shared_ptr<Ram> ram;
 	std::shared_ptr<PPUMemory> ppu_memory;
-	std::unique_ptr<PPU> ppu;
+	std::shared_ptr<PPU> ppu;
 };
 
 TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Increment", "[ppu][vram][address]") {

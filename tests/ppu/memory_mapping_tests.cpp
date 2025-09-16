@@ -22,7 +22,7 @@ class MemoryMappingTestFixture {
 		bus->connect_ram(ram);
 		ppu = std::make_unique<PPU>();
 		ppu->connect_bus(bus.get());
-		ppu->reset();
+		ppu->power_on();
 	}
 
 	void write_ppu_register(uint16_t address, uint8_t value) {
@@ -88,8 +88,14 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Pattern Table Mapping", "[ppu][memor
 		// Should be accessible during VBlank
 
 		// Advance to VBlank
-		while (ppu->get_current_scanline() != 241) {
+		int safety_counter = 0;
+		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+		while (ppu->get_current_scanline() != 241 && safety_counter < MAX_CYCLES) {
 			ppu->tick(CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= MAX_CYCLES) {
+			throw std::runtime_error("Loop hit safety limit - possible infinite loop");
 		}
 
 		uint8_t data = read_vram(0x0100);
@@ -337,8 +343,14 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 		write_ppu_register(0x2001, 0x18);
 
 		// Advance to visible scanline
-		while (ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) {
+		int safety_counter = 0;
+		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+		while ((ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) && safety_counter < MAX_CYCLES) {
 			ppu->tick(CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= MAX_CYCLES) {
+			throw std::runtime_error("Loop hit safety limit - possible infinite loop");
 		}
 
 		// Try to access VRAM during rendering
@@ -354,8 +366,15 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 		write_ppu_register(0x2001, 0x18);
 
 		// Advance to visible scanline
-		while (ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) {
+		int safety_counter_2 = 0;
+		const int MAX_CYCLES_2 = 100000; // Safety limit to prevent infinite loops
+		while ((ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) &&
+			   safety_counter_2 < MAX_CYCLES_2) {
 			ppu->tick(CpuCycle{1});
+			safety_counter_2++;
+		}
+		if (safety_counter_2 >= MAX_CYCLES_2) {
+			throw std::runtime_error("Loop hit safety limit - possible infinite loop");
 		}
 
 		// Palette access should still work during rendering
@@ -369,12 +388,25 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 		write_ppu_register(0x2001, 0x10);
 
 		// Advance to sprite evaluation time (cycles 65-256)
-		while (ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) {
+		int safety_counter_3 = 0;
+		const int MAX_CYCLES_3 = 100000; // Safety limit to prevent infinite loops
+		while ((ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) &&
+			   safety_counter_3 < MAX_CYCLES_3) {
 			ppu->tick(CpuCycle{1});
+			safety_counter_3++;
+		}
+		if (safety_counter_3 >= MAX_CYCLES_3) {
+			throw std::runtime_error("Loop hit safety limit - possible infinite loop");
 		}
 
-		while (ppu->get_current_cycle() < 65) {
+		int safety_counter_4 = 0;
+		const int MAX_CYCLES_4 = 100000; // Safety limit to prevent infinite loops
+		while (ppu->get_current_cycle() < 65 && safety_counter_4 < MAX_CYCLES_4) {
 			ppu->tick(CpuCycle{1});
+			safety_counter_4++;
+		}
+		if (safety_counter_4 >= MAX_CYCLES_4) {
+			throw std::runtime_error("Loop hit safety limit - possible infinite loop");
 		}
 
 		// OAM writes should be ignored during sprite evaluation

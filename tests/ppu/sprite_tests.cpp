@@ -20,9 +20,10 @@ class SpriteTestFixture {
 		ppu_memory = std::make_shared<PPUMemory>();
 
 		bus->connect_ram(ram);
-		ppu = std::make_unique<PPU>();
+		ppu = std::make_shared<PPU>();
+		bus->connect_ppu(ppu);
 		ppu->connect_bus(bus.get());
-		ppu->reset();
+		ppu->power_on();
 
 		// Clear OAM
 		clear_oam();
@@ -53,14 +54,26 @@ class SpriteTestFixture {
 	}
 
 	void advance_to_scanline(int target_scanline) {
-		while (ppu->get_current_scanline() < target_scanline) {
+		int safety_counter = 0;
+		int max_cycles = 100000; // Safety limit
+		while (ppu->get_current_scanline() < target_scanline && safety_counter < max_cycles) {
 			ppu->tick(CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= max_cycles) {
+			FAIL("advance_to_scanline hit safety limit - PPU may not be properly connected");
 		}
 	}
 
 	void advance_to_cycle(int target_cycle) {
-		while (ppu->get_current_cycle() < target_cycle) {
+		int safety_counter = 0;
+		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+		while (ppu->get_current_cycle() < target_cycle && safety_counter < MAX_CYCLES) {
 			ppu->tick(CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= MAX_CYCLES) {
+			throw std::runtime_error("advance_to_cycle hit safety limit - possible infinite loop");
 		}
 	}
 
@@ -82,7 +95,7 @@ class SpriteTestFixture {
 	std::unique_ptr<SystemBus> bus;
 	std::shared_ptr<Ram> ram;
 	std::shared_ptr<PPUMemory> ppu_memory;
-	std::unique_ptr<PPU> ppu;
+	std::shared_ptr<PPU> ppu;
 };
 
 TEST_CASE_METHOD(SpriteTestFixture, "Sprite Evaluation Basic", "[ppu][sprites][evaluation]") {

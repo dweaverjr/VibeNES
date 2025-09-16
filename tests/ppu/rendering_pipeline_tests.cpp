@@ -10,17 +10,17 @@ using namespace nes;
 class RenderingPipelineTestFixture {
   public:
 	RenderingPipelineTestFixture() {
-		bus = std::make_unique<SystemBus>();
-		ram = std::make_shared<Ram>();
-		ppu_memory = std::make_shared<PPUMemory>();
+		bus = std::make_unique<nes::SystemBus>();
+		ram = std::make_shared<nes::Ram>();
+		ppu_memory = std::make_shared<nes::PPUMemory>();
 
 		bus->connect_ram(ram);
 
-		ppu = std::make_shared<PPU>();
+		ppu = std::make_shared<nes::PPU>();
 		ppu->connect_bus(bus.get());
 		bus->connect_ppu(ppu);
 
-		ppu->reset();
+		ppu->power_on();
 
 		// Set up basic rendering environment
 		setup_basic_graphics_data();
@@ -128,32 +128,56 @@ class RenderingPipelineTestFixture {
 
 	void advance_ppu_cycles(int cycles) {
 		for (int i = 0; i < cycles; i++) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick(nes::CpuCycle{1});
 		}
 	}
 
 	void advance_to_scanline(int target_scanline) {
-		while (ppu->get_current_scanline() != target_scanline) {
-			ppu->tick(CpuCycle{1});
+		int safety_counter = 0;
+		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+		while (ppu->get_current_scanline() < target_scanline && safety_counter < MAX_CYCLES) {
+			ppu->tick(nes::CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= MAX_CYCLES) {
+			throw std::runtime_error("advance_to_scanline hit safety limit - possible infinite loop");
 		}
 	}
 
 	void advance_to_cycle(int target_cycle) {
-		while (ppu->get_current_cycle() != target_cycle) {
-			ppu->tick(CpuCycle{1});
+		int safety_counter = 0;
+		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+		while (ppu->get_current_cycle() < target_cycle && safety_counter < MAX_CYCLES) {
+			ppu->tick(nes::CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= MAX_CYCLES) {
+			throw std::runtime_error("advance_to_cycle hit safety limit - possible infinite loop");
 		}
 	}
 
 	void advance_to_vblank() {
-		while (ppu->get_current_scanline() != 241) {
-			ppu->tick(CpuCycle{1});
+		int safety_counter = 0;
+		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+		while (ppu->get_current_scanline() != 241 && safety_counter < MAX_CYCLES) {
+			ppu->tick(nes::CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= MAX_CYCLES) {
+			throw std::runtime_error("advance_to_vblank hit safety limit - possible infinite loop");
 		}
 	}
 
 	void advance_to_rendering_start() {
 		// Advance to start of visible scanlines
-		while (ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) {
-			ppu->tick(CpuCycle{1});
+		int safety_counter = 0;
+		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+		while ((ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) && safety_counter < MAX_CYCLES) {
+			ppu->tick(nes::CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= MAX_CYCLES) {
+			throw std::runtime_error("advance_to_rendering_start hit safety limit - possible infinite loop");
 		}
 		advance_to_cycle(0);
 	}
@@ -174,10 +198,10 @@ class RenderingPipelineTestFixture {
 	}
 
   protected:
-	std::unique_ptr<SystemBus> bus;
-	std::shared_ptr<Ram> ram;
-	std::shared_ptr<PPUMemory> ppu_memory;
-	std::shared_ptr<PPU> ppu;
+	std::unique_ptr<nes::SystemBus> bus;
+	std::shared_ptr<nes::Ram> ram;
+	std::shared_ptr<nes::PPUMemory> ppu_memory;
+	std::shared_ptr<nes::PPU> ppu;
 };
 
 TEST_CASE_METHOD(RenderingPipelineTestFixture, "Background Tile Fetching", "[ppu][pipeline][background]") {

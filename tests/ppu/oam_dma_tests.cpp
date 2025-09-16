@@ -23,7 +23,7 @@ class OAMDMATestFixture {
 		ppu->connect_bus(bus.get());
 		bus->connect_ppu(ppu);
 
-		ppu->reset();
+		ppu->power_on();
 		cpu->reset();
 
 		// Clear OAM

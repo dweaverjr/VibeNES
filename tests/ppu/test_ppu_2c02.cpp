@@ -25,11 +25,12 @@ class PPUTestFixture {
 		bus->connect_ram(ram);
 
 		// Create PPU
-		ppu = std::make_unique<PPU>();
+		ppu = std::make_shared<PPU>();
 		ppu->connect_bus(bus.get());
+		bus->connect_ppu(ppu);
 
 		// Initialize PPU state
-		ppu->reset();
+		ppu->power_on();
 	}
 
 	// Helper function to create mock CHR data
@@ -77,8 +78,14 @@ class PPUTestFixture {
 
 	// Helper function to advance to specific scanline
 	void advance_to_scanline(int target_scanline) {
-		while (ppu->get_current_scanline() < target_scanline) {
+		int safety_counter = 0;
+		int max_cycles = 100000; // Safety limit
+		while (ppu->get_current_scanline() < target_scanline && safety_counter < max_cycles) {
 			ppu->tick(CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= max_cycles) {
+			FAIL("advance_to_scanline hit safety limit - PPU may not be properly connected");
 		}
 	}
 
@@ -86,7 +93,7 @@ class PPUTestFixture {
 	std::unique_ptr<SystemBus> bus;
 	std::shared_ptr<Ram> ram;
 	std::shared_ptr<PPUMemory> ppu_memory;
-	std::unique_ptr<PPU> ppu;
+	std::shared_ptr<PPU> ppu;
 };
 
 TEST_CASE_METHOD(PPUTestFixture, "PPU Construction", "[ppu][core]") {

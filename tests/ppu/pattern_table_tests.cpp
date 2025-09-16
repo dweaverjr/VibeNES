@@ -21,7 +21,7 @@ class PatternTableTestFixture {
 		ppu->connect_bus(bus.get());
 		bus->connect_ppu(ppu);
 
-		ppu->reset();
+		ppu->power_on();
 
 		// Set up some basic CHR data for testing
 		setup_test_chr_data();
@@ -150,8 +150,14 @@ class PatternTableTestFixture {
 	}
 
 	void advance_to_scanline(int target_scanline) {
-		while (ppu->get_current_scanline() != target_scanline) {
+		int safety_counter = 0;
+		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+		while (ppu->get_current_scanline() != target_scanline && safety_counter < MAX_CYCLES) {
 			ppu->tick(CpuCycle{1});
+			safety_counter++;
+		}
+		if (safety_counter >= MAX_CYCLES) {
+			throw std::runtime_error("advance_to_scanline hit safety limit - possible infinite loop");
 		}
 	}
 

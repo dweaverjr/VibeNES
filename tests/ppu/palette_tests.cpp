@@ -20,7 +20,7 @@ class PaletteTestFixture {
 		ppu->connect_bus(bus.get());
 		bus->connect_ppu(ppu);
 
-		ppu->reset();
+		ppu->power_on();
 	}
 
 	void write_ppu_register(uint16_t address, uint8_t value) {

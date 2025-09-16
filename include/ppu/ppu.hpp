@@ -35,7 +35,7 @@ class PPU : public Component {
 	void reset() override;
 	void power_on() override;
 	const char *get_name() const noexcept override {
-		return "PPU";
+		return "PPU 2C02";
 	}
 
 	// CPU interface - memory-mapped registers ($2000-$2007, mirrored through $3FFF)
