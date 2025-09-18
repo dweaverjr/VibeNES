@@ -47,7 +47,7 @@ class ScrollTestFixture {
 		int safety_counter = 0;
 		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
 		while (ppu->get_current_scanline() < target_scanline && safety_counter < MAX_CYCLES) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 			safety_counter++;
 		}
 		if (safety_counter >= MAX_CYCLES) {
@@ -59,7 +59,7 @@ class ScrollTestFixture {
 		int safety_counter = 0;
 		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
 		while (ppu->get_current_cycle() < target_cycle && safety_counter < MAX_CYCLES) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 			safety_counter++;
 		}
 		if (safety_counter >= MAX_CYCLES) {
@@ -69,7 +69,7 @@ class ScrollTestFixture {
 
 	void advance_ppu_cycles(int cycles) {
 		for (int i = 0; i < cycles; i++) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 		}
 	}
 

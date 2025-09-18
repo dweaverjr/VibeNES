@@ -36,6 +36,9 @@ class Cartridge final : public Component {
 	Byte ppu_read(Address address) const;
 	void ppu_write(Address address, Byte value);
 
+	// Mapper notifications (for MMC3 scanline counter, etc.)
+	void ppu_a12_toggle() const;
+
 	// ROM information
 	const RomData &get_rom_data() const noexcept {
 		return rom_data_;

@@ -43,6 +43,9 @@ class SystemBus final : public Component {
 	// Debug interface
 	void debug_print_memory_map() const;
 
+	// DMA interface
+	[[nodiscard]] bool is_dma_active() const noexcept;
+
   private:
 	// Connected components
 	std::shared_ptr<Ram> ram_;

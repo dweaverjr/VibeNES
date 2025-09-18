@@ -162,7 +162,6 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 		update_main_display_texture(ppu->get_frame_buffer());
 		// Clear the frame ready flag after we've processed the frame
 		if (display_mode_ == PPUDisplayMode::FRAME_COMPLETE && ppu->is_frame_ready()) {
-			printf("DEBUG: Clearing frame ready flag\n");
 			ppu->clear_frame_ready();
 		}
 	}

@@ -45,10 +45,16 @@ TEST_CASE("CPU Reset", "[cpu][reset]") {
 	CPU6502 cpu(bus.get());
 
 	SECTION("Reset should set PC from reset vector") {
-		// For now, manually set the PC since we don't have ROM mapped
-		// In a real NES, the reset vector would be in cartridge ROM
-		cpu.set_program_counter(0x0200);
+		// Set up reset vector at 0xFFFC-0xFFFD to point to 0x8000
+		bus->write(0xFFFC, 0x00); // Low byte of 0x8000
+		bus->write(0xFFFD, 0x80); // High byte of 0x8000
+
+		// Simulate proper NES startup sequence: power on then reset
+		cpu.power_on();
 		cpu.reset();
+
+		// Reset is processed during next instruction cycle
+		cpu.tick(cpu_cycles(7)); // Reset takes 7 cycles
 
 		// After reset, PC should be set to the default test reset vector
 		REQUIRE(cpu.get_program_counter() == 0x8000);
@@ -3830,113 +3836,111 @@ TEST_CASE("CPU Stack Operations - All Opcodes", "[cpu][instructions][stack][opco
 			std::function<void(const CPU6502 &)> verify;
 		};
 
-		std::vector<StackTest> tests = {{0x48, "PHA",
-										 [](CPU6502 &cpu, SystemBus *bus) {
-											 cpu.set_program_counter(0x0200);
-											 cpu.set_accumulator(0x42);
-											 cpu.set_stack_pointer(0xFF);
-											 bus->write(0x0200, 0x48);
-										 },
-										 [](const CPU6502 &cpu) {
-											 REQUIRE(cpu.get_accumulator() == 0x42);   // Accumulator unchanged
-											 REQUIRE(cpu.get_stack_pointer() == 0xFE); // Stack pointer decremented
-											 // Note: Can't easily verify stack contents without additional CPU
-											 // interface
-										 }},
+		std::vector<StackTest> tests = {
+			{0x48, "PHA",
+			 [](CPU6502 &cpu, SystemBus *bus) {
+				 cpu.set_program_counter(0x0200);
+				 cpu.set_accumulator(0x42);
+				 cpu.set_stack_pointer(0xFF);
+				 bus->write(0x0200, 0x48);
+			 },
+			 [](const CPU6502 &cpu) {
+				 REQUIRE(static_cast<int>(cpu.get_accumulator()) == 0x42);	 // Accumulator unchanged
+				 REQUIRE(static_cast<int>(cpu.get_stack_pointer()) == 0xFE); // Stack pointer decremented
+				 // Note: Can't easily verify stack contents without additional CPU
+				 // interface
+			 }},
 
-										{0x68, "PLA",
-										 [](CPU6502 &cpu, SystemBus *bus) {
-											 cpu.set_program_counter(0x0200);
-											 cpu.set_accumulator(0x00);
-											 cpu.set_stack_pointer(0xFE); // Stack pointer as if something was pushed
-											 bus->write(0x0200, 0x68);
-											 bus->write(0x01FF, 0x42); // Put value on stack
-										 },
-										 [](const CPU6502 &cpu) {
-											 REQUIRE(cpu.get_accumulator() == 0x42);   // Accumulator loaded from stack
-											 REQUIRE(cpu.get_stack_pointer() == 0xFF); // Stack pointer incremented
-											 REQUIRE(cpu.get_zero_flag() == false);	   // N=0, Z=0 for 0x42
-											 REQUIRE(cpu.get_negative_flag() == false);
-										 }},
+			{0x68, "PLA",
+			 [](CPU6502 &cpu, SystemBus *bus) {
+				 cpu.set_program_counter(0x0200);
+				 cpu.set_accumulator(0x00);
+				 cpu.set_stack_pointer(0xFE); // Stack pointer as if something was pushed
+				 bus->write(0x0200, 0x68);
+				 bus->write(0x01FF, 0x42); // Put value on stack
+			 },
+			 [](const CPU6502 &cpu) {
+				 REQUIRE(static_cast<int>(cpu.get_accumulator()) == 0x42);	 // Accumulator loaded from stack
+				 REQUIRE(static_cast<int>(cpu.get_stack_pointer()) == 0xFF); // Stack pointer incremented
+				 REQUIRE(cpu.get_zero_flag() == false);						 // N=0, Z=0 for 0x42
+				 REQUIRE(cpu.get_negative_flag() == false);
+			 }},
 
-										{0x68, "PLA Zero Flag",
-										 [](CPU6502 &cpu, SystemBus *bus) {
-											 cpu.set_program_counter(0x0200);
-											 cpu.set_accumulator(0xFF);
-											 cpu.set_stack_pointer(0xFE);
-											 bus->write(0x0200, 0x68);
-											 bus->write(0x01FF, 0x00); // Put zero on stack
-										 },
-										 [](const CPU6502 &cpu) {
-											 REQUIRE(cpu.get_accumulator() == 0x00);
-											 REQUIRE(cpu.get_zero_flag() == true); // Z=1 for zero
-											 REQUIRE(cpu.get_negative_flag() == false);
-										 }},
+			{0x68, "PLA Zero Flag",
+			 [](CPU6502 &cpu, SystemBus *bus) {
+				 cpu.set_program_counter(0x0200);
+				 cpu.set_accumulator(0xFF);
+				 cpu.set_stack_pointer(0xFE);
+				 bus->write(0x0200, 0x68);
+				 bus->write(0x01FF, 0x00); // Put zero on stack
+			 },
+			 [](const CPU6502 &cpu) {
+				 REQUIRE(static_cast<int>(cpu.get_accumulator()) == 0x00);
+				 REQUIRE(cpu.get_zero_flag() == true); // Z=1 for zero
+				 REQUIRE(cpu.get_negative_flag() == false);
+			 }},
 
-										{0x68, "PLA Negative Flag",
-										 [](CPU6502 &cpu, SystemBus *bus) {
-											 cpu.set_program_counter(0x0200);
-											 cpu.set_accumulator(0x00);
-											 cpu.set_stack_pointer(0xFE);
-											 bus->write(0x0200, 0x68);
-											 bus->write(0x01FF, 0x80); // Put negative value on stack
-										 },
-										 [](const CPU6502 &cpu) {
-											 REQUIRE(cpu.get_accumulator() == 0x80);
-											 REQUIRE(cpu.get_zero_flag() == false);
-											 REQUIRE(cpu.get_negative_flag() == true); // N=1 for 0x80
-										 }},
+			{0x68, "PLA Negative Flag",
+			 [](CPU6502 &cpu, SystemBus *bus) {
+				 cpu.set_program_counter(0x0200);
+				 cpu.set_accumulator(0x00);
+				 cpu.set_stack_pointer(0xFE);
+				 bus->write(0x0200, 0x68);
+				 bus->write(0x01FF, 0x80); // Put negative value on stack
+			 },
+			 [](const CPU6502 &cpu) {
+				 REQUIRE(static_cast<int>(cpu.get_accumulator()) == 0x80);
+				 REQUIRE(cpu.get_zero_flag() == false);
+				 REQUIRE(cpu.get_negative_flag() == true); // N=1 for 0x80
+			 }},
 
-										{0x08, "PHP",
-										 [](CPU6502 &cpu, SystemBus *bus) {
-											 cpu.set_program_counter(0x0200);
-											 cpu.set_stack_pointer(0xFF);
-											 // Set some flags for testing
-											 cpu.set_carry_flag(true);
-											 cpu.set_zero_flag(true);
-											 cpu.set_interrupt_flag(true);
-											 bus->write(0x0200, 0x08);
-										 },
-										 [](const CPU6502 &cpu) {
-											 REQUIRE(cpu.get_stack_pointer() == 0xFE); // Stack pointer decremented
-											 // Flags should remain unchanged
-											 REQUIRE(cpu.get_carry_flag() == true);
-											 REQUIRE(cpu.get_zero_flag() == true);
-											 REQUIRE(cpu.get_interrupt_flag() == true);
-										 }},
+			{0x08, "PHP",
+			 [](CPU6502 &cpu, SystemBus *bus) {
+				 cpu.set_program_counter(0x0200);
+				 cpu.set_stack_pointer(0xFF);
+				 // Set some flags for testing
+				 cpu.set_carry_flag(true);
+				 cpu.set_zero_flag(true);
+				 cpu.set_interrupt_flag(true);
+				 bus->write(0x0200, 0x08);
+			 },
+			 [](const CPU6502 &cpu) {
+				 REQUIRE(static_cast<int>(cpu.get_stack_pointer()) == 0xFE); // Stack pointer decremented
+				 // Flags should remain unchanged
+				 REQUIRE(cpu.get_carry_flag() == true);
+				 REQUIRE(cpu.get_zero_flag() == true);
+				 REQUIRE(cpu.get_interrupt_flag() == true);
+			 }},
 
-										{0x28, "PLP",
-										 [](CPU6502 &cpu, SystemBus *bus) {
-											 cpu.set_program_counter(0x0200);
-											 cpu.set_stack_pointer(0xFE);
-											 // Clear all flags initially
-											 cpu.set_carry_flag(false);
-											 cpu.set_zero_flag(false);
-											 cpu.set_interrupt_flag(false);
-											 cpu.set_decimal_flag(false);
-											 cpu.set_overflow_flag(false);
-											 cpu.set_negative_flag(false);
-											 bus->write(0x0200, 0x28);
-											 // Put status with some flags set on stack (C=1, Z=1, I=1)
-											 bus->write(0x01FF, 0x27); // 00100111 (unused bit always set)
-										 },
-										 [](const CPU6502 &cpu) {
-											 REQUIRE(cpu.get_stack_pointer() == 0xFF); // Stack pointer incremented
-											 // Flags should be restored from stack
-											 REQUIRE(cpu.get_carry_flag() == true);
-											 REQUIRE(cpu.get_zero_flag() == true);
-											 REQUIRE(cpu.get_interrupt_flag() == true);
-											 REQUIRE(cpu.get_decimal_flag() == false);
-											 REQUIRE(cpu.get_overflow_flag() == false);
-											 REQUIRE(cpu.get_negative_flag() == false);
-										 }}};
+			{0x28, "PLP",
+			 [](CPU6502 &cpu, SystemBus *bus) {
+				 cpu.set_program_counter(0x0200);
+				 cpu.set_stack_pointer(0xFE);
+				 // Clear all flags initially
+				 cpu.set_carry_flag(false);
+				 cpu.set_zero_flag(false);
+				 cpu.set_interrupt_flag(false);
+				 cpu.set_decimal_flag(false);
+				 cpu.set_overflow_flag(false);
+				 cpu.set_negative_flag(false);
+				 bus->write(0x0200, 0x28);
+				 // Put status with some flags set on stack (C=1, Z=1, I=1)
+				 bus->write(0x01FF, 0x27); // 00100111 (unused bit always set)
+			 },
+			 [](const CPU6502 &cpu) {
+				 REQUIRE(static_cast<int>(cpu.get_stack_pointer()) == 0xFF); // Stack pointer incremented
+				 // Flags should be restored from stack
+				 REQUIRE(cpu.get_carry_flag() == true);
+				 REQUIRE(cpu.get_zero_flag() == true);
+				 REQUIRE(cpu.get_interrupt_flag() == true);
+				 REQUIRE(cpu.get_decimal_flag() == false);
+				 REQUIRE(cpu.get_overflow_flag() == false);
+				 REQUIRE(cpu.get_negative_flag() == false);
+			 }}};
 
 		for (const auto &test : tests) {
 			DYNAMIC_SECTION("Testing " << test.name << " (0x" << std::hex << (int)test.opcode << ")") {
-				// Reset CPU state
-				cpu.reset();
-
-				// Set up test
+				// Set up test (no reset needed for individual instruction tests)
 				test.setup(cpu, bus.get());
 
 				// Execute instruction
@@ -4035,10 +4039,7 @@ TEST_CASE("CPU Status Flag Instructions - All Opcodes", "[cpu][instructions][fla
 
 		for (const auto &test : tests) {
 			DYNAMIC_SECTION("Testing " << test.name << " (0x" << std::hex << (int)test.opcode << ")") {
-				// Reset CPU state
-				cpu.reset();
-
-				// Set up test
+				// Set up test (no reset needed for individual instruction tests)
 				test.setup(cpu, bus.get());
 
 				// Store initial state of other flags to ensure they're not affected
@@ -4060,7 +4061,6 @@ TEST_CASE("CPU Status Flag Instructions - All Opcodes", "[cpu][instructions][fla
 
 	SECTION("Flag independence verification") {
 		// Test that flag instructions don't affect other flags
-		cpu.reset();
 		cpu.set_program_counter(0x0200);
 
 		// Set all flags to a known state
@@ -4091,7 +4091,6 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 	CPU6502 cpu(bus.get());
 
 	SECTION("TXS - Transfer X to Stack Pointer (0x9A)") {
-		cpu.reset();
 		cpu.set_program_counter(0x0200);
 		cpu.set_x_register(0x80);
 		cpu.set_stack_pointer(0xFF); // Initial stack pointer
@@ -4103,8 +4102,8 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 		cpu.execute_instruction();
 
 		// Verify results
-		REQUIRE(cpu.get_stack_pointer() == 0x80); // Stack pointer should match X register
-		REQUIRE(cpu.get_x_register() == 0x80);	  // X register unchanged
+		REQUIRE(static_cast<int>(cpu.get_stack_pointer()) == 0x80); // Stack pointer should match X register
+		REQUIRE(static_cast<int>(cpu.get_x_register()) == 0x80);	// X register unchanged
 		REQUIRE(cpu.get_program_counter() == 0x0201);
 
 		// TXS doesn't affect flags
@@ -4113,7 +4112,6 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 	}
 
 	SECTION("TSX - Transfer Stack Pointer to X (0xBA)") {
-		cpu.reset();
 		cpu.set_program_counter(0x0200);
 		cpu.set_stack_pointer(0x42);
 		cpu.set_x_register(0x00); // Initial X register
@@ -4135,7 +4133,6 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 	}
 
 	SECTION("TSX with zero result") {
-		cpu.reset();
 		cpu.set_program_counter(0x0200);
 		cpu.set_stack_pointer(0x00);
 
@@ -4148,7 +4145,6 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 	}
 
 	SECTION("TSX with negative result") {
-		cpu.reset();
 		cpu.set_program_counter(0x0200);
 		cpu.set_stack_pointer(0x80); // Bit 7 set
 
@@ -4168,7 +4164,6 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 	CPU6502 cpu(bus.get());
 
 	SECTION("BIT Zero Page (0x24) - Basic operation") {
-		cpu.reset();
 		cpu.set_program_counter(0x0200);
 		cpu.set_accumulator(0x0F); // 00001111
 
@@ -4190,7 +4185,6 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 	}
 
 	SECTION("BIT Absolute (0x2C) - Basic operation") {
-		cpu.reset();
 		cpu.set_program_counter(0x0200);
 		cpu.set_accumulator(0x50); // 01010000
 
@@ -4213,7 +4207,6 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 	}
 
 	SECTION("BIT with all flag combinations") {
-		cpu.reset();
 		cpu.set_program_counter(0x0200);
 
 		struct BitTest {
@@ -4236,7 +4229,6 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 		for (const auto &test : tests) {
 			DYNAMIC_SECTION("BIT test A=0x" << std::hex << (int)test.accumulator << " M=0x" << std::hex
 											<< (int)test.memory) {
-				cpu.reset();
 				cpu.set_program_counter(0x0200);
 				cpu.set_accumulator(test.accumulator);
 
@@ -4262,7 +4254,6 @@ TEST_CASE("CPU BRK Instruction", "[cpu][instructions][brk][interrupt][opcodes]")
 	CPU6502 cpu(bus.get());
 
 	SECTION("BRK (0x00) - Basic operation") {
-		cpu.reset();
 		cpu.set_program_counter(0x0300);
 		cpu.set_stack_pointer(0xFF);
 
@@ -4297,7 +4288,6 @@ TEST_CASE("CPU BRK Instruction", "[cpu][instructions][brk][interrupt][opcodes]")
 	}
 
 	SECTION("BRK preserves flags correctly") {
-		cpu.reset();
 		cpu.set_program_counter(0x0200);
 		cpu.set_stack_pointer(0xFF);
 

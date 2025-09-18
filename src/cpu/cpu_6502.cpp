@@ -21,7 +21,14 @@ void CPU6502::tick(CpuCycle cycles) {
 
 	// Execute instructions while we have cycles
 	while (cycles_remaining_.count() > 0) {
-		(void)execute_instruction(); // Discard return value in tick context
+		// Check if DMA is active - CPU should be halted during OAM DMA
+		if (bus_->is_dma_active()) {
+			// CPU is halted during DMA - consume one cycle and wait
+			cycles_remaining_ -= CpuCycle{1};
+		} else {
+			// Normal instruction execution
+			(void)execute_instruction(); // Discard return value in tick context
+		}
 	}
 }
 void CPU6502::reset() {
@@ -50,8 +57,8 @@ void CPU6502::power_on() {
 	x_register_ = 0x00;	 // Could be anything
 	y_register_ = 0x00;	 // Could be anything
 
-	// Stack pointer: Real hardware behavior varies, but often starts around 0xFD
-	stack_pointer_ = 0xFD; // More realistic than 0xFF
+	// Stack pointer: Real hardware behavior varies, but often starts around 0x00
+	stack_pointer_ = 0x00; // Will be decremented by 3 during reset to reach 0xFD
 
 	// Status register: Most bits undefined, but some have known behavior
 	status_.status_register_ = 0x20;	  // Unused flag always set
@@ -1946,10 +1953,11 @@ void CPU6502::PLA() {
 	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
 	// Cycle 2: Internal operation
 	consume_cycle();
-	// Cycle 3: Increment stack pointer (internal)
+	// Cycle 3: Increment stack pointer
 	consume_cycle();
-	// Cycle 4: Pull accumulator from stack
-	accumulator_ = pull_byte();
+	stack_pointer_++;
+	// Cycle 4: Read accumulator from stack
+	accumulator_ = read_byte(0x0100 + stack_pointer_);
 
 	// Update flags based on pulled value
 	update_zero_flag(accumulator_);
@@ -1974,10 +1982,11 @@ void CPU6502::PLP() {
 	// Cycle 1: Fetch opcode (already consumed in execute_instruction)
 	// Cycle 2: Internal operation
 	consume_cycle();
-	// Cycle 3: Increment stack pointer (internal)
+	// Cycle 3: Increment stack pointer
 	consume_cycle();
-	// Cycle 4: Pull status register from stack
-	status_.status_register_ = pull_byte();
+	stack_pointer_++;
+	// Cycle 4: Read status register from stack
+	status_.status_register_ = read_byte(0x0100 + stack_pointer_);
 	// Note: Bit 5 (unused flag) is always set, bit 4 (B flag) is ignored
 	status_.status_register_ |= 0x20u; // Ensure unused flag is set
 	status_.status_register_ &= 0xEFu; // Clear B flag (it doesn't exist in the actual register)

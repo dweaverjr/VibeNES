@@ -57,7 +57,8 @@ void PPUMemory::write_palette(uint8_t index, uint8_t value) {
 	uint8_t mapped_index = map_palette_address(index);
 
 	if (mapped_index < palette_ram_.size()) {
-		palette_ram_[mapped_index] = value;
+		// NES palette RAM is only 6 bits - mask out the upper 2 bits
+		palette_ram_[mapped_index] = value & 0x3F;
 	}
 }
 

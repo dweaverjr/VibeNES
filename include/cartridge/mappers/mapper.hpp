@@ -32,6 +32,12 @@ class Mapper {
 	enum class Mirroring { Horizontal, Vertical, SingleScreenLow, SingleScreenHigh, FourScreen };
 	virtual Mirroring get_mirroring() const noexcept = 0;
 
+	// PPU A12 line toggle notification (for MMC3 scanline counting)
+	virtual void ppu_a12_toggle() {
+		// Default implementation does nothing
+		// Override in mappers that need A12 monitoring (like MMC3)
+	}
+
   protected:
 	// Helper to check if address is in PRG ROM range
 	static constexpr bool is_prg_rom_address(Address address) noexcept {

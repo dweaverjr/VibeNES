@@ -313,7 +313,6 @@ void APU::write(uint16_t address, uint8_t value) {
 		// Clear DMC IRQ
 		dmc_irq_flag_ = false;
 
-		std::cout << "APU: Status register write $" << std::hex << (int)value << std::dec << std::endl;
 		break;
 
 	// Frame counter

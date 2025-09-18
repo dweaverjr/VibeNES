@@ -72,7 +72,7 @@ class PPUTestFixture {
 	// Helper function to advance PPU by specific number of cycles
 	void advance_ppu_cycles(int cycles) {
 		for (int i = 0; i < cycles; i++) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 		}
 	}
 
@@ -81,7 +81,7 @@ class PPUTestFixture {
 		int safety_counter = 0;
 		int max_cycles = 100000; // Safety limit
 		while (ppu->get_current_scanline() < target_scanline && safety_counter < max_cycles) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 			safety_counter++;
 		}
 		if (safety_counter >= max_cycles) {
@@ -319,7 +319,7 @@ TEST_CASE_METHOD(PPUTestFixture, "PPUDATA Register ($2007)", "[ppu][registers]")
 		uint8_t dummy = read_ppu_register(0x2007); // Dummy read
 		uint8_t data = read_ppu_register(0x2007);  // Actual data
 
-		REQUIRE(data == 0x42);
+		REQUIRE(static_cast<int>(data) == 0x42);
 	}
 
 	SECTION("PPUDATA should handle VRAM increment modes") {
@@ -360,6 +360,6 @@ TEST_CASE_METHOD(PPUTestFixture, "PPUDATA Register ($2007)", "[ppu][registers]")
 		write_ppu_register(0x2006, 0x00);
 
 		uint8_t palette_data = read_ppu_register(0x2007);
-		REQUIRE(palette_data == 0x0F); // No dummy read for palette
+		REQUIRE(static_cast<int>(palette_data) == 0x0F); // No dummy read for palette
 	}
 }

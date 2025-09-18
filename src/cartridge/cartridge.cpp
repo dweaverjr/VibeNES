@@ -100,6 +100,12 @@ Mapper::Mirroring Cartridge::get_mirroring() const noexcept {
 	return mapper_->get_mirroring();
 }
 
+void Cartridge::ppu_a12_toggle() const {
+	if (mapper_) {
+		mapper_->ppu_a12_toggle();
+	}
+}
+
 std::unique_ptr<Mapper> Cartridge::create_mapper(const RomData &rom_data) {
 	// Determine mirroring mode
 	Mapper::Mirroring mirroring;

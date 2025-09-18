@@ -2,10 +2,12 @@
 // PPU Timing Tests
 // Tests for hardware-accurate PPU timing behavior
 
+#include "../../include/apu/apu.hpp"
+#include "../../include/cartridge/cartridge.hpp"
 #include "../../include/core/bus.hpp"
+#include "../../include/cpu/cpu_6502.hpp"
 #include "../../include/memory/ram.hpp"
 #include "../../include/ppu/ppu.hpp"
-#include "../../include/ppu/ppu_memory.hpp"
 #include "../catch2/catch_amalgamated.hpp"
 #include <memory>
 
@@ -16,12 +18,29 @@ class TimingTestFixture {
 	TimingTestFixture() {
 		bus = std::make_unique<SystemBus>();
 		ram = std::make_shared<Ram>();
-		ppu_memory = std::make_shared<PPUMemory>();
+		cartridge = std::make_shared<Cartridge>();
+		apu = std::make_shared<APU>();
+		cpu = std::make_shared<CPU6502>(bus.get());
 
+		// Connect components to bus
 		bus->connect_ram(ram);
+		bus->connect_cartridge(cartridge);
+		bus->connect_apu(apu);
+		bus->connect_cpu(cpu);
+
+		// Create and connect PPU
 		ppu = std::make_shared<PPU>();
 		ppu->connect_bus(bus.get());
 		bus->connect_ppu(ppu);
+
+		// Connect cartridge to PPU for CHR ROM access
+		ppu->connect_cartridge(cartridge);
+
+		// Connect CPU to PPU for NMI generation
+		ppu->connect_cpu(cpu.get());
+
+		// Power on the system
+		bus->power_on();
 		ppu->power_on();
 	}
 
@@ -37,7 +56,7 @@ class TimingTestFixture {
 		int safety_counter = 0;
 		int max_cycles = 100000; // Safety limit
 		while (ppu->get_current_scanline() < target_scanline && safety_counter < max_cycles) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 			safety_counter++;
 		}
 		if (safety_counter >= max_cycles) {
@@ -49,7 +68,7 @@ class TimingTestFixture {
 		int safety_counter = 0;
 		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
 		while (ppu->get_current_cycle() < target_cycle && safety_counter < MAX_CYCLES) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 			safety_counter++;
 		}
 		if (safety_counter >= MAX_CYCLES) {
@@ -59,21 +78,23 @@ class TimingTestFixture {
 
 	void advance_ppu_cycles(int cycles) {
 		for (int i = 0; i < cycles; i++) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 		}
 	}
 
 	void advance_full_frame() {
 		uint64_t start_frame = ppu->get_frame_count();
 		while (ppu->get_frame_count() == start_frame) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 		}
 	}
 
   protected:
 	std::unique_ptr<SystemBus> bus;
 	std::shared_ptr<Ram> ram;
-	std::shared_ptr<PPUMemory> ppu_memory;
+	std::shared_ptr<Cartridge> cartridge;
+	std::shared_ptr<APU> apu;
+	std::shared_ptr<CPU6502> cpu;
 	std::shared_ptr<PPU> ppu;
 };
 
@@ -83,7 +104,7 @@ TEST_CASE_METHOD(TimingTestFixture, "Frame Timing", "[ppu][timing][frame]") {
 		int cycle_count = 0;
 
 		while (ppu->get_frame_count() == start_frame) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 			cycle_count++;
 		}
 
@@ -104,7 +125,7 @@ TEST_CASE_METHOD(TimingTestFixture, "Frame Timing", "[ppu][timing][frame]") {
 		uint64_t start_frame = ppu->get_frame_count();
 
 		while (ppu->get_frame_count() == start_frame) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 			odd_frame_cycles++;
 		}
 
@@ -116,7 +137,7 @@ TEST_CASE_METHOD(TimingTestFixture, "Frame Timing", "[ppu][timing][frame]") {
 		start_frame = ppu->get_frame_count();
 
 		while (ppu->get_frame_count() == start_frame) {
-			ppu->tick(CpuCycle{1});
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
 			even_frame_cycles++;
 		}
 

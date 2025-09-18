@@ -152,19 +152,22 @@ TEST_CASE("Bus Component Interface", "[bus][component]") {
 		bus.write(0x0500, 0xAA);
 		REQUIRE(bus.read(0x0500) == 0xAA);
 
-		// Reset should clear RAM through bus
+		// Reset should preserve RAM contents (real NES hardware behavior)
 		bus.reset();
-		REQUIRE(bus.read(0x0500) == 0x00);
+		REQUIRE(bus.read(0x0500) == 0xAA); // RAM contents preserved on reset
 	}
 
 	SECTION("Power on propagates to connected components") {
-		// Write some data
+		// Clear the initial random garbage first by writing known values
 		bus.write(0x0600, 0xBB);
 		REQUIRE(bus.read(0x0600) == 0xBB);
 
-		// Power on should clear RAM through bus
+		// Power on should fill RAM with random garbage (real NES hardware behavior)
 		bus.power_on();
-		REQUIRE(bus.read(0x0600) == 0x00);
+		// Can't test for specific value since it's random, but should not be the written value
+		// Just test that power_on doesn't crash and ram still works
+		bus.write(0x0600, 0xCC);
+		REQUIRE(bus.read(0x0600) == 0xCC);
 	}
 
 	SECTION("Tick propagates to connected components") {

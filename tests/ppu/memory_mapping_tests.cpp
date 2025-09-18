@@ -2,11 +2,12 @@
 // PPU Memory Mapping Tests
 // Tests for hardware-accurate PPU memory system behavior
 
+#include "../../include/apu/apu.hpp"
 #include "../../include/cartridge/cartridge.hpp"
 #include "../../include/core/bus.hpp"
+#include "../../include/cpu/cpu_6502.hpp"
 #include "../../include/memory/ram.hpp"
 #include "../../include/ppu/ppu.hpp"
-#include "../../include/ppu/ppu_memory.hpp"
 #include "../catch2/catch_amalgamated.hpp"
 #include <memory>
 
@@ -17,11 +18,27 @@ class MemoryMappingTestFixture {
 	MemoryMappingTestFixture() {
 		bus = std::make_unique<SystemBus>();
 		ram = std::make_shared<Ram>();
-		ppu_memory = std::make_shared<PPUMemory>();
+		cartridge = std::make_shared<Cartridge>();
+		apu = std::make_shared<APU>();
+		cpu = std::make_shared<CPU6502>(bus.get());
 
+		// Connect components to bus (like TimingTestFixture)
 		bus->connect_ram(ram);
-		ppu = std::make_unique<PPU>();
+		bus->connect_cartridge(cartridge);
+		bus->connect_apu(apu);
+		bus->connect_cpu(cpu);
+
+		// Create and connect PPU
+		ppu = std::make_shared<PPU>();
 		ppu->connect_bus(bus.get());
+		bus->connect_ppu(ppu);
+
+		// Connect cartridge to PPU for CHR ROM access
+		ppu->connect_cartridge(cartridge);
+
+		// Connect CPU to PPU for NMI generation
+		ppu->connect_cpu(cpu.get());
+
 		ppu->power_on();
 	}
 
@@ -52,8 +69,10 @@ class MemoryMappingTestFixture {
   protected:
 	std::unique_ptr<SystemBus> bus;
 	std::shared_ptr<Ram> ram;
-	std::shared_ptr<PPUMemory> ppu_memory;
-	std::unique_ptr<PPU> ppu;
+	std::shared_ptr<Cartridge> cartridge;
+	std::shared_ptr<APU> apu;
+	std::shared_ptr<CPU6502> cpu;
+	std::shared_ptr<PPU> ppu;
 };
 
 TEST_CASE_METHOD(MemoryMappingTestFixture, "Pattern Table Mapping", "[ppu][memory][pattern_tables]") {
@@ -190,10 +209,10 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Attribute Table Mapping", "[ppu][mem
 		write_vram(attr_base + 0x38, 0x56); // Bottom-left corner
 		write_vram(attr_base + 0x3F, 0x78); // Bottom-right corner
 
-		REQUIRE(read_vram(attr_base + 0x00) == 0x12);
-		REQUIRE(read_vram(attr_base + 0x07) == 0x34);
-		REQUIRE(read_vram(attr_base + 0x38) == 0x56);
-		REQUIRE(read_vram(attr_base + 0x3F) == 0x78);
+		REQUIRE(static_cast<int>(read_vram(attr_base + 0x00)) == 0x12);
+		REQUIRE(static_cast<int>(read_vram(attr_base + 0x07)) == 0x34);
+		REQUIRE(static_cast<int>(read_vram(attr_base + 0x38)) == 0x56);
+		REQUIRE(static_cast<int>(read_vram(attr_base + 0x3F)) == 0x78);
 	}
 }
 
@@ -207,7 +226,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Palette Memory Mapping", "[ppu][memo
 		// Read back and verify
 		for (uint8_t i = 0; i < 16; i++) {
 			uint8_t value = read_vram(0x3F00 + i);
-			REQUIRE(value == i * 4);
+			REQUIRE(static_cast<int>(value) == i * 4);
 		}
 	}
 
@@ -220,7 +239,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Palette Memory Mapping", "[ppu][memo
 		// Read back and verify
 		for (uint8_t i = 0; i < 16; i++) {
 			uint8_t value = read_vram(0x3F10 + i);
-			REQUIRE(value == i * 8);
+			REQUIRE(static_cast<int>(value) == i * 8);
 		}
 	}
 
@@ -231,10 +250,10 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Palette Memory Mapping", "[ppu][memo
 		write_vram(0x3F15, 0x56); // Sprite palette 1, color 1
 
 		// Test mirrors
-		REQUIRE(read_vram(0x3F10) == 0x12); // $3F10 mirrors $3F00
-		REQUIRE(read_vram(0x3F14) == 0x12); // $3F14 mirrors $3F04 mirrors $3F00
-		REQUIRE(read_vram(0x3F18) == 0x12); // $3F18 mirrors $3F08 mirrors $3F00
-		REQUIRE(read_vram(0x3F1C) == 0x12); // $3F1C mirrors $3F0C mirrors $3F00
+		REQUIRE(static_cast<int>(read_vram(0x3F10)) == 0x12); // $3F10 mirrors $3F00
+		REQUIRE(static_cast<int>(read_vram(0x3F14)) == 0x12); // $3F14 mirrors $3F04 mirrors $3F00
+		REQUIRE(static_cast<int>(read_vram(0x3F18)) == 0x12); // $3F18 mirrors $3F08 mirrors $3F00
+		REQUIRE(static_cast<int>(read_vram(0x3F1C)) == 0x12); // $3F1C mirrors $3F0C mirrors $3F00
 	}
 
 	SECTION("Palette memory should be only 6 bits") {
@@ -244,9 +263,9 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Palette Memory Mapping", "[ppu][memo
 		write_vram(0x3F02, 0x40);
 
 		// Read back - only lower 6 bits should be stored
-		REQUIRE(read_vram(0x3F00) == 0x3F);
-		REQUIRE(read_vram(0x3F01) == 0x00);
-		REQUIRE(read_vram(0x3F02) == 0x00);
+		REQUIRE(static_cast<int>(read_vram(0x3F00)) == 0x3F);
+		REQUIRE(static_cast<int>(read_vram(0x3F01)) == 0x00);
+		REQUIRE(static_cast<int>(read_vram(0x3F02)) == 0x00);
 	}
 }
 
@@ -259,10 +278,10 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "VRAM Address Mirroring", "[ppu][memo
 		write_vram(0x3F1F, 0x78);
 
 		// Test mirrors
-		REQUIRE(read_vram(0x6000) == 0x12); // $6000 mirrors $2000
-		REQUIRE(read_vram(0x6345) == 0x34); // $6345 mirrors $2345
-		REQUIRE(read_vram(0x7F00) == 0x56); // $7F00 mirrors $3F00
-		REQUIRE(read_vram(0x7F1F) == 0x78); // $7F1F mirrors $3F1F
+		REQUIRE(static_cast<int>(read_vram(0x6000)) == 0x12); // $6000 mirrors $2000
+		REQUIRE(static_cast<int>(read_vram(0x6345)) == 0x34); // $6345 mirrors $2345
+		REQUIRE(static_cast<int>(read_vram(0x7F00)) == 0x56); // $7F00 mirrors $3F00
+		REQUIRE(static_cast<int>(read_vram(0x7F1F)) == 0x78); // $7F1F mirrors $3F1F
 	}
 
 	SECTION("Nametable mirroring should depend on cartridge") {
@@ -297,10 +316,10 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "VRAM Increment Mode", "[ppu][memory]
 		write_ppu_register(0x2007, 0x40);
 
 		// Read back from sequential addresses
-		REQUIRE(read_vram(0x2000) == 0x10);
-		REQUIRE(read_vram(0x2001) == 0x20);
-		REQUIRE(read_vram(0x2002) == 0x30);
-		REQUIRE(read_vram(0x2003) == 0x40);
+		REQUIRE(static_cast<int>(read_vram(0x2000)) == 0x10);
+		REQUIRE(static_cast<int>(read_vram(0x2001)) == 0x20);
+		REQUIRE(static_cast<int>(read_vram(0x2002)) == 0x30);
+		REQUIRE(static_cast<int>(read_vram(0x2003)) == 0x40);
 	}
 
 	SECTION("Increment by 32 mode should work") {
@@ -316,10 +335,10 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "VRAM Increment Mode", "[ppu][memory]
 		write_ppu_register(0x2007, 0x44);
 
 		// Read back from addresses incremented by 32
-		REQUIRE(read_vram(0x2000) == 0x11);
-		REQUIRE(read_vram(0x2020) == 0x22);
-		REQUIRE(read_vram(0x2040) == 0x33);
-		REQUIRE(read_vram(0x2060) == 0x44);
+		REQUIRE(static_cast<int>(read_vram(0x2000)) == 0x11);
+		REQUIRE(static_cast<int>(read_vram(0x2020)) == 0x22);
+		REQUIRE(static_cast<int>(read_vram(0x2040)) == 0x33);
+		REQUIRE(static_cast<int>(read_vram(0x2060)) == 0x44);
 	}
 
 	SECTION("VRAM address should wrap at $4000") {
@@ -331,9 +350,9 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "VRAM Increment Mode", "[ppu][memory]
 		write_ppu_register(0x2007, 0xBB);
 		write_ppu_register(0x2007, 0xCC);
 
-		REQUIRE(read_vram(0x3FFE) == 0xAA);
-		REQUIRE(read_vram(0x3FFF) == 0xBB);
-		REQUIRE(read_vram(0x0000) == 0xCC); // Wrapped to beginning
+		REQUIRE(static_cast<int>(read_vram(0x3FFE)) == 0xAA);
+		REQUIRE(static_cast<int>(read_vram(0x3FFF)) == 0xBB);
+		REQUIRE(static_cast<int>(read_vram(0x0000)) == 0xCC); // Wrapped to beginning
 	}
 }
 
@@ -380,7 +399,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 		// Palette access should still work during rendering
 		write_vram(0x3F00, 0x20);
 		uint8_t value = read_vram(0x3F00);
-		REQUIRE(value == 0x20);
+		REQUIRE(static_cast<int>(value) == 0x20);
 	}
 
 	SECTION("OAM access should be blocked during sprite evaluation") {

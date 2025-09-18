@@ -32,6 +32,7 @@ class PPU : public Component {
 
 	// Component interface implementation
 	void tick(CpuCycle cycles) override;
+	void tick_single_dot(); // Advance PPU by exactly 1 dot - for testing
 	void reset() override;
 	void power_on() override;
 	const char *get_name() const noexcept override {
@@ -41,6 +42,21 @@ class PPU : public Component {
 	// CPU interface - memory-mapped registers ($2000-$2007, mirrored through $3FFF)
 	uint8_t read_register(uint16_t address);
 	void write_register(uint16_t address, uint8_t value);
+
+	// OAM DMA interface ($4014)
+	void write_oam_dma(uint8_t page);
+	bool is_oam_dma_active() const {
+		return oam_dma_active_;
+	}
+	void perform_oam_dma_cycle();
+
+	// OAM access for debugging/testing
+	uint8_t read_oam(uint8_t address) const {
+		return oam_memory_[address];
+	}
+	void write_oam(uint8_t address, uint8_t value) {
+		oam_memory_[address] = value;
+	}
 
 	// Frame buffer access
 	bool is_frame_ready() const {
@@ -116,6 +132,25 @@ class PPU : public Component {
 	bool write_toggle_;			 // First/second write toggle (w)
 	uint8_t read_buffer_;		 // PPU data read buffer
 
+	// OAM (Object Attribute Memory) Management
+	std::array<uint8_t, 256> oam_memory_;	// Primary OAM (64 sprites × 4 bytes)
+	std::array<uint8_t, 32> secondary_oam_; // Secondary OAM for scanline sprites (8 sprites × 4 bytes)
+	bool oam_dma_active_;					// OAM DMA in progress ($4014)
+	uint16_t oam_dma_address_;				// OAM DMA source address
+	uint8_t oam_dma_cycle_;					// OAM DMA cycle counter (0-513)
+	bool oam_dma_pending_;					// OAM DMA requested but not started
+
+	// Hardware Timing State
+	bool odd_frame_;					   // Tracks odd/even frames for cycle skip
+	uint8_t nmi_delay_;					   // NMI generation delay cycles
+	bool suppress_vbl_;					   // VBlank suppression flag
+	bool rendering_disabled_mid_scanline_; // Track rendering disable timing
+
+	// Bus State and Open Bus Behavior
+	uint8_t ppu_data_bus_;				   // PPU data bus for open bus behavior
+	uint8_t io_db_;						   // I/O data bus latch
+	bool vram_address_corruption_pending_; // VRAM address corruption flag
+
 	// Memory management
 	PPUMemory memory_;
 
@@ -151,10 +186,18 @@ class PPU : public Component {
 		uint8_t sprite_index;	   // Original sprite index (for sprite 0 detection)
 		uint8_t pattern_data_low;  // Low bit plane for current row
 		uint8_t pattern_data_high; // High bit plane for current row
+		bool is_sprite_0;		   // True if this is sprite 0
 	};
 	std::array<ScanlineSprite, 8> scanline_sprites_; // Max 8 sprites per scanline
 	uint8_t sprite_count_current_scanline_;			 // Number of sprites on current scanline
 	bool sprite_0_on_scanline_;						 // True if sprite 0 is on current scanline
+
+	// Hardware-accurate sprite evaluation timing
+	uint8_t sprite_evaluation_cycle_; // Current sprite evaluation cycle (0-63)
+	uint8_t sprite_evaluation_index_; // Current sprite being evaluated (0-63)
+	bool sprite_in_range_;			  // Current sprite Y-range check result
+	bool sprite_overflow_detected_;	  // Hardware sprite overflow bug state
+	uint8_t sprite_evaluation_temp_;  // Temporary sprite evaluation byte
 
 	// External connections
 	SystemBus *bus_;					   // For NMI generation
@@ -172,7 +215,7 @@ class PPU : public Component {
 
 	// Register handlers
 	uint8_t read_ppustatus();
-	uint8_t read_oamdata();
+	uint8_t read_oamdata(); // Delegates to read_oamdata_during_rendering for hardware accuracy
 	uint8_t read_ppudata();
 
 	void write_ppuctrl(uint8_t value);
@@ -183,6 +226,31 @@ class PPU : public Component {
 	void write_ppuaddr(uint8_t value);
 	void write_ppudata(uint8_t value);
 
+	// OAM operations
+	void clear_secondary_oam();
+	void evaluate_sprites_for_scanline(); // Keep original name for consistency
+	void perform_sprite_evaluation_cycle();
+	void handle_sprite_overflow_bug();
+
+	// Hardware timing features
+	void handle_odd_frame_skip();
+	void handle_vblank_timing();
+	void handle_rendering_disable_mid_scanline();
+	void advance_to_cycle(uint16_t target_cycle);
+
+	// Bus conflicts and corruption
+	void handle_vram_address_corruption();
+	uint8_t read_open_bus();
+	void update_io_bus(uint8_t value);
+	void handle_palette_mirroring(uint16_t &address);
+
+	// Fine X control and pixel selection (consolidated background pixel methods)
+	void update_fine_x_scroll(uint8_t value);
+	uint8_t select_pixel_from_shift_register(uint16_t shift_reg, uint8_t fine_x) const;
+	uint8_t extract_background_bits_at_fine_x() const;
+	uint8_t extract_attribute_bits_at_fine_x() const;
+	// Note: get_background_pixel_with_fine_x functionality integrated into get_background_pixel_from_shift_registers
+
 	// Memory access helpers
 	uint8_t read_ppu_memory(uint16_t address);
 	void write_ppu_memory(uint16_t address, uint8_t value);
@@ -190,6 +258,17 @@ class PPU : public Component {
 	// Rendering helpers
 	void render_pixel();
 	void clear_frame_buffer();
+
+	// Pixel multiplexer and priority resolution
+	uint8_t multiplex_background_sprite_pixels(uint8_t bg_pixel, uint8_t sprite_pixel, bool sprite_priority);
+	uint32_t apply_color_emphasis(uint32_t color);
+	bool is_transparent_color(uint8_t palette_index);
+	// Note: resolve_pixel_priority functionality merged into multiplex_background_sprite_pixels
+
+	// Hardware-accurate register behavior
+	uint8_t read_oamdata_during_rendering(); // Enhanced version that handles rendering behavior
+	void handle_ppustatus_race_condition();
+	void persist_write_toggle_state();
 
 	// Background rendering (Phase 2)
 	void render_background_pixel();
@@ -201,27 +280,24 @@ class PPU : public Component {
 	uint32_t get_palette_color(uint8_t palette_index);
 
 	// Hardware-accurate background tile fetching
-	void fetch_background_tile_data();
 	void shift_background_registers();
 	void load_shift_registers();
-	uint8_t get_background_pixel_from_shift_registers();
+	uint8_t get_background_pixel_from_shift_registers(); // Enhanced with fine X support
 	void perform_tile_fetch_cycle();
 
-	// VRAM address updates during rendering
-	void update_vram_address_rendering();
-	void handle_horizontal_scroll_update();
-	void handle_vertical_scroll_update();
-
 	// Sprite rendering (Phase 3)
-	void render_sprite_pixel();
 	uint8_t get_sprite_pixel_at_current_position(bool &sprite_priority);
-	void evaluate_sprites_for_scanline();
-	uint8_t fetch_sprite_pattern_data(const Sprite &sprite, uint8_t sprite_y, bool sprite_table);
 	uint8_t fetch_sprite_pattern_data_raw(uint8_t tile_index, uint8_t fine_y, bool sprite_table);
-	uint8_t get_sprite_palette_index(uint8_t pattern_data, uint8_t palette, uint8_t fine_x);
-	bool check_sprite_0_hit(uint8_t bg_pixel, uint8_t sprite_pixel, uint8_t x_pos);
+	bool check_sprite_0_hit(uint8_t bg_pixel, uint8_t sprite_pixel, uint8_t x_pos); // Enhanced with edge case support
 	void render_combined_pixel(uint8_t bg_pixel, uint8_t sprite_pixel, bool sprite_priority, uint8_t x_pos,
 							   uint8_t y_pos);
+
+	// Enhanced sprite 0 hit detection and timing
+	void handle_sprite_0_hit_timing();
+
+	// Background pattern fetch timing during sprite evaluation
+	void fetch_background_pattern_during_sprite_eval();
+	void handle_background_sprite_fetch_conflicts();
 
 	// Advanced scrolling (Phase 4)
 	void update_vram_address_x();
@@ -260,6 +336,36 @@ constexpr uint16_t HBLANK_END = 340;
 
 constexpr uint16_t VBLANK_SET_CYCLE = 1;   // VBlank flag set at cycle 1 of scanline 241
 constexpr uint16_t VBLANK_CLEAR_CYCLE = 1; // VBlank flag cleared at cycle 1 of pre-render
+
+// OAM DMA timing
+constexpr uint16_t OAM_DMA_CYCLES = 513;		// Total OAM DMA cycles (512 + 1 dummy read)
+constexpr uint16_t OAM_DMA_ALIGNMENT_CYCLE = 1; // Additional cycle for odd CPU cycle alignment
+
+// Sprite evaluation timing (cycles 65-256 of visible scanlines)
+constexpr uint16_t SPRITE_EVAL_START_CYCLE = 65;
+constexpr uint16_t SPRITE_EVAL_END_CYCLE = 256;
+constexpr uint8_t MAX_SPRITES_PER_SCANLINE = 8;
+
+// Odd frame skip (cycle 339 skipped on odd frames during pre-render if rendering enabled)
+constexpr uint16_t ODD_FRAME_SKIP_CYCLE = 339;
+
+// Hardware quirk timing
+constexpr uint8_t NMI_DELAY_CYCLES = 2;		 // NMI generation delay
+constexpr uint8_t PPUSTATUS_RACE_WINDOW = 3; // VBlank race condition window
 } // namespace PPUTiming
+
+/// PPU memory access constants
+namespace PPUMemoryConstants {
+// Palette mirroring addresses ($3F10/$3F14/$3F18/$3F1C mirror $3F00/$3F04/$3F08/$3F0C)
+constexpr uint16_t PALETTE_MIRROR_MASK = 0x0013; // Mask for palette mirroring
+constexpr uint16_t PALETTE_BASE = 0x3F00;
+constexpr uint16_t PALETTE_SIZE = 0x20;
+
+// Open bus behavior
+constexpr uint16_t OPEN_BUS_DECAY_CYCLES = 600; // Approximate open bus decay time
+
+// VRAM address bus conflicts
+constexpr uint16_t VRAM_BUS_CONFLICT_MASK = 0x3FFF;
+} // namespace PPUMemoryConstants
 
 } // namespace nes

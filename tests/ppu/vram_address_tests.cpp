@@ -74,9 +74,9 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Increment", "[ppu][vram][
 		uint8_t data2 = read_ppu_register(0x2007); // $2001
 		uint8_t data3 = read_ppu_register(0x2007); // $2002
 
-		REQUIRE(data1 == 0x11);
-		REQUIRE(data2 == 0x22);
-		REQUIRE(data3 == 0x33);
+		REQUIRE(static_cast<int>(data1) == 0x11);
+		REQUIRE(static_cast<int>(data2) == 0x22);
+		REQUIRE(static_cast<int>(data3) == 0x33);
 	}
 
 	SECTION("VRAM address should increment by 32 in vertical mode") {
@@ -100,9 +100,9 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Increment", "[ppu][vram][
 		uint8_t dummy3 = read_ppu_register(0x2007);
 		uint8_t data3 = read_ppu_register(0x2007);
 
-		REQUIRE(data1 == 0xAA);
-		REQUIRE(data2 == 0xBB);
-		REQUIRE(data3 == 0xCC);
+		REQUIRE(static_cast<int>(data1) == 0xAA);
+		REQUIRE(static_cast<int>(data2) == 0xBB);
+		REQUIRE(static_cast<int>(data3) == 0xCC);
 	}
 }
 
@@ -118,7 +118,7 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Wrapping", "[ppu][vram][w
 		uint8_t dummy = read_ppu_register(0x2007);
 		uint8_t data = read_ppu_register(0x2007);
 
-		REQUIRE(data == 0x42);
+		REQUIRE(static_cast<int>(data) == 0x42);
 	}
 
 	SECTION("Nametable addresses should mirror correctly") {
@@ -137,7 +137,7 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Wrapping", "[ppu][vram][w
 				uint8_t data = read_ppu_register(0x2007);
 
 				INFO("Testing mirror at address: 0x" << std::hex << mirror);
-				REQUIRE(data == test_data);
+				REQUIRE(static_cast<int>(data) == static_cast<int>(test_data));
 			}
 		}
 	}
@@ -234,7 +234,7 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "Address Calculation Edge Cases", "[ppu
 		uint8_t dummy = read_ppu_register(0x2007);
 		uint8_t data = read_ppu_register(0x2007);
 
-		REQUIRE(data == 0x99);
+		REQUIRE(static_cast<int>(data) == 0x99);
 	}
 
 	SECTION("Palette addresses should behave correctly") {
@@ -245,7 +245,7 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "Address Calculation Edge Cases", "[ppu
 		set_vram_address(0x3F20); // Mirror of $3F00
 		uint8_t palette_data = read_ppu_register(0x2007);
 
-		REQUIRE(palette_data == 0x0F);
+		REQUIRE(static_cast<int>(palette_data) == 0x0F);
 	}
 
 	SECTION("Backdrop color mirrors should work") {
@@ -260,7 +260,7 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "Address Calculation Edge Cases", "[ppu
 			uint8_t data = read_ppu_register(0x2007);
 
 			INFO("Testing backdrop mirror at: 0x" << std::hex << addr);
-			REQUIRE(data == 0x30);
+			REQUIRE(static_cast<int>(data) == 0x30);
 		}
 	}
 }

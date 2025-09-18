@@ -105,7 +105,7 @@ TEST_CASE("RAM Component Interface", "[ram][component]") {
 		REQUIRE_NOTHROW(ram.power_on());
 	}
 
-	SECTION("Reset clears all memory") {
+	SECTION("Reset preserves memory contents") {
 		// Fill some memory
 		ram.write(0x0100, 0xAA);
 		ram.write(0x0500, 0xBB);
@@ -116,16 +116,23 @@ TEST_CASE("RAM Component Interface", "[ram][component]") {
 		REQUIRE(ram.read(0x0500) == 0xBB);
 		REQUIRE(ram.read(0x0700) == 0xCC);
 
-		// Reset should clear memory
+		// Reset should preserve memory (hardware-accurate behavior)
 		ram.reset();
 
-		REQUIRE(ram.read(0x0100) == 0x00);
-		REQUIRE(ram.read(0x0500) == 0x00);
-		REQUIRE(ram.read(0x0700) == 0x00);
+		REQUIRE(ram.read(0x0100) == 0xAA);
+		REQUIRE(ram.read(0x0500) == 0xBB);
+		REQUIRE(ram.read(0x0700) == 0xCC);
 	}
 
-	SECTION("Power on clears all memory") {
-		// Fill some memory
+	SECTION("Power on fills memory with random garbage") {
+		// Start with a clean state
+		ram.power_on();
+
+		// Read initial values (should be random garbage)
+		Byte initial_1 = ram.read(0x0200);
+		Byte initial_2 = ram.read(0x0600);
+
+		// Write known values
 		ram.write(0x0200, 0xDD);
 		ram.write(0x0600, 0xEE);
 
@@ -133,11 +140,19 @@ TEST_CASE("RAM Component Interface", "[ram][component]") {
 		REQUIRE(ram.read(0x0200) == 0xDD);
 		REQUIRE(ram.read(0x0600) == 0xEE);
 
-		// Power on should clear memory
+		// Power on should fill with new random garbage
 		ram.power_on();
 
-		REQUIRE(ram.read(0x0200) == 0x00);
-		REQUIRE(ram.read(0x0600) == 0x00);
+		// Memory should be different from the written values
+		// (Very unlikely to randomly get the same values we wrote)
+		Byte after_1 = ram.read(0x0200);
+		Byte after_2 = ram.read(0x0600);
+
+		// Test that power_on changed the memory (hardware-accurate behavior)
+		// Note: In extremely rare cases this might fail due to random chance,
+		// but the deterministic RNG should make this test reliable
+		bool memory_changed = (after_1 != 0xDD) || (after_2 != 0xEE);
+		REQUIRE(memory_changed);
 	}
 }
 

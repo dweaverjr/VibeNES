@@ -274,33 +274,26 @@ bool SystemBus::is_cartridge_address(Address address) const noexcept {
 void SystemBus::perform_oam_dma(Byte page) {
 	// OAM DMA transfers 256 bytes from page $XX00-$XXFF to PPU OAM
 	// Takes 513 cycles (or 514 if on odd CPU cycle)
-	// DMA starts at current OAM address and wraps around
+	// Hardware-accurate: CPU is halted and PPU performs cycle-by-cycle transfer
 
 	if (!ppu_) {
 		return;
 	}
 
-	Address base_address = static_cast<Address>(page) << 8; // page * 256
-
 	// Debug output for major DMA transfers
 	static Byte last_dma_page = 0xFF;
 	if (page != last_dma_page) {
-		printf("OAM DMA: Transferring $%02X00-$%02XFF to PPU OAM\n", page, page);
+		printf("OAM DMA: Starting cycle-accurate transfer $%02X00-$%02XFF to PPU OAM\n", page, page);
 		last_dma_page = page;
 	}
 
-	// Transfer 256 bytes to OAM using PPU register interface
-	// Note: OAM address is preserved and auto-increments with each write
-	for (uint16_t i = 0; i < 256; i++) {
-		Address source_addr = base_address + i;
-		Byte data = read(source_addr);
+	// Start hardware-accurate OAM DMA in the PPU
+	// This will halt the CPU for 513-514 cycles while PPU handles the transfer
+	ppu_->write_oam_dma(page);
+}
 
-		// Write data through OAMDATA register (auto-increments OAM address)
-		ppu_->write_register(0x2004, data); // OAMDATA
-	}
-
-	// TODO: Add CPU cycle penalty for DMA (513/514 cycles)
-	// This would require coordinating with the CPU to add cycles
+bool SystemBus::is_dma_active() const noexcept {
+	return ppu_ && ppu_->is_oam_dma_active();
 }
 
 } // namespace nes
