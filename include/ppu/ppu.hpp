@@ -43,10 +43,13 @@ class PPU : public Component {
 	uint8_t read_register(uint16_t address);
 	void write_register(uint16_t address, uint8_t value);
 
+	// Non-intrusive register peek for debugging (no side effects)
+	uint8_t peek_register(uint16_t address) const;
+
 	// OAM DMA interface ($4014)
 	void write_oam_dma(uint8_t page);
 	bool is_oam_dma_active() const {
-		return oam_dma_active_;
+		return oam_dma_active_ || oam_dma_pending_;
 	}
 	void perform_oam_dma_cycle();
 
@@ -137,7 +140,7 @@ class PPU : public Component {
 	std::array<uint8_t, 32> secondary_oam_; // Secondary OAM for scanline sprites (8 sprites × 4 bytes)
 	bool oam_dma_active_;					// OAM DMA in progress ($4014)
 	uint16_t oam_dma_address_;				// OAM DMA source address
-	uint8_t oam_dma_cycle_;					// OAM DMA cycle counter (0-513)
+	uint16_t oam_dma_cycle_;				// OAM DMA cycle counter (0-513)
 	bool oam_dma_pending_;					// OAM DMA requested but not started
 
 	// Hardware Timing State
@@ -228,8 +231,10 @@ class PPU : public Component {
 
 	// OAM operations
 	void clear_secondary_oam();
-	void evaluate_sprites_for_scanline(); // Keep original name for consistency
 	void perform_sprite_evaluation_cycle();
+	void prepare_scanline_sprites();					  // Convert secondary OAM to scanline sprites with pattern data
+	void prepare_scanline_sprites_for_current_scanline(); // Convert secondary OAM for current scanline
+	void simple_sprite_evaluation_for_current_scanline(); // Simple sprite evaluation bypassing cycle-accurate version
 	void handle_sprite_overflow_bug();
 
 	// Hardware timing features

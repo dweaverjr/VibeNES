@@ -144,6 +144,61 @@ Byte SystemBus::read(Address address) const {
 	return last_bus_value_;
 }
 
+Byte SystemBus::peek(Address address) const {
+	// Non-intrusive memory peek for debugging - no side effects
+
+	// RAM: $0000-$1FFF (includes mirroring)
+	if (is_ram_address(address)) {
+		if (ram_) {
+			return ram_->read(address); // RAM reads have no side effects
+		}
+	}
+
+	// PPU: $2000-$3FFF (includes register mirroring)
+	if (is_ppu_address(address)) {
+		// For PPU registers, return cached/approximate values to avoid side effects
+		// $2002 (PPUSTATUS) - return status without clearing VBlank flag
+		// $2007 (PPUDATA) - return last read buffer value without advancing address
+		// Other registers are write-only, return open bus
+		if (ppu_) {
+			return ppu_->peek_register(address); // Need to implement this
+		}
+		return last_bus_value_; // Open bus
+	}
+
+	// APU/IO: $4000-$4015 (excluding $4017 which is controller 2 for reads)
+	if (is_apu_read_address(address)) {
+		// APU reads may have side effects, return open bus for safety
+		return last_bus_value_;
+	}
+
+	// Controllers: $4016 (controller 1), $4017 (controller 2 read)
+	if (is_controller_address(address)) {
+		// Controller reads have side effects, return open bus for safety
+		return last_bus_value_;
+	}
+
+	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
+	if (is_cartridge_address(address)) {
+		if (cartridge_) {
+			return cartridge_->cpu_read(address); // ROM reads typically have no side effects
+		}
+	}
+
+	// High memory: $8000-$FFFF (test memory for ROM vectors)
+	if (address >= 0x8000) {
+		Address index = address - 0x8000;
+		if (test_high_memory_valid_[index]) {
+			return test_high_memory_[index];
+		}
+		// Return open bus if no data written
+		return last_bus_value_;
+	}
+
+	// Unmapped region - open bus behavior
+	return last_bus_value_;
+}
+
 void SystemBus::write(Address address, Byte value) {
 	last_bus_value_ = value; // Bus remembers last written value
 

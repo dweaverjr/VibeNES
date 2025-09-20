@@ -140,6 +140,9 @@ void GuiApplication::initialize_emulation_components() {
 	// Connect CPU to PPU for NMI generation
 	ppu_->connect_cpu(cpu_.get());
 
+	// Connect PPU to bus for OAM DMA and CPU memory access
+	ppu_->connect_bus(bus_.get());
+
 	// Initialize system
 	bus_->power_on();
 

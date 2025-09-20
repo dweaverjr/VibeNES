@@ -68,12 +68,33 @@ class SpriteTestFixture {
 	void advance_to_cycle(int target_cycle) {
 		int safety_counter = 0;
 		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
-		while (ppu->get_current_cycle() < target_cycle && safety_counter < MAX_CYCLES) {
-			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
-			safety_counter++;
+		int initial_cycle = ppu->get_current_cycle();
+		int initial_scanline = ppu->get_current_scanline();
+
+		// Handle cycle wrapping: if target is 341, advance to end of current scanline
+		if (target_cycle >= 341) {
+			// Advance to end of current scanline (341 cycles total per scanline)
+			while (ppu->get_current_cycle() != 0 && safety_counter < MAX_CYCLES) {
+				ppu->tick_single_dot();
+				safety_counter++;
+			}
+		} else {
+			// Normal case: advance to target cycle on current scanline
+			while (ppu->get_current_cycle() < target_cycle && ppu->get_current_scanline() == initial_scanline &&
+				   safety_counter < MAX_CYCLES) {
+				ppu->tick_single_dot();
+				safety_counter++;
+			}
 		}
+
 		if (safety_counter >= MAX_CYCLES) {
-			throw std::runtime_error("advance_to_cycle hit safety limit - possible infinite loop");
+			// Debug information for infinite loop diagnosis
+			throw std::runtime_error("advance_to_cycle hit safety limit - possible infinite loop. " +
+									 std::string("Started at scanline ") + std::to_string(initial_scanline) +
+									 ", cycle " + std::to_string(initial_cycle) +
+									 ". Target cycle: " + std::to_string(target_cycle) +
+									 ". Current scanline: " + std::to_string(ppu->get_current_scanline()) +
+									 ", cycle: " + std::to_string(ppu->get_current_cycle()));
 		}
 	}
 

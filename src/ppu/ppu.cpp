@@ -169,7 +169,7 @@ void PPU::tick_internal() {
 	current_cycle_++;
 
 	// Handle VBlank timing AFTER cycle increment for correct timing
-	handle_vblank_timing();
+	// handle_vblank_timing(); // DISABLED - using phase-based timing instead
 
 	// Check for end of scanline
 	if (current_cycle_ >= PPUTiming::CYCLES_PER_SCANLINE) {
@@ -189,6 +189,9 @@ void PPU::tick_internal() {
 }
 
 uint8_t PPU::read_register(uint16_t address) {
+	// PPU register reads take exactly 1 PPU cycle
+	tick_single_dot();
+
 	// Map address to PPU register
 	uint16_t register_addr = PPUConstants::REGISTER_BASE + (address & PPUConstants::REGISTER_MASK);
 
@@ -205,7 +208,46 @@ uint8_t PPU::read_register(uint16_t address) {
 	}
 }
 
+uint8_t PPU::peek_register(uint16_t address) const {
+	// Non-intrusive register peek for debugging - no side effects, no tick
+
+	// Map address to PPU register
+	uint16_t register_addr = PPUConstants::REGISTER_BASE + (address & PPUConstants::REGISTER_MASK);
+
+	switch (static_cast<PPURegister>(register_addr)) {
+	case PPURegister::PPUCTRL:
+		// Write-only, return last written value
+		return control_register_;
+	case PPURegister::PPUMASK:
+		// Write-only, return last written value
+		return mask_register_;
+	case PPURegister::PPUSTATUS:
+		// Read status without clearing VBlank flag
+		return status_register_;
+	case PPURegister::OAMADDR:
+		// Write-only, return last written value
+		return oam_address_;
+	case PPURegister::OAMDATA:
+		// Return current OAM data without side effects
+		return oam_memory_[oam_address_];
+	case PPURegister::PPUSCROLL:
+		// Write-only, return 0 (open bus)
+		return 0;
+	case PPURegister::PPUADDR:
+		// Write-only, return 0 (open bus)
+		return 0;
+	case PPURegister::PPUDATA:
+		// Return read buffer without advancing address
+		return read_buffer_;
+	default:
+		return 0;
+	}
+}
+
 void PPU::write_register(uint16_t address, uint8_t value) {
+	// PPU register writes take exactly 1 PPU cycle
+	tick_single_dot();
+
 	// Map address to PPU register
 	uint16_t register_addr = PPUConstants::REGISTER_BASE + (address & PPUConstants::REGISTER_MASK);
 
@@ -245,6 +287,12 @@ void PPU::process_visible_scanline() {
 	if (current_cycle_ == 0 && is_rendering_enabled()) {
 		// DON'T clear shift registers - they should contain pre-loaded data from pre-render scanline
 		// The NES hardware maintains shift register state between scanlines
+
+		// CRITICAL: The cycle-accurate sprite evaluation evaluates for NEXT scanline,
+		// but rendering needs sprites for CURRENT scanline. Use simple evaluation for current scanline.
+		if (is_sprites_enabled()) {
+			simple_sprite_evaluation_for_current_scanline();
+		}
 	}
 
 	// During the first 8 cycles, we need to fetch the first two tiles
@@ -305,9 +353,7 @@ void PPU::process_visible_scanline() {
 		// This resets the horizontal position for the next scanline
 		if (current_cycle_ == 257) {
 			copy_horizontal_scroll();
-		}
-
-		// Continue background tile fetching for next scanline (cycles 320-335)
+		} // Continue background tile fetching for next scanline (cycles 320-335)
 		// These are the first two tiles that will be rendered on the next scanline
 		if (current_cycle_ >= 320 && current_cycle_ < 336 && is_background_enabled()) {
 			perform_tile_fetch_cycle();
@@ -444,6 +490,9 @@ uint8_t PPU::read_ppudata() {
 		vram_address_ += 1; // Increment by 1 (across)
 	}
 
+	// VRAM address is 14-bit, wrap at $4000
+	vram_address_ &= 0x3FFF;
+
 	return result;
 }
 
@@ -466,7 +515,7 @@ void PPU::write_oamaddr(uint8_t value) {
 }
 
 void PPU::write_oamdata(uint8_t value) {
-	memory_.write_oam(oam_address_, value);
+	oam_memory_[oam_address_] = value;
 	oam_address_++; // Auto-increment OAM address
 }
 
@@ -509,6 +558,9 @@ void PPU::write_ppudata(uint8_t value) {
 	} else {
 		vram_address_ += 1; // Increment by 1 (across)
 	}
+
+	// VRAM address is 14-bit, wrap at $4000
+	vram_address_ &= 0x3FFF;
 }
 
 // Memory access helpers
@@ -516,8 +568,11 @@ uint8_t PPU::read_ppu_memory(uint16_t address) {
 	address &= 0x3FFF; // 14-bit address space
 
 	if (address < PPUMemoryMap::PATTERN_TABLE_1_END + 1) {
-		// Pattern tables - read from cartridge
-		uint8_t value = memory_.read_pattern_table(address);
+		// Pattern tables - read from cartridge CHR ROM/RAM
+		uint8_t value = 0;
+		if (cartridge_) {
+			value = cartridge_->ppu_read(address);
+		}
 		update_io_bus(value);
 		return value;
 	} else if (address < PPUMemoryMap::NAMETABLE_MIRROR_END + 1) {
@@ -540,8 +595,10 @@ void PPU::write_ppu_memory(uint16_t address, uint8_t value) {
 	update_io_bus(value);
 
 	if (address < PPUMemoryMap::PATTERN_TABLE_1_END + 1) {
-		// Pattern tables - writes may go to cartridge CHR RAM (if present)
-		// For now, ignore writes to pattern tables
+		// Pattern tables - writes go to cartridge CHR RAM (if present)
+		if (cartridge_) {
+			cartridge_->ppu_write(address, value);
+		}
 	} else if (address < PPUMemoryMap::NAMETABLE_MIRROR_END + 1) {
 		// Nametables and mirrors
 		memory_.write_vram(address, value);
@@ -743,7 +800,13 @@ uint32_t PPU::get_palette_color(uint8_t palette_index) {
 // =============================================================================
 
 uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority) {
-	uint8_t current_x = current_cycle_;
+	// Only render sprites during visible pixels (cycles 0-255)
+	if (current_cycle_ >= 256) {
+		sprite_priority = false;
+		return 0; // No sprites rendered outside visible area
+	}
+	
+	uint8_t current_x = static_cast<uint8_t>(current_cycle_);
 
 	// Check for left-edge clipping first
 	if (current_x < 8 && !(mask_register_ & PPUConstants::PPUMASK_SHOW_SPRITES_LEFT_MASK)) {
@@ -797,88 +860,6 @@ uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority) {
 	}
 
 	return 0; // No sprite pixel (transparent)
-}
-
-void PPU::evaluate_sprites_for_scanline() {
-	sprite_count_current_scanline_ = 0;
-	sprite_0_on_scanline_ = false;
-
-	uint8_t scanline = current_scanline_;
-
-	// Check sprite size (8x8 or 8x16)
-	uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
-
-	// Get OAM data
-	const auto &oam_data = memory_.get_oam();
-
-	// Evaluate all 64 sprites
-	for (uint8_t sprite_index = 0; sprite_index < 64; sprite_index++) {
-		// If we already have 8 sprites, set overflow flag and stop
-		if (sprite_count_current_scanline_ >= 8) {
-			status_register_ |= PPUConstants::PPUSTATUS_OVERFLOW_MASK;
-			break;
-		}
-
-		// Get sprite data (4 bytes per sprite)
-		uint8_t base_addr = sprite_index * 4;
-		Sprite sprite;
-		sprite.y_position = oam_data[base_addr];
-		sprite.tile_index = oam_data[base_addr + 1];
-		sprite.attributes = *reinterpret_cast<const SpriteAttributes *>(&oam_data[base_addr + 2]);
-		sprite.x_position = oam_data[base_addr + 3];
-
-		// Check if sprite is on current scanline
-		if (scanline >= sprite.y_position && scanline < sprite.y_position + sprite_height) {
-			// Calculate sprite Y offset
-			uint8_t sprite_y = scanline - sprite.y_position;
-
-			// Handle vertical flip
-			if (sprite.attributes.flip_vertical) {
-				sprite_y = (sprite_height - 1) - sprite_y;
-			}
-
-			// Fetch sprite pattern data
-			bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
-
-			ScanlineSprite &scanline_sprite = scanline_sprites_[sprite_count_current_scanline_];
-			scanline_sprite.sprite_data = sprite;
-			scanline_sprite.sprite_index = sprite_index;
-
-			// For 8x16 sprites, handle pattern table selection differently
-			if (sprite_height == 16) {
-				// In 8x16 mode, bit 0 of tile_index selects pattern table
-				sprite_table = (sprite.tile_index & 0x01) != 0;
-				uint8_t tile_number = sprite.tile_index & 0xFE; // Clear LSB
-
-				if (sprite_y < 8) {
-					// Top half
-					scanline_sprite.pattern_data_low =
-						fetch_sprite_pattern_data_raw(tile_number, sprite_y, sprite_table);
-					scanline_sprite.pattern_data_high =
-						fetch_sprite_pattern_data_raw(tile_number, sprite_y + 8, sprite_table);
-				} else {
-					// Bottom half
-					scanline_sprite.pattern_data_low =
-						fetch_sprite_pattern_data_raw(tile_number + 1, sprite_y - 8, sprite_table);
-					scanline_sprite.pattern_data_high =
-						fetch_sprite_pattern_data_raw(tile_number + 1, sprite_y, sprite_table);
-				}
-			} else {
-				// 8x8 sprites
-				scanline_sprite.pattern_data_low =
-					fetch_sprite_pattern_data_raw(sprite.tile_index, sprite_y, sprite_table);
-				scanline_sprite.pattern_data_high =
-					fetch_sprite_pattern_data_raw(sprite.tile_index, sprite_y + 8, sprite_table);
-			}
-
-			// Track sprite 0
-			if (sprite_index == 0) {
-				sprite_0_on_scanline_ = true;
-			}
-
-			sprite_count_current_scanline_++;
-		}
-	}
 }
 
 uint8_t PPU::fetch_sprite_pattern_data_raw(uint8_t tile_index, uint8_t fine_y, bool sprite_table) {
@@ -1073,13 +1054,14 @@ void PPU::perform_oam_dma_cycle() {
 		if (oam_dma_cycle_ <= PPUTiming::OAM_DMA_CYCLES - 1) {
 			if ((oam_dma_cycle_ & 1) == 1) {
 				// Odd cycles: Read from CPU memory
-				uint16_t cpu_address = oam_dma_address_ + ((oam_dma_cycle_ - 1) >> 1);
+				uint8_t byte_index = (oam_dma_cycle_ - 1) >> 1;
+				uint16_t cpu_address = oam_dma_address_ + byte_index;
 				if (bus_) {
 					ppu_data_bus_ = bus_->read(cpu_address);
 				}
 			} else {
 				// Even cycles: Write to OAM
-				uint8_t oam_index = ((oam_dma_cycle_ - 2) >> 1);
+				uint8_t oam_index = (oam_dma_cycle_ - 2) >> 1;
 				oam_memory_[oam_index] = ppu_data_bus_;
 			}
 		}
@@ -1161,6 +1143,267 @@ void PPU::handle_sprite_overflow_bug() {
 	// The hardware bug: sprite index increments incorrectly
 	// This simplified implementation just sets the overflow flag
 	// Real hardware behavior is more complex but rarely matters for games
+}
+
+void PPU::prepare_scanline_sprites() {
+	// Convert secondary OAM to scanline sprites with pattern data
+	// This happens during cycles 257-320 in hardware
+
+	for (uint8_t i = 0; i < sprite_count_current_scanline_ && i < 8; i++) {
+		uint8_t base_addr = i * 4;
+
+		// Get sprite data from secondary OAM
+		Sprite sprite;
+		sprite.y_position = secondary_oam_[base_addr];
+		sprite.tile_index = secondary_oam_[base_addr + 1];
+		sprite.attributes = *reinterpret_cast<const SpriteAttributes *>(&secondary_oam_[base_addr + 2]);
+		sprite.x_position = secondary_oam_[base_addr + 3];
+
+		// Calculate sprite Y offset for next scanline (sprite evaluation is for next scanline)
+		uint8_t next_scanline = (current_scanline_ + 1) & 0xFF;
+		uint8_t sprite_y = next_scanline - sprite.y_position;
+		uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
+
+		// Handle vertical flip
+		if (sprite.attributes.flip_vertical) {
+			sprite_y = (sprite_height - 1) - sprite_y;
+		}
+
+		// Store sprite data and index
+		ScanlineSprite &scanline_sprite = scanline_sprites_[i];
+		scanline_sprite.sprite_data = sprite;
+		scanline_sprite.sprite_index = (i == 0 && sprite_0_on_scanline_) ? 0 : i; // Track sprite 0
+
+		// Fetch sprite pattern data
+		bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
+
+		if (sprite_height == 16) {
+			// 8x16 sprites - bit 0 of tile_index selects pattern table
+			sprite_table = (sprite.tile_index & 0x01) != 0;
+			uint8_t tile_number = sprite.tile_index & 0xFE; // Clear LSB
+
+			if (sprite_y < 8) {
+				// Top half
+				scanline_sprite.pattern_data_low = fetch_sprite_pattern_data_raw(tile_number, sprite_y, sprite_table);
+				scanline_sprite.pattern_data_high =
+					fetch_sprite_pattern_data_raw(tile_number, sprite_y + 8, sprite_table);
+			} else {
+				// Bottom half
+				scanline_sprite.pattern_data_low =
+					fetch_sprite_pattern_data_raw(tile_number + 1, sprite_y - 8, sprite_table);
+				scanline_sprite.pattern_data_high =
+					fetch_sprite_pattern_data_raw(tile_number + 1, sprite_y, sprite_table);
+			}
+		} else {
+			// 8x8 sprites
+			scanline_sprite.pattern_data_low = fetch_sprite_pattern_data_raw(sprite.tile_index, sprite_y, sprite_table);
+			scanline_sprite.pattern_data_high =
+				fetch_sprite_pattern_data_raw(sprite.tile_index, sprite_y + 8, sprite_table);
+		}
+	}
+}
+
+void PPU::prepare_scanline_sprites_for_current_scanline() {
+	// Convert secondary OAM to scanline sprites for CURRENT scanline
+	// This is called at the start of each visible scanline
+
+	for (uint8_t i = 0; i < sprite_count_current_scanline_ && i < 8; i++) {
+		uint8_t base_addr = i * 4;
+
+		// Get sprite data from secondary OAM
+		Sprite sprite;
+		sprite.y_position = secondary_oam_[base_addr];
+		sprite.tile_index = secondary_oam_[base_addr + 1];
+		sprite.attributes = *reinterpret_cast<const SpriteAttributes *>(&secondary_oam_[base_addr + 2]);
+		sprite.x_position = secondary_oam_[base_addr + 3];
+
+		// Calculate sprite Y offset for CURRENT scanline
+		uint8_t sprite_y = current_scanline_ - sprite.y_position;
+		uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
+
+		// Handle vertical flip
+		if (sprite.attributes.flip_vertical) {
+			sprite_y = (sprite_height - 1) - sprite_y;
+		}
+
+		// Store sprite data and index
+		ScanlineSprite &scanline_sprite = scanline_sprites_[i];
+		scanline_sprite.sprite_data = sprite;
+		scanline_sprite.sprite_index = (i == 0 && sprite_0_on_scanline_) ? 0 : i; // Track sprite 0
+
+		// Fetch sprite pattern data
+		bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
+
+		if (sprite_height == 16) {
+			// 8x16 sprites - bit 0 of tile_index selects pattern table
+			sprite_table = (sprite.tile_index & 0x01) != 0;
+			uint8_t tile_number = sprite.tile_index & 0xFE; // Clear LSB
+
+			if (sprite_y < 8) {
+				// Top half
+				scanline_sprite.pattern_data_low = fetch_sprite_pattern_data_raw(tile_number, sprite_y, sprite_table);
+				scanline_sprite.pattern_data_high =
+					fetch_sprite_pattern_data_raw(tile_number, sprite_y + 8, sprite_table);
+			} else {
+				// Bottom half
+				scanline_sprite.pattern_data_low =
+					fetch_sprite_pattern_data_raw(tile_number + 1, sprite_y - 8, sprite_table);
+				scanline_sprite.pattern_data_high =
+					fetch_sprite_pattern_data_raw(tile_number + 1, sprite_y, sprite_table);
+			}
+		} else {
+			// 8x8 sprites
+			scanline_sprite.pattern_data_low = fetch_sprite_pattern_data_raw(sprite.tile_index, sprite_y, sprite_table);
+			scanline_sprite.pattern_data_high =
+				fetch_sprite_pattern_data_raw(sprite.tile_index, sprite_y + 8, sprite_table);
+		}
+	}
+}
+
+void PPU::simple_sprite_evaluation_for_current_scanline() {
+	// Simple sprite evaluation - directly evaluate OAM for current scanline
+	// This bypasses the complex cycle-accurate evaluation for debugging
+
+	sprite_count_current_scanline_ = 0;
+	sprite_0_on_scanline_ = false;
+
+	uint8_t scanline = current_scanline_;
+	uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
+
+	// Debug: Only print for a few scanlines to avoid spam
+	bool debug_print = false; // Disabled to reduce spam
+
+	if (debug_print) {
+		printf("DEBUG: Evaluating sprites for scanline %d, sprites_enabled=%d\n", scanline, is_sprites_enabled());
+
+		// Check what's in CPU memory $0200-$020F (first 4 sprites worth)
+		printf("DEBUG: Checking CPU memory $0200-$020F (OAM source)...\n");
+		if (bus_) {
+			printf("DEBUG: Bus is valid, reading CPU memory...\n");
+			for (int i = 0; i < 4; i++) {
+				uint16_t base_addr = 0x0200 + (i * 4);
+				uint8_t sprite_y = bus_->read(base_addr);
+				uint8_t tile_index = bus_->read(base_addr + 1);
+				uint8_t attributes = bus_->read(base_addr + 2);
+				uint8_t sprite_x = bus_->read(base_addr + 3);
+				printf("DEBUG: CPU $%04X sprite %d: Y=%d, tile=%02X, attr=%02X, X=%d\n", base_addr, i, sprite_y,
+					   tile_index, attributes, sprite_x);
+			}
+		} else {
+			printf("DEBUG: Bus is NULL! Cannot read CPU memory.\n");
+		}
+
+		// Check first few sprites in OAM to see what data we have
+		printf("DEBUG: Checking OAM data...\n");
+		for (int i = 0; i < 4; i++) {
+			uint8_t base_addr = i * 4;
+			uint8_t sprite_y = oam_memory_[base_addr];
+			uint8_t tile_index = oam_memory_[base_addr + 1];
+			uint8_t attributes = oam_memory_[base_addr + 2];
+			uint8_t sprite_x = oam_memory_[base_addr + 3];
+			printf("DEBUG: OAM sprite %d: Y=%d, tile=%02X, attr=%02X, X=%d\n", i, sprite_y, tile_index, attributes,
+				   sprite_x);
+		}
+		printf("DEBUG: OAM check complete.\n");
+	}
+
+	// Evaluate all 64 sprites
+	for (uint8_t sprite_index = 0; sprite_index < 64 && sprite_count_current_scanline_ < 8; sprite_index++) {
+		uint8_t base_addr = sprite_index * 4;
+		uint8_t sprite_y = oam_memory_[base_addr];
+		uint8_t tile_index = oam_memory_[base_addr + 1];
+		uint8_t attributes = oam_memory_[base_addr + 2];
+		uint8_t sprite_x = oam_memory_[base_addr + 3];
+
+		// NES Hardware Behavior: Sprites with Y positions 239-255 are clipped
+		// and should not appear on screen. This prevents Y coordinate wrapping.
+		if (sprite_y >= 239) {
+			continue; // Skip sprites that are off-screen
+		}
+
+		// Check if sprite is on current scanline
+		if (scanline >= sprite_y && scanline < sprite_y + sprite_height) {
+			if (debug_print) {
+				printf("DEBUG: Found sprite %d at Y=%d on scanline %d\n", sprite_index, sprite_y, scanline);
+			}
+
+			// Calculate sprite Y offset
+			uint8_t sprite_y_offset = scanline - sprite_y;
+
+			// Handle vertical flip
+			if (attributes & 0x80) { // flip_vertical bit
+				sprite_y_offset = (sprite_height - 1) - sprite_y_offset;
+			}
+
+			// Store sprite data directly in scanline_sprites_
+			ScanlineSprite &scanline_sprite = scanline_sprites_[sprite_count_current_scanline_];
+			scanline_sprite.sprite_data.y_position = sprite_y;
+			scanline_sprite.sprite_data.tile_index = tile_index;
+
+			// Manually extract attribute bits to avoid reinterpret_cast issues
+			scanline_sprite.sprite_data.attributes.palette = attributes & 0x03;				   // Bits 0-1
+			scanline_sprite.sprite_data.attributes.unused = (attributes >> 2) & 0x07;		   // Bits 2-4
+			scanline_sprite.sprite_data.attributes.priority = (attributes >> 5) & 0x01;		   // Bit 5
+			scanline_sprite.sprite_data.attributes.flip_horizontal = (attributes >> 6) & 0x01; // Bit 6
+			scanline_sprite.sprite_data.attributes.flip_vertical = (attributes >> 7) & 0x01;   // Bit 7
+
+			scanline_sprite.sprite_data.x_position = sprite_x;
+			scanline_sprite.sprite_index = sprite_index;
+
+			// Fetch sprite pattern data
+			bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
+
+			if (sprite_height == 16) {
+				// 8x16 sprites - bit 0 of tile_index selects pattern table
+				sprite_table = (tile_index & 0x01) != 0;
+				uint8_t tile_number = tile_index & 0xFE; // Clear LSB
+
+				if (sprite_y_offset < 8) {
+					// Top half - tile_number
+					scanline_sprite.pattern_data_low =
+						fetch_sprite_pattern_data_raw(tile_number, sprite_y_offset, sprite_table);
+					scanline_sprite.pattern_data_high =
+						fetch_sprite_pattern_data_raw(tile_number, sprite_y_offset + 8, sprite_table);
+				} else {
+					// Bottom half - tile_number + 1, fine_y = sprite_y_offset - 8
+					uint8_t fine_y = sprite_y_offset - 8;
+					scanline_sprite.pattern_data_low =
+						fetch_sprite_pattern_data_raw(tile_number + 1, fine_y, sprite_table);
+					scanline_sprite.pattern_data_high =
+						fetch_sprite_pattern_data_raw(tile_number + 1, fine_y + 8, sprite_table);
+				}
+			} else {
+				// 8x8 sprites
+				scanline_sprite.pattern_data_low =
+					fetch_sprite_pattern_data_raw(tile_index, sprite_y_offset, sprite_table);
+				scanline_sprite.pattern_data_high =
+					fetch_sprite_pattern_data_raw(tile_index, sprite_y_offset + 8, sprite_table);
+			}
+
+			// Track sprite 0
+			if (sprite_index == 0) {
+				sprite_0_on_scanline_ = true;
+			}
+
+			sprite_count_current_scanline_++;
+		}
+	}
+
+	if (debug_print && sprite_count_current_scanline_ > 0) {
+		printf("DEBUG: Found %d sprites on scanline %d\n", sprite_count_current_scanline_, scanline);
+	}
+
+	// Set overflow flag if more than 8 sprites were found
+	if (sprite_count_current_scanline_ >= 8) {
+		// Check if there are more sprites
+		for (uint8_t sprite_index = 8; sprite_index < 64; sprite_index++) {
+			uint8_t sprite_y = oam_memory_[sprite_index * 4];
+			if (scanline >= sprite_y && scanline < sprite_y + sprite_height) {
+				status_register_ |= PPUConstants::PPUSTATUS_OVERFLOW_MASK;
+				break;
+			}
+		}
+	}
 }
 
 // =============================================================================
@@ -1402,7 +1645,9 @@ uint8_t PPU::read_oamdata_during_rendering() {
 		}
 	} else {
 		// During VBlank or when rendering is disabled, normal read
-		return oam_memory_[oam_address_];
+		uint8_t value = oam_memory_[oam_address_];
+		oam_address_++; // Auto-increment OAM address on read
+		return value;
 	}
 }
 

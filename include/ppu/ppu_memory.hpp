@@ -6,7 +6,8 @@
 
 namespace nes {
 
-/// PPU Memory management - handles VRAM, OAM, and palette memory
+/// PPU Memory management - handles VRAM and palette memory
+/// Note: OAM (Object Attribute Memory) is handled directly by the PPU class
 class PPUMemory {
   public:
 	PPUMemory();
@@ -19,9 +20,6 @@ class PPUMemory {
 	uint8_t read_palette(uint8_t index);
 	void write_palette(uint8_t index, uint8_t value);
 
-	uint8_t read_oam(uint8_t index);
-	void write_oam(uint8_t index, uint8_t value);
-
 	// Reset memory to power-on state
 	void reset();
 	void power_on();
@@ -32,9 +30,6 @@ class PPUMemory {
 	}
 	const std::array<uint8_t, 32> &get_palette_ram() const {
 		return palette_ram_;
-	}
-	const std::array<uint8_t, 256> &get_oam() const {
-		return oam_;
 	}
 
 	// Pattern table access (reads from cartridge CHR ROM/RAM)
@@ -47,7 +42,6 @@ class PPUMemory {
 	// Internal memory arrays
 	std::array<uint8_t, 2048> vram_;	  // 2KB VRAM (nametables)
 	std::array<uint8_t, 32> palette_ram_; // 32 bytes palette RAM
-	std::array<uint8_t, 256> oam_;		  // 256 bytes Object Attribute Memory
 
 	// Mirroring state
 	bool vertical_mirroring_;

@@ -63,7 +63,17 @@ class MemoryMappingTestFixture {
 
 	uint8_t read_vram(uint16_t address) {
 		set_vram_address(address);
-		return read_ppu_register(0x2007);
+
+		// Hardware behavior: PPUDATA reads are buffered except for palette memory
+		if (address >= 0x3F00 && address <= 0x3F1F) {
+			// Palette reads return immediately (no buffering)
+			return read_ppu_register(0x2007);
+		} else {
+			// Non-palette reads: first read loads buffer, second read returns data
+			read_ppu_register(0x2007);		  // Dummy read to load buffer
+			set_vram_address(address);		  // Reset address since dummy read incremented it
+			return read_ppu_register(0x2007); // Actual read
+		}
 	}
 
   protected:

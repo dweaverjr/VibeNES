@@ -11,7 +11,6 @@ void PPUMemory::power_on() {
 	// Clear all memory to 0 on power-on
 	vram_.fill(0);
 	palette_ram_.fill(0);
-	oam_.fill(0);
 	vertical_mirroring_ = false;
 }
 
@@ -62,17 +61,10 @@ void PPUMemory::write_palette(uint8_t index, uint8_t value) {
 	}
 }
 
-uint8_t PPUMemory::read_oam(uint8_t index) {
-	return oam_[index];
-}
-
-void PPUMemory::write_oam(uint8_t index, uint8_t value) {
-	oam_[index] = value;
-}
-
 uint8_t PPUMemory::read_pattern_table(uint16_t address) {
 	// Pattern table reads come from cartridge CHR ROM/RAM
-	// This is a placeholder - will be connected to cartridge later
+	// This function should not be used directly - pattern table access should go through PPU
+	// which handles cartridge connection properly. Return 0 for now.
 	(void)address; // Suppress unused parameter warning
 	return 0;
 }
@@ -82,6 +74,11 @@ void PPUMemory::set_mirroring_mode(bool vertical_mirroring) {
 }
 
 uint16_t PPUMemory::map_nametable_address(uint16_t address) {
+	// Handle $3000-$3EFF mirror of $2000-$2EFF first
+	if (address >= 0x3000 && address <= 0x3EFF) {
+		address = 0x2000 + (address - 0x3000);
+	}
+
 	// Remove the base nametable address to get offset
 	uint16_t offset = address - PPUMemoryMap::NAMETABLE_0_START;
 
@@ -103,9 +100,11 @@ uint16_t PPUMemory::map_nametable_address(uint16_t address) {
 		// NT2 ($2800-$2BFF) -> VRAM $0400-$07FF
 		// NT3 ($2C00-$2FFF) -> VRAM $0400-$07FF (mirror of NT2)
 		if (offset >= 0x800) {
-			offset -= 0x400; // Map nametables 2,3 to upper 1KB
+			// Nametables 2,3: subtract 0x800 to get position within pair, then add 0x400 for upper 1KB
+			offset = 0x400 + (offset - 0x800);
 		} else if (offset >= 0x400) {
-			offset -= 0x400; // Map nametable 1 to lower 1KB (mirror of NT0)
+			// Nametable 1: subtract 0x400 to mirror to nametable 0 (lower 1KB)
+			offset -= 0x400;
 		}
 	}
 

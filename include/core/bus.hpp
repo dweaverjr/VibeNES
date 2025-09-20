@@ -32,6 +32,9 @@ class SystemBus final : public Component {
 	[[nodiscard]] Byte read(Address address) const;
 	void write(Address address, Byte value);
 
+	// Non-intrusive memory peek (no side effects) for debugging
+	[[nodiscard]] Byte peek(Address address) const;
+
 	// Component management
 	void connect_ram(std::shared_ptr<Ram> ram);
 	void connect_ppu(std::shared_ptr<PPU> ppu);

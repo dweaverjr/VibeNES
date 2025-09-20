@@ -125,6 +125,13 @@
             "detail": "Build and run debug version with GUI"
         },
         {
+            "type": "shell",
+            "label": "Run Debug (No Build)",
+            "command": "${workspaceFolder}/build/debug/VibeNES_GUI.exe",
+            "group": "test",
+            "detail": "Run debug version with GUI without building"
+        },
+        {
             "type": "cppbuild",
             "label": "Build Tests",
             "command": "c:\\msys64\\ucrt64\\bin\\g++.exe",

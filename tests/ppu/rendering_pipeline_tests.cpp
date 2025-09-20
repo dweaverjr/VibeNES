@@ -1,8 +1,11 @@
+#include "../../include/apu/apu.hpp"
+#include "../../include/cartridge/cartridge.hpp"
+#include "../../include/core/bus.hpp"
+#include "../../include/cpu/cpu_6502.hpp"
+#include "../../include/memory/ram.hpp"
+#include "../../include/ppu/ppu.hpp"
+#include "../../include/ppu/ppu_memory.hpp"
 #include "../catch2/catch_amalgamated.hpp"
-#include "core/bus.hpp"
-#include "memory/ram.hpp"
-#include "ppu/ppu.hpp"
-#include "ppu/ppu_memory.hpp"
 #include <memory>
 
 using namespace nes;
@@ -12,14 +15,30 @@ class RenderingPipelineTestFixture {
 	RenderingPipelineTestFixture() {
 		bus = std::make_unique<nes::SystemBus>();
 		ram = std::make_shared<nes::Ram>();
+		cartridge = std::make_shared<nes::Cartridge>();
+		apu = std::make_shared<nes::APU>();
+		cpu = std::make_shared<nes::CPU6502>(bus.get());
 		ppu_memory = std::make_shared<nes::PPUMemory>();
 
+		// Connect components to bus (like TimingTestFixture)
 		bus->connect_ram(ram);
+		bus->connect_cartridge(cartridge);
+		bus->connect_apu(apu);
+		bus->connect_cpu(cpu);
 
+		// Create and connect PPU
 		ppu = std::make_shared<nes::PPU>();
 		ppu->connect_bus(bus.get());
 		bus->connect_ppu(ppu);
 
+		// Connect cartridge to PPU for CHR ROM access
+		ppu->connect_cartridge(cartridge);
+
+		// Connect CPU to PPU for NMI generation
+		ppu->connect_cpu(cpu.get());
+
+		// Power on
+		bus->power_on();
 		ppu->power_on();
 
 		// Set up basic rendering environment
@@ -200,6 +219,9 @@ class RenderingPipelineTestFixture {
   protected:
 	std::unique_ptr<nes::SystemBus> bus;
 	std::shared_ptr<nes::Ram> ram;
+	std::shared_ptr<nes::Cartridge> cartridge;
+	std::shared_ptr<nes::APU> apu;
+	std::shared_ptr<nes::CPU6502> cpu;
 	std::shared_ptr<nes::PPUMemory> ppu_memory;
 	std::shared_ptr<nes::PPU> ppu;
 };

@@ -1,9 +1,10 @@
 #include "../catch2/catch_amalgamated.hpp"
+#include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
+#include "cpu/cpu_6502.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
-#include "ppu/ppu_memory.hpp"
 #include <memory>
 
 using namespace nes;
@@ -13,14 +14,29 @@ class PatternTableTestFixture {
 	PatternTableTestFixture() {
 		bus = std::make_unique<SystemBus>();
 		ram = std::make_shared<Ram>();
-		ppu_memory = std::make_shared<PPUMemory>();
+		cartridge = std::make_shared<Cartridge>();
+		apu = std::make_shared<APU>();
+		cpu = std::make_shared<CPU6502>(bus.get());
 
+		// Connect components to bus
 		bus->connect_ram(ram);
+		bus->connect_cartridge(cartridge);
+		bus->connect_apu(apu);
+		bus->connect_cpu(cpu);
 
+		// Create and connect PPU
 		ppu = std::make_shared<PPU>();
 		ppu->connect_bus(bus.get());
 		bus->connect_ppu(ppu);
 
+		// Connect cartridge to PPU for CHR ROM access
+		ppu->connect_cartridge(cartridge);
+
+		// Connect CPU to PPU for NMI generation
+		ppu->connect_cpu(cpu.get());
+
+		// Power on the system
+		bus->power_on();
 		ppu->power_on();
 
 		// Set up some basic CHR data for testing
@@ -164,6 +180,9 @@ class PatternTableTestFixture {
   protected:
 	std::unique_ptr<SystemBus> bus;
 	std::shared_ptr<Ram> ram;
+	std::shared_ptr<Cartridge> cartridge;
+	std::shared_ptr<APU> apu;
+	std::shared_ptr<CPU6502> cpu;
 	std::shared_ptr<PPUMemory> ppu_memory;
 	std::shared_ptr<PPU> ppu;
 	std::vector<uint8_t> test_chr_data_;

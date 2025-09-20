@@ -76,7 +76,7 @@ void MemoryViewerPanel::render_memory_grid(const nes::SystemBus *bus) {
 			for (uint16_t col = 0; col < bytes_per_row_; ++col) {
 				ImGui::TableNextColumn();
 				uint16_t addr = static_cast<uint16_t>(row_address + col);
-				uint8_t value = bus->read(addr);
+				uint8_t value = bus->peek(addr); // Use peek to avoid side effects
 				ImGui::TextColored(RetroTheme::get_hex_color(), "%02X", value);
 			}
 
@@ -93,7 +93,7 @@ void MemoryViewerPanel::render_ascii_column(const nes::SystemBus *bus, uint16_t 
 	char ascii_str[32] = {0}; // Max 16 bytes per row + null terminator
 
 	for (uint16_t i = 0; i < count && i < 31; ++i) {
-		uint8_t value = bus->read(static_cast<uint16_t>(start_addr + i));
+		uint8_t value = bus->peek(static_cast<uint16_t>(start_addr + i)); // Use peek to avoid side effects
 		ascii_str[i] = (value >= 32 && value < 127) ? static_cast<char>(value) : '.';
 	}
 

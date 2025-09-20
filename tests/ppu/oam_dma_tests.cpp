@@ -1,4 +1,6 @@
 #include "../catch2/catch_amalgamated.hpp"
+#include "apu/apu.hpp"
+#include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "memory/ram.hpp"
@@ -12,17 +14,30 @@ class OAMDMATestFixture {
 	OAMDMATestFixture() {
 		bus = std::make_unique<SystemBus>();
 		ram = std::make_shared<Ram>();
-		ppu_memory = std::make_shared<PPUMemory>();
+		cartridge = std::make_shared<Cartridge>();
+		apu = std::make_shared<APU>();
 
+		// Connect components to bus
 		bus->connect_ram(ram);
+		bus->connect_cartridge(cartridge);
+		bus->connect_apu(apu);
 
 		cpu = std::make_shared<CPU6502>(bus.get());
 		bus->connect_cpu(cpu);
 
+		// Create and connect PPU
 		ppu = std::make_shared<PPU>();
 		ppu->connect_bus(bus.get());
 		bus->connect_ppu(ppu);
 
+		// Connect cartridge to PPU for CHR ROM access
+		ppu->connect_cartridge(cartridge);
+
+		// Connect CPU to PPU for NMI generation
+		ppu->connect_cpu(cpu.get());
+
+		// Power on the system
+		bus->power_on();
 		ppu->power_on();
 		cpu->reset();
 
@@ -71,6 +86,22 @@ class OAMDMATestFixture {
 		}
 	}
 
+	void wait_for_dma_completion() {
+		// Wait for DMA to complete by advancing cycles
+		int cycles_waited = 0;
+		const int MAX_DMA_CYCLES = 600; // Safety limit
+
+		while (bus->is_dma_active() && cycles_waited < MAX_DMA_CYCLES) {
+			ppu->tick(CpuCycle{1}); // Advance PPU to process DMA
+			cycles_waited++;
+		}
+
+		// Add a few extra cycles to ensure completion
+		for (int i = 0; i < 10; i++) {
+			ppu->tick(CpuCycle{1});
+		}
+	}
+
 	uint64_t get_cpu_cycle_count() {
 		// For testing purposes, we'll use a simple cycle counter
 		// In real implementation, this would track actual CPU cycles
@@ -85,8 +116,9 @@ class OAMDMATestFixture {
   protected:
 	std::unique_ptr<SystemBus> bus;
 	std::shared_ptr<Ram> ram;
+	std::shared_ptr<Cartridge> cartridge;
+	std::shared_ptr<APU> apu;
 	std::shared_ptr<CPU6502> cpu;
-	std::shared_ptr<PPUMemory> ppu_memory;
 	std::shared_ptr<PPU> ppu;
 };
 
@@ -101,6 +133,9 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Basic Transfer", "[ppu][oam_dma][ba
 		// Trigger OAM DMA from page $02
 		trigger_oam_dma(0x02);
 
+		// Wait for DMA to complete
+		wait_for_dma_completion();
+
 		// Verify OAM contains the test pattern
 		verify_oam_contents(0x00);
 	}
@@ -110,12 +145,14 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Basic Transfer", "[ppu][oam_dma][ba
 		setup_test_data_in_ram(0x03);
 		clear_oam();
 		trigger_oam_dma(0x03);
+		wait_for_dma_completion();
 		verify_oam_contents(0x00);
 
 		// Test DMA from page $01 (zero page area)
 		setup_test_data_in_ram(0x01);
 		clear_oam();
 		trigger_oam_dma(0x01);
+		wait_for_dma_completion();
 		verify_oam_contents(0x00);
 	}
 
@@ -128,6 +165,9 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Basic Transfer", "[ppu][oam_dma][ba
 
 		// Trigger DMA
 		trigger_oam_dma(0x02);
+
+		// Wait for DMA to complete
+		wait_for_dma_completion();
 
 		// DMA should start at OAM address $80 and wrap around
 		write_ppu_register(0x2003, 0x80); // Reset to start position
@@ -244,10 +284,12 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Edge Cases", "[ppu][oam_dma][edge_c
 		// DMA from mirrored address (should read same data)
 		clear_oam();
 		trigger_oam_dma(0x08); // $0800 mirrors to $0000
+		wait_for_dma_completion();
 		verify_oam_contents(0x00);
 
 		clear_oam();
 		trigger_oam_dma(0x10); // $1000 mirrors to $0000
+		wait_for_dma_completion();
 		verify_oam_contents(0x00);
 	}
 
@@ -260,6 +302,9 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Edge Cases", "[ppu][oam_dma][edge_c
 		// Trigger DMA
 		trigger_oam_dma(0x02);
 
+		// Wait for DMA to complete
+		wait_for_dma_completion();
+
 		// OAM address should have wrapped around back to original + 256
 		// Since 256 bytes were written, final address should be $40
 		uint8_t final_oam_addr = read_ppu_register(0x2003);
@@ -270,6 +315,7 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Edge Cases", "[ppu][oam_dma][edge_c
 		// First transfer
 		setup_test_data_in_ram(0x02);
 		trigger_oam_dma(0x02);
+		wait_for_dma_completion();
 
 		// Set up different pattern for second transfer
 		for (uint16_t i = 0x0300; i < 0x0400; i++) {
@@ -278,6 +324,7 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Edge Cases", "[ppu][oam_dma][edge_c
 
 		// Second transfer should overwrite first
 		trigger_oam_dma(0x03);
+		wait_for_dma_completion();
 
 		// Verify second pattern
 		write_ppu_register(0x2003, 0x00);
@@ -301,6 +348,7 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA During Rendering", "[ppu][oam_dma][
 		// DMA should work normally during VBlank
 		clear_oam();
 		trigger_oam_dma(0x02);
+		wait_for_dma_completion();
 		verify_oam_contents(0x00);
 	}
 
@@ -318,6 +366,7 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA During Rendering", "[ppu][oam_dma][
 		// DMA should still work (though may affect rendering)
 		clear_oam();
 		trigger_oam_dma(0x02);
+		wait_for_dma_completion();
 		verify_oam_contents(0x00);
 	}
 }
@@ -346,6 +395,9 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Sprite Setup", "[ppu][oam_dma][spri
 
 		// Transfer to OAM
 		trigger_oam_dma(0x02);
+
+		// Wait for DMA to complete
+		wait_for_dma_completion();
 
 		// Verify sprite 0 data
 		write_ppu_register(0x2003, 0x00);
