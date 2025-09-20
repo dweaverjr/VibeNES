@@ -805,7 +805,7 @@ uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority) {
 		sprite_priority = false;
 		return 0; // No sprites rendered outside visible area
 	}
-	
+
 	uint8_t current_x = static_cast<uint8_t>(current_cycle_);
 
 	// Check for left-edge clipping first
