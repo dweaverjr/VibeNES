@@ -93,10 +93,10 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Increment", "[ppu][vram][
 
 		// Read back to verify addresses were incremented correctly
 		set_vram_address(0x2000);
-		uint8_t dummy = read_ppu_register(0x2007); // Dummy read
-		uint8_t data1 = read_ppu_register(0x2007); // $2000
-		uint8_t data2 = read_ppu_register(0x2007); // $2001
-		uint8_t data3 = read_ppu_register(0x2007); // $2002
+		[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007); // Dummy read
+		uint8_t data1 = read_ppu_register(0x2007);					// $2000
+		uint8_t data2 = read_ppu_register(0x2007);					// $2001
+		uint8_t data3 = read_ppu_register(0x2007);					// $2002
 
 		REQUIRE(static_cast<int>(data1) == 0x11);
 		REQUIRE(static_cast<int>(data2) == 0x22);
@@ -113,15 +113,15 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Increment", "[ppu][vram][
 
 		// Check data at incremented addresses
 		set_vram_address(0x2000); // $2000
-		uint8_t dummy1 = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t dummy1 = read_ppu_register(0x2007);
 		uint8_t data1 = read_ppu_register(0x2007);
 
 		set_vram_address(0x2020); // $2000 + 32
-		uint8_t dummy2 = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t dummy2 = read_ppu_register(0x2007);
 		uint8_t data2 = read_ppu_register(0x2007);
 
 		set_vram_address(0x2040); // $2000 + 64
-		uint8_t dummy3 = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t dummy3 = read_ppu_register(0x2007);
 		uint8_t data3 = read_ppu_register(0x2007);
 
 		REQUIRE(static_cast<int>(data1) == 0xAA);
@@ -135,14 +135,14 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Wrapping", "[ppu][vram][w
 		write_ppu_register(0x2000, 0x00); // +1 increment
 		set_vram_address(0x3FFF);
 
-		write_ppu_register(0x2007, 0x42);
+		write_ppu_register(0x2007, 0x02); // Valid 6-bit value (0x42 & 0x3F = 0x02)
 
 		// Address should wrap to $0000
 		set_vram_address(0x0000);
-		uint8_t dummy = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007);
 		uint8_t data = read_ppu_register(0x2007);
 
-		REQUIRE(static_cast<int>(data) == 0x42);
+		REQUIRE(static_cast<int>(data) == 0x02);
 	}
 
 	SECTION("Nametable addresses should mirror correctly") {
@@ -157,7 +157,7 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Wrapping", "[ppu][vram][w
 		for (uint16_t mirror = 0x3000; mirror <= 0x3F00; mirror += 0x1000) {
 			if (mirror < 0x3F00) { // Don't test palette area
 				set_vram_address(mirror);
-				uint8_t dummy = read_ppu_register(0x2007);
+				[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007);
 				uint8_t data = read_ppu_register(0x2007);
 
 				INFO("Testing mirror at address: 0x" << std::hex << mirror);
@@ -251,14 +251,14 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "Address Calculation Edge Cases", "[ppu
 		// PPU only has 14-bit address space
 		set_vram_address(0x7FFF); // Should be masked to $3FFF
 
-		write_ppu_register(0x2007, 0x99);
+		write_ppu_register(0x2007, 0x19); // Valid 6-bit value (0x99 & 0x3F = 0x19)
 
 		// Verify it was written to the masked address
 		set_vram_address(0x3FFF);
-		uint8_t dummy = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007);
 		uint8_t data = read_ppu_register(0x2007);
 
-		REQUIRE(static_cast<int>(data) == 0x99);
+		REQUIRE(static_cast<int>(data) == 0x19);
 	}
 
 	SECTION("Palette addresses should behave correctly") {

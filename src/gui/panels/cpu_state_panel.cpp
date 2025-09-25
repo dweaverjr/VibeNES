@@ -7,11 +7,12 @@ namespace nes::gui {
 CPUStatePanel::CPUStatePanel() : visible_(true) {
 }
 
-void CPUStatePanel::render(nes::CPU6502 *cpu, std::function<void()> step_callback) {
+void CPUStatePanel::render(nes::CPU6502 *cpu, std::function<void()> step_callback,
+						   std::function<void()> reset_callback) {
 	if (!cpu)
 		return;
 
-	render_controls(cpu, step_callback);
+	render_controls(cpu, step_callback, reset_callback);
 	ImGui::Separator();
 	render_registers(cpu);
 	ImGui::Separator();
@@ -75,7 +76,8 @@ void CPUStatePanel::render_stack_info(const nes::CPU6502 *cpu) {
 	ImGui::TextColored(RetroTheme::get_address_color(), "Stack Top: $01FF");
 }
 
-void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> step_callback) {
+void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> step_callback,
+									std::function<void()> reset_callback) {
 	ImGui::Separator();
 	ImGui::Text("CPU Debug Controls:");
 
@@ -153,9 +155,14 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 
 	ImGui::SameLine();
 
-	// Reset button - trigger CPU reset
-	if (ImGui::Button("Reset CPU")) {
-		cpu->trigger_reset();
+	// NES Reset button - trigger system-wide reset
+	if (ImGui::Button("NES Reset")) {
+		if (reset_callback) {
+			reset_callback(); // Use the provided reset callback for proper system coordination
+		} else {
+			// Fallback to direct CPU reset if no callback provided
+			cpu->trigger_reset();
+		}
 	}
 
 	ImGui::SameLine();
@@ -168,7 +175,7 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 						  "Step 1000x: Execute 1000 CPU instructions\n"
 						  "Step 10,000x: Execute 10,000 CPU instructions\n"
 						  "Step 100,000x: Execute 100,000 CPU instructions\n"
-						  "Reset: Restart CPU from reset vector\n"
+						  "NES Reset: Reset entire NES system to initial state\n"
 						  "(Hold buttons to repeat rapidly)");
 	}
 }

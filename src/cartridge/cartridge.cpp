@@ -46,6 +46,28 @@ bool Cartridge::load_rom(const std::string &filepath) {
 	return true;
 }
 
+bool Cartridge::load_from_rom_data(const RomData &rom_data) {
+	// Validate ROM data
+	if (!rom_data.valid) {
+		std::cerr << "Invalid ROM data provided" << std::endl;
+		return false;
+	}
+
+	// Store ROM data
+	rom_data_ = rom_data;
+
+	// Create appropriate mapper
+	mapper_ = create_mapper(rom_data_);
+	if (!mapper_) {
+		std::cerr << "Unsupported mapper: " << static_cast<int>(rom_data_.mapper_id) << std::endl;
+		rom_data_ = {}; // Clear invalid data
+		return false;
+	}
+
+	std::cout << "Cartridge loaded from ROM data successfully!" << std::endl;
+	return true;
+}
+
 void Cartridge::unload_rom() {
 	mapper_.reset();
 	rom_data_ = {};

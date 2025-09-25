@@ -89,6 +89,29 @@ class PPUTestFixture {
 		}
 	}
 
+	void advance_to_cycle(int target_cycle) {
+		int safety_counter = 0;
+		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+
+		// If target cycle is less than current cycle, we need to advance to next scanline
+		if (target_cycle < ppu->get_current_cycle()) {
+			// Advance to next scanline first
+			while (ppu->get_current_cycle() != 0 && safety_counter < MAX_CYCLES) {
+				ppu->tick_single_dot();
+				safety_counter++;
+			}
+		}
+
+		// Now advance to the target cycle within the current scanline
+		while (ppu->get_current_cycle() < target_cycle && safety_counter < MAX_CYCLES) {
+			ppu->tick_single_dot(); // Advance by exactly 1 PPU dot
+			safety_counter++;
+		}
+		if (safety_counter >= MAX_CYCLES) {
+			FAIL("advance_to_cycle hit safety limit - possible infinite loop");
+		}
+	}
+
   protected:
 	std::unique_ptr<SystemBus> bus;
 	std::shared_ptr<Ram> ram;
@@ -120,6 +143,7 @@ TEST_CASE_METHOD(PPUTestFixture, "PPU Reset", "[ppu][reset]") {
 		// Set VBlank flag artificially
 		write_ppu_register(0x2001, 0x10); // Enable rendering to allow VBlank
 		advance_to_scanline(241);		  // VBlank scanline
+		advance_to_cycle(1);			  // VBlank flag is set at cycle 1
 
 		uint8_t status_before = read_ppu_register(0x2002);
 		REQUIRE((status_before & 0x80) != 0); // VBlank should be set
@@ -214,6 +238,7 @@ TEST_CASE_METHOD(PPUTestFixture, "PPUSTATUS Register ($2002)", "[ppu][registers]
 	SECTION("VBlank flag should be set during VBlank") {
 		write_ppu_register(0x2001, 0x10); // Enable rendering
 		advance_to_scanline(241);		  // VBlank starts at scanline 241
+		advance_to_cycle(1);			  // VBlank flag is set at cycle 1
 
 		uint8_t status = read_ppu_register(0x2002);
 		REQUIRE((status & 0x80) != 0); // VBlank flag should be set
@@ -222,6 +247,7 @@ TEST_CASE_METHOD(PPUTestFixture, "PPUSTATUS Register ($2002)", "[ppu][registers]
 	SECTION("Reading PPUSTATUS should clear VBlank flag") {
 		write_ppu_register(0x2001, 0x10); // Enable rendering
 		advance_to_scanline(241);		  // VBlank starts
+		advance_to_cycle(1);			  // VBlank flag is set at cycle 1
 
 		uint8_t status1 = read_ppu_register(0x2002);
 		REQUIRE((status1 & 0x80) != 0); // VBlank should be set
@@ -316,8 +342,8 @@ TEST_CASE_METHOD(PPUTestFixture, "PPUDATA Register ($2007)", "[ppu][registers]")
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t dummy = read_ppu_register(0x2007); // Dummy read
-		uint8_t data = read_ppu_register(0x2007);  // Actual data
+		[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007); // Dummy read
+		uint8_t data = read_ppu_register(0x2007);					// Actual data
 
 		REQUIRE(static_cast<int>(data) == 0x42);
 	}

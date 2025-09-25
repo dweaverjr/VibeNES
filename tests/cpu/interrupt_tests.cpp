@@ -171,7 +171,7 @@ TEST_CASE("NMI interrupt handling", "[cpu][interrupts]") {
 
 		// Trigger NMI and process
 		cpu.trigger_nmi();
-		cpu.execute_instruction(); // This should process the NMI instead of the NOP
+		(void)cpu.execute_instruction(); // This should process the NMI instead of the NOP
 
 		// Verify PC jumped to NMI vector
 		REQUIRE(cpu.get_program_counter() == 0x8000);
@@ -235,7 +235,7 @@ TEST_CASE("IRQ interrupt handling", "[cpu][interrupts]") {
 
 		// Trigger IRQ and process
 		cpu.trigger_irq();
-		cpu.execute_instruction(); // This should process the IRQ instead of the NOP
+		(void)cpu.execute_instruction(); // This should process the IRQ instead of the NOP
 
 		// Verify PC jumped to IRQ vector
 		REQUIRE(cpu.get_program_counter() == 0x8200);
@@ -271,7 +271,7 @@ TEST_CASE("IRQ interrupt handling", "[cpu][interrupts]") {
 		// Put a NOP instruction and try to execute
 		cpu.set_program_counter(0x1000);
 		bus->write(0x1000, 0xEA);  // NOP
-		cpu.execute_instruction(); // Should execute NOP, not IRQ
+		(void)cpu.execute_instruction(); // Should execute NOP, not IRQ
 
 		// Should have executed NOP (PC incremented)
 		REQUIRE(cpu.get_program_counter() == 0x1001);
@@ -287,13 +287,13 @@ TEST_CASE("IRQ interrupt handling", "[cpu][interrupts]") {
 		// Put a NOP instruction
 		cpu.set_program_counter(0x1000);
 		bus->write(0x1000, 0xEA);  // NOP
-		cpu.execute_instruction(); // Should execute NOP since IRQ is masked
+		(void)cpu.execute_instruction(); // Should execute NOP since IRQ is masked
 
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_program_counter() == 0x1001); // NOP executed
 
 		cpu.set_interrupt_flag(false); // Enable interrupts
-		cpu.execute_instruction();	   // Should now process IRQ
+		(void)cpu.execute_instruction();	   // Should now process IRQ
 
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_program_counter() == 0x8200);
@@ -327,7 +327,7 @@ TEST_CASE("Reset interrupt handling", "[cpu][interrupts]") {
 
 		// Trigger reset and process
 		cpu.trigger_reset();
-		cpu.execute_instruction(); // This should process the reset
+		(void)cpu.execute_instruction(); // This should process the reset
 
 		// Verify PC jumped to reset vector
 		REQUIRE(cpu.get_program_counter() == 0x8100);
@@ -358,7 +358,7 @@ TEST_CASE("Reset interrupt handling", "[cpu][interrupts]") {
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::RESET);
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_program_counter() == 0x8100);
 	}
@@ -377,7 +377,7 @@ TEST_CASE("Interrupt priority and precedence", "[cpu][interrupts]") {
 		cpu.trigger_nmi();
 		cpu.trigger_reset();
 
-		cpu.execute_instruction(); // Process highest priority interrupt
+		(void)cpu.execute_instruction(); // Process highest priority interrupt
 
 		// Should process reset first
 		REQUIRE(cpu.get_program_counter() == 0x8100);
@@ -391,7 +391,7 @@ TEST_CASE("Interrupt priority and precedence", "[cpu][interrupts]") {
 		cpu.trigger_irq();
 		cpu.trigger_nmi();
 
-		cpu.execute_instruction(); // Process highest priority interrupt
+		(void)cpu.execute_instruction(); // Process highest priority interrupt
 
 		// Should process NMI first
 		REQUIRE(cpu.get_program_counter() == 0x8000);
@@ -412,17 +412,17 @@ TEST_CASE("Interrupt priority and precedence", "[cpu][interrupts]") {
 		cpu.trigger_reset();
 
 		// Process reset first
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x8100);
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::NMI);
 
 		// Process NMI second
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x8000);
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::IRQ);
 
 		// Process IRQ last
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x8200);
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
 	}
@@ -462,7 +462,7 @@ TEST_CASE("BRK instruction vs IRQ handling", "[cpu][interrupts]") {
 		bus->write(0x3000, 0xEA); // NOP
 
 		cpu.trigger_irq();
-		cpu.execute_instruction(); // Process IRQ
+		(void)cpu.execute_instruction(); // Process IRQ
 
 		// Check that B flag was cleared in pushed status
 		Byte irq_status = peek_stack(*bus, 0xFC);
@@ -477,7 +477,7 @@ TEST_CASE("BRK instruction vs IRQ handling", "[cpu][interrupts]") {
 		bus->write(0x4000, 0x00); // BRK
 		bus->write(0x4001, 0x00); // BRK padding byte
 
-		cpu.execute_instruction(); // Execute BRK
+		(void)cpu.execute_instruction(); // Execute BRK
 
 		// Check that B flag was set in pushed status
 		Byte brk_status = peek_stack(*bus, 0xFC);

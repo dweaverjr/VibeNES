@@ -152,11 +152,11 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "VRAM Address Corruption During B
 		write_ppu_register(0x2006, 0x00); // Address = $2400
 
 		// Read during background fetching
-		uint8_t corrupted_data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t corrupted_data = read_ppu_register(0x2007);
 
 		// The address used might be corrupted by background fetching
 		// Expected data at $2400 would be different from what we get
-		uint8_t expected = 0x24 ^ 0x00; // Our test pattern
+		[[maybe_unused]] uint8_t expected = 0x24 ^ 0x00; // Our test pattern
 
 		// During rendering, address might be corrupted
 		// This is hardware-specific behavior
@@ -172,7 +172,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "VRAM Address Corruption During B
 		write_ppu_register(0x2006, 0x23);
 		write_ppu_register(0x2006, 0xC0); // Attribute table
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Address corruption during attribute fetch has specific patterns
 	}
@@ -187,7 +187,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "VRAM Address Corruption During B
 		write_ppu_register(0x2006, 0x10);
 		write_ppu_register(0x2006, 0x00); // Pattern table
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Pattern table fetching can corrupt VRAM address in specific ways
 	}
@@ -207,7 +207,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "VRAM Address Corruption During B
 			write_ppu_register(0x2006, 0x20 + tile);
 			write_ppu_register(0x2006, 0x00);
 
-			uint8_t data = read_ppu_register(0x2007);
+			[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 			// Each tile fetch should cause different corruption patterns
 		}
@@ -235,7 +235,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "VRAM Address Corruption During S
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Address can be corrupted by sprite evaluation process
 	}
@@ -256,7 +256,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "VRAM Address Corruption During S
 		write_ppu_register(0x2006, 0x15);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Sprite pattern fetching affects VRAM address
 	}
@@ -280,7 +280,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "VRAM Address Corruption During S
 		write_ppu_register(0x2006, 0x10);
 		write_ppu_register(0x2006, 0x10);
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// 8x16 sprites cause different address corruption patterns
 	}
@@ -302,7 +302,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Fine Scroll Address Corruption",
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Fine X scroll affects address corruption patterns
 	}
@@ -322,7 +322,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Fine Scroll Address Corruption",
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Fine Y scroll affects tile row and address corruption
 	}
@@ -342,7 +342,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Fine Scroll Address Corruption",
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Coarse scroll affects nametable selection and addressing
 	}
@@ -379,7 +379,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Address Line Conflicts", "[ppu][
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t vram_data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t vram_data = read_ppu_register(0x2007);
 
 		// VRAM access during CHR fetch can cause conflicts
 	}
@@ -398,7 +398,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Address Line Conflicts", "[ppu][
 			write_ppu_register(0x2006, addr >> 8);
 			write_ppu_register(0x2006, addr & 0xFF);
 
-			uint8_t data = read_ppu_register(0x2007);
+			[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 			// Mirroring behavior during rendering can be affected
 		}
@@ -418,9 +418,9 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Increment Mode Corruption", "[pp
 		write_ppu_register(0x2006, 0x00);
 
 		// Sequential reads during rendering
-		uint8_t data1 = read_ppu_register(0x2007); // Dummy
-		uint8_t data2 = read_ppu_register(0x2007); // $2000
-		uint8_t data3 = read_ppu_register(0x2007); // $2001 (should be)
+		[[maybe_unused]] uint8_t data1 = read_ppu_register(0x2007); // Dummy
+		[[maybe_unused]] uint8_t data2 = read_ppu_register(0x2007); // $2000
+		[[maybe_unused]] uint8_t data3 = read_ppu_register(0x2007); // $2001 (should be)
 
 		// Address increment might be corrupted during rendering
 	}
@@ -436,9 +436,9 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Increment Mode Corruption", "[pp
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t dummy = read_ppu_register(0x2007);
-		uint8_t data1 = read_ppu_register(0x2007); // $2000
-		uint8_t data2 = read_ppu_register(0x2007); // $2020 (should be)
+		[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data1 = read_ppu_register(0x2007); // $2000
+		[[maybe_unused]] uint8_t data2 = read_ppu_register(0x2007); // $2020 (should be)
 
 		// Vertical increment can be affected by rendering
 	}
@@ -454,9 +454,9 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Increment Mode Corruption", "[pp
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t dummy = read_ppu_register(0x2007);
-		uint8_t data1 = read_ppu_register(0x2007);
-		uint8_t data2 = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data1 = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data2 = read_ppu_register(0x2007);
 
 		// Sprite evaluation can affect address increment
 	}
@@ -481,8 +481,8 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Write During Rendering Corruptio
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t dummy = read_ppu_register(0x2007);
-		uint8_t written_data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t written_data = read_ppu_register(0x2007);
 
 		// Data might not be written to expected address
 	}
@@ -499,7 +499,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Write During Rendering Corruptio
 		write_ppu_register(0x2006, 0x00); // Low byte
 
 		// The address might be corrupted by rendering activity
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Address might not be $2500 as expected
 	}
@@ -538,7 +538,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Edge Case Address Patterns", "[p
 		write_ppu_register(0x2006, 0x3F);
 		write_ppu_register(0x2006, 0xFF); // Near top of address space
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Address wraparound during rendering
 	}
@@ -553,8 +553,8 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Edge Case Address Patterns", "[p
 		write_ppu_register(0x2006, 0x23);
 		write_ppu_register(0x2006, 0xFF); // Nametable boundary
 
-		uint8_t data1 = read_ppu_register(0x2007);
-		uint8_t data2 = read_ppu_register(0x2007); // Crosses to attribute table
+		[[maybe_unused]] uint8_t data1 = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data2 = read_ppu_register(0x2007); // Crosses to attribute table
 
 		// Boundary crossing can cause specific corruption
 	}
@@ -570,7 +570,7 @@ TEST_CASE_METHOD(AddressCorruptionTestFixture, "Edge Case Address Patterns", "[p
 		write_ppu_register(0x2006, 0x24);
 		write_ppu_register(0x2006, 0x00);
 
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Address setting during scroll copy can cause corruption
 	}

@@ -141,6 +141,7 @@ class PPU : public Component {
 	bool oam_dma_active_;					// OAM DMA in progress ($4014)
 	uint16_t oam_dma_address_;				// OAM DMA source address
 	uint16_t oam_dma_cycle_;				// OAM DMA cycle counter (0-513)
+	uint8_t oam_dma_subcycle_;				// PPU subcycle counter for CPU timing (0-2)
 	bool oam_dma_pending_;					// OAM DMA requested but not started
 
 	// Hardware Timing State
@@ -194,6 +195,7 @@ class PPU : public Component {
 	std::array<ScanlineSprite, 8> scanline_sprites_; // Max 8 sprites per scanline
 	uint8_t sprite_count_current_scanline_;			 // Number of sprites on current scanline
 	bool sprite_0_on_scanline_;						 // True if sprite 0 is on current scanline
+	bool sprite_0_hit_detected_;					 // Prevents multiple sprite 0 hits per frame
 
 	// Hardware-accurate sprite evaluation timing
 	uint8_t sprite_evaluation_cycle_; // Current sprite evaluation cycle (0-63)
@@ -218,7 +220,7 @@ class PPU : public Component {
 
 	// Register handlers
 	uint8_t read_ppustatus();
-	uint8_t read_oamdata(); // Delegates to read_oamdata_during_rendering for hardware accuracy
+	uint8_t read_oamdata(); // Simple direct OAM read with auto-increment
 	uint8_t read_ppudata();
 
 	void write_ppuctrl(uint8_t value);
@@ -232,9 +234,7 @@ class PPU : public Component {
 	// OAM operations
 	void clear_secondary_oam();
 	void perform_sprite_evaluation_cycle();
-	void prepare_scanline_sprites();					  // Convert secondary OAM to scanline sprites with pattern data
-	void prepare_scanline_sprites_for_current_scanline(); // Convert secondary OAM for current scanline
-	void simple_sprite_evaluation_for_current_scanline(); // Simple sprite evaluation bypassing cycle-accurate version
+	void prepare_scanline_sprites(); // Convert secondary OAM to scanline sprites with pattern data
 	void handle_sprite_overflow_bug();
 
 	// Hardware timing features
@@ -273,7 +273,6 @@ class PPU : public Component {
 	// Hardware-accurate register behavior
 	uint8_t read_oamdata_during_rendering(); // Enhanced version that handles rendering behavior
 	void handle_ppustatus_race_condition();
-	void persist_write_toggle_state();
 
 	// Background rendering (Phase 2)
 	void render_background_pixel();
@@ -297,20 +296,16 @@ class PPU : public Component {
 	void render_combined_pixel(uint8_t bg_pixel, uint8_t sprite_pixel, bool sprite_priority, uint8_t x_pos,
 							   uint8_t y_pos);
 
-	// Enhanced sprite 0 hit detection and timing
-	void handle_sprite_0_hit_timing();
-
-	// Background pattern fetch timing during sprite evaluation
-	void fetch_background_pattern_during_sprite_eval();
-	void handle_background_sprite_fetch_conflicts();
-
 	// Advanced scrolling (Phase 4)
-	void update_vram_address_x();
-	void update_vram_address_y();
+	void increment_vram_address(); // Consolidated VRAM increment logic
+	void increment_oam_address();  // Consolidated OAM address increment logic
+	void set_vblank_flag();		   // Consolidated VBlank manipulation
+	void clear_vblank_flag();
 	void copy_horizontal_scroll();
 	void copy_vertical_scroll();
 	void increment_coarse_x();
 	void increment_fine_y();
+	void clear_shift_registers(); // Consolidated shift register clearing
 	uint16_t get_current_nametable_address();
 	uint16_t get_current_attribute_address();
 	uint8_t get_fine_y_scroll();
@@ -323,6 +318,7 @@ class PPU : public Component {
 	bool is_rendering_enabled() const;
 	bool is_background_enabled() const;
 	bool is_sprites_enabled() const;
+	bool is_oam_access_restricted() const; // Check if OAM access should return 0xFF
 };
 
 /// PPU timing constants

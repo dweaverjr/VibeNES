@@ -122,7 +122,7 @@ TEST_CASE_METHOD(ScrollTestFixture, "Coarse Scroll Behavior", "[ppu][scroll][coa
 
 	SECTION("Coarse X should wrap at tile 32") {
 		// When coarse X reaches 32, it should wrap to 0 and switch nametables
-		set_scroll(32 * 8, 0); // 256 pixels = 32 tiles
+		set_scroll(static_cast<uint8_t>(32 * 8), 0); // 256 pixels = 32 tiles
 
 		// This should wrap to coarse X = 0 and toggle horizontal nametable
 	}
@@ -138,23 +138,23 @@ TEST_CASE_METHOD(ScrollTestFixture, "Coarse Scroll Behavior", "[ppu][scroll][coa
 TEST_CASE_METHOD(ScrollTestFixture, "Nametable Selection", "[ppu][scroll][nametable]") {
 	SECTION("Horizontal nametable bit should toggle with X scroll") {
 		// Test horizontal nametable switching
-		set_scroll(0, 0);	// Nametable 0
-		set_scroll(256, 0); // Should switch to nametable 1
-		set_scroll(512, 0); // Should wrap back to nametable 0
+		set_scroll(0, 0);						  // Nametable 0
+		set_scroll(static_cast<uint8_t>(256), 0); // Should switch to nametable 1
+		set_scroll(static_cast<uint8_t>(512), 0); // Should wrap back to nametable 0
 	}
 
 	SECTION("Vertical nametable bit should toggle with Y scroll") {
 		// Test vertical nametable switching
-		set_scroll(0, 0);	// Nametable 0
-		set_scroll(0, 240); // Should switch to nametable 2
-		set_scroll(0, 480); // Should wrap back to nametable 0
+		set_scroll(0, 0);						  // Nametable 0
+		set_scroll(0, 240);						  // Should switch to nametable 2
+		set_scroll(0, static_cast<uint8_t>(480)); // Should wrap back to nametable 0
 	}
 
 	SECTION("Both nametable bits should work together") {
-		set_scroll(0, 0);	  // Nametable 0 ($2000)
-		set_scroll(256, 0);	  // Nametable 1 ($2400)
-		set_scroll(0, 240);	  // Nametable 2 ($2800)
-		set_scroll(256, 240); // Nametable 3 ($2C00)
+		set_scroll(0, 0);							// Nametable 0 ($2000)
+		set_scroll(static_cast<uint8_t>(256), 0);	// Nametable 1 ($2400)
+		set_scroll(0, 240);							// Nametable 2 ($2800)
+		set_scroll(static_cast<uint8_t>(256), 240); // Nametable 3 ($2C00)
 	}
 }
 

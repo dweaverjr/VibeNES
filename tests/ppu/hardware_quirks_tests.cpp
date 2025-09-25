@@ -137,12 +137,12 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "OAMADDR Decay During Rendering", "[
 		advance_to_cycle(64); // Just before sprite evaluation
 
 		// OAMADDR should still be 0
-		uint8_t oam_before = read_ppu_register(0x2004);
+		[[maybe_unused]] uint8_t oam_before = read_ppu_register(0x2004);
 
 		advance_to_cycle(256); // After sprite evaluation
 
 		// OAMADDR should have been incremented/corrupted
-		uint8_t oam_after = read_ppu_register(0x2004);
+		[[maybe_unused]] uint8_t oam_after = read_ppu_register(0x2004);
 
 		// The exact behavior depends on sprite count and evaluation
 		// but OAMADDR should have changed
@@ -174,7 +174,7 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "OAMADDR Decay During Rendering", "[
 		advance_to_cycle(320);
 
 		// OAMADDR should be reset to 0
-		uint8_t oam_data = read_ppu_register(0x2004);
+		[[maybe_unused]] uint8_t oam_data = read_ppu_register(0x2004);
 		// Should read from address 0
 	}
 }
@@ -182,7 +182,7 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "OAMADDR Decay During Rendering", "[
 TEST_CASE_METHOD(HardwareQuirksTestFixture, "Open Bus Behavior", "[ppu][quirks][open_bus]") {
 	SECTION("Unused register bits should return open bus") {
 		// PPUSTATUS bits 0-4 are unused and should return open bus
-		uint8_t status = read_ppu_register(0x2002);
+		[[maybe_unused]] uint8_t status = read_ppu_register(0x2002);
 
 		// Bits 5-7 are defined, bits 0-4 are open bus
 		// The exact value depends on the last value on the bus
@@ -195,16 +195,16 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "Open Bus Behavior", "[ppu][quirks][
 		write_ppu_register(0x2007, 0xAA);
 
 		// Reading PPUCTRL (write-only) should return bus value
-		uint8_t ctrl_read = read_ppu_register(0x2000);
+		[[maybe_unused]] uint8_t ctrl_read = read_ppu_register(0x2000);
 
 		// Reading PPUMASK (write-only) should return bus value
-		uint8_t mask_read = read_ppu_register(0x2001);
+		[[maybe_unused]] uint8_t mask_read = read_ppu_register(0x2001);
 
 		// Reading PPUSCROLL (write-only) should return bus value
-		uint8_t scroll_read = read_ppu_register(0x2005);
+		[[maybe_unused]] uint8_t scroll_read = read_ppu_register(0x2005);
 
 		// Reading PPUADDR (write-only) should return bus value
-		uint8_t addr_read = read_ppu_register(0x2006);
+		[[maybe_unused]] uint8_t addr_read = read_ppu_register(0x2006);
 
 		// These should all return the last bus value (0xAA in this case)
 		// or decay pattern depending on timing
@@ -215,11 +215,11 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "Open Bus Behavior", "[ppu][quirks][
 		write_ppu_register(0x2007, 0xFF);
 
 		// Read immediately
-		uint8_t immediate = read_ppu_register(0x2000);
+		[[maybe_unused]] uint8_t immediate = read_ppu_register(0x2000);
 
 		// Advance time and read again
 		advance_ppu_cycles(1000);
-		uint8_t delayed = read_ppu_register(0x2000);
+		[[maybe_unused]] uint8_t delayed = read_ppu_register(0x2000);
 
 		// Values should potentially decay (hardware-dependent)
 	}
@@ -239,7 +239,7 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "VRAM Address Line Behavior", "[ppu]
 		write_ppu_register(0x2006, 0x00);
 
 		// Read - address might be corrupted by rendering
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// The address used might not be $2000 due to rendering interference
 	}
@@ -270,10 +270,10 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "VRAM Address Line Behavior", "[ppu]
 		write_ppu_register(0x2006, 0x00);
 
 		// Multiple reads should increment properly
-		uint8_t dummy1 = read_ppu_register(0x2007); // Dummy read
-		uint8_t data1 = read_ppu_register(0x2007);	// $2000
-		uint8_t data2 = read_ppu_register(0x2007);	// $2001
-		uint8_t data3 = read_ppu_register(0x2007);	// $2002
+		[[maybe_unused]] uint8_t dummy1 = read_ppu_register(0x2007); // Dummy read
+		uint8_t data1 = read_ppu_register(0x2007);					 // $2000
+		uint8_t data2 = read_ppu_register(0x2007);					 // $2001
+		uint8_t data3 = read_ppu_register(0x2007);					 // $2002
 
 		// Verify increment worked correctly
 		REQUIRE(data1 == 0x00); // Expected value at $2000
@@ -396,7 +396,7 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "Sprite Evaluation Quirks", "[ppu][q
 		write_ppu_register(0x2004, 4);	  // X position in clipped area
 
 		// Enable rendering with left edge clipping disabled
-		write_ppu_register(0x2001, 0x14); // Show sprites in leftmost 8 pixels
+		write_ppu_register(0x2001, 0x1E); // Show background and sprites in leftmost 8 pixels
 
 		advance_to_scanline(51);
 		advance_to_cycle(12); // Sprite pixel position
@@ -497,7 +497,7 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "Undocumented Register Behavior", "[
 		advance_to_scanline(50);
 		advance_to_cycle(100); // During sprite evaluation
 
-		uint8_t oam_data = read_ppu_register(0x2004);
+		[[maybe_unused]] uint8_t oam_data = read_ppu_register(0x2004);
 		// Should return specific value based on sprite evaluation state
 	}
 
@@ -507,7 +507,7 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "Undocumented Register Behavior", "[
 		// Try writing to PPUSTATUS (should be ignored)
 		write_ppu_register(0x2002, 0xFF);
 
-		uint8_t status = read_ppu_register(0x2002);
+		[[maybe_unused]] uint8_t status = read_ppu_register(0x2002);
 		// Write should be ignored, status should be normal
 	}
 }

@@ -93,7 +93,8 @@ TEST_CASE("Bus Open Bus Behavior", "[bus][open-bus]") {
 	SECTION("Open bus returns last bus value - PPU region") {
 		// Write a known value to RAM first to set the bus
 		bus.write(0x0100, 0xAB);
-		bus.read(0x0100); // This sets last_bus_value_ to 0xAB
+		[[maybe_unused]] auto bus_value = bus.read(0x0100); // This sets last_bus_value_ to 0xAB
+		(void)bus_value;
 
 		// Now read from unmapped PPU region - should return last bus value
 		Byte open_bus_value = bus.read(0x2000);
@@ -103,7 +104,8 @@ TEST_CASE("Bus Open Bus Behavior", "[bus][open-bus]") {
 	SECTION("Open bus returns last bus value - APU region") {
 		// Set a different known value
 		bus.write(0x0200, 0xCD);
-		bus.read(0x0200); // This sets last_bus_value_ to 0xCD
+		[[maybe_unused]] auto bus_value = bus.read(0x0200); // This sets last_bus_value_ to 0xCD
+		(void)bus_value;
 
 		// Read from unmapped APU region
 		Byte open_bus_value = bus.read(0x4000);
@@ -113,7 +115,8 @@ TEST_CASE("Bus Open Bus Behavior", "[bus][open-bus]") {
 	SECTION("Open bus returns last bus value - Cartridge region") {
 		// Set another known value
 		bus.write(0x0300, 0xEF);
-		bus.read(0x0300); // This sets last_bus_value_ to 0xEF
+		[[maybe_unused]] auto bus_value = bus.read(0x0300); // This sets last_bus_value_ to 0xEF
+		(void)bus_value;
 
 		// Read from unmapped cartridge region
 		Byte open_bus_value = bus.read(0x4020);
@@ -211,7 +214,8 @@ TEST_CASE("Bus Address Decoding", "[bus][addressing]") {
 
 		// First establish a known bus value
 		bus.write(0x0100, 0x55);
-		bus.read(0x0100); // Sets last_bus_value_ to 0x55
+		[[maybe_unused]] auto bus_value = bus.read(0x0100); // Sets last_bus_value_ to 0x55
+		(void)bus_value;
 
 		for (const auto &[addr, is_ram] : test_addresses) {
 			if (is_ram) {

@@ -319,7 +319,7 @@ TEST_CASE_METHOD(TimingTestFixture, "Memory Access Timing", "[ppu][timing][memor
 		write_ppu_register(0x2006, 0x00);
 
 		int start_cycle = ppu->get_current_cycle();
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 		int end_cycle = ppu->get_current_cycle();
 
 		// VRAM read should take exactly 1 PPU cycle
@@ -348,7 +348,7 @@ TEST_CASE_METHOD(TimingTestFixture, "Memory Access Timing", "[ppu][timing][memor
 		write_ppu_register(0x2006, 0x00);
 
 		// VRAM reads during rendering should return garbage
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 		// Value is unpredictable during rendering
 	}
 }
@@ -371,7 +371,7 @@ TEST_CASE_METHOD(TimingTestFixture, "Register Access Timing", "[ppu][timing][reg
 		write_ppu_register(0x2006, 0x45);
 
 		// Current VRAM address should be $2345
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 		// Reading from $2345
 	}
 

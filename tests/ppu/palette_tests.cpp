@@ -122,7 +122,7 @@ class PaletteTestFixture {
 
 	void advance_to_rendering() {
 		// Advance to active rendering period
-		while (ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) {
+		while (ppu->get_current_scanline() >= 240) {
 			ppu->tick(CpuCycle{1});
 		}
 	}
@@ -144,7 +144,7 @@ class PaletteTestFixture {
 };
 
 TEST_CASE_METHOD(PaletteTestFixture, "Palette Memory Layout", "[ppu][palette][layout]") {
-	SECTION("Palette RAM should be 32 bytes") {
+	SECTION("Palette RAM should be 32 bytes (with universal mirroring)") {
 		clear_all_palettes();
 
 		// Write test pattern to all 32 palette entries
@@ -153,9 +153,42 @@ TEST_CASE_METHOD(PaletteTestFixture, "Palette Memory Layout", "[ppu][palette][la
 			write_palette(addr, test_value);
 		}
 
-		// Verify all entries were written
+		// Helper to canonicalize sprite universal colors to background indices
+		auto canonicalize = [](uint8_t idx) -> uint8_t {
+			switch (idx) {
+			case 0x10:
+				return 0x00;
+			case 0x14:
+				return 0x04;
+			case 0x18:
+				return 0x08;
+			case 0x1C:
+				return 0x0C;
+			default:
+				return idx;
+			}
+		};
+
+		// Verify all entries, accounting for NES universal color mirroring
+		// Last-writer-wins semantics (since we wrote 0x3F00..0x3F1F in order):
+		// - Index 0x00 gets overwritten by write to 0x10 (value 0x10)
+		// - Index 0x04 gets overwritten by write to 0x14 (value 0x14)
+		// - Index 0x08 gets overwritten by write to 0x18 (value 0x18)
+		// - Index 0x0C gets overwritten by write to 0x1C (value 0x1C)
 		for (uint16_t addr = 0x3F00; addr <= 0x3F1F; addr++) {
-			uint8_t expected = static_cast<uint8_t>(addr & 0x3F);
+			uint8_t raw_idx = static_cast<uint8_t>(addr & 0x1F);
+			uint8_t canon = canonicalize(raw_idx);
+			uint8_t expected;
+			if (canon == 0x00)
+				expected = 0x10; // from 0x3F10 write
+			else if (canon == 0x04)
+				expected = 0x14; // from 0x3F14 write
+			else if (canon == 0x08)
+				expected = 0x18; // from 0x3F18 write
+			else if (canon == 0x0C)
+				expected = 0x1C; // from 0x3F1C write
+			else
+				expected = canon; // self
 			uint8_t actual = read_palette(addr);
 			REQUIRE(actual == expected);
 		}
@@ -267,7 +300,7 @@ TEST_CASE_METHOD(PaletteTestFixture, "Grayscale Mode", "[ppu][palette][grayscale
 
 		// Test normal color mode
 		disable_grayscale_mode();
-		uint8_t color_normal = read_palette(0x3F01);
+		[[maybe_unused]] uint8_t color_normal = read_palette(0x3F01);
 
 		// Enable grayscale mode
 		enable_grayscale_mode();
@@ -284,7 +317,7 @@ TEST_CASE_METHOD(PaletteTestFixture, "Grayscale Mode", "[ppu][palette][grayscale
 
 		// Check multiple palette entries
 		for (uint16_t addr = 0x3F00; addr <= 0x3F1F; addr += 4) {
-			uint8_t value = read_palette(addr);
+			[[maybe_unused]] uint8_t value = read_palette(addr);
 			// In grayscale mode, should see grayscale effect
 			// (exact behavior depends on implementation)
 		}
@@ -297,19 +330,19 @@ TEST_CASE_METHOD(PaletteTestFixture, "Color Emphasis", "[ppu][palette][emphasis]
 
 		// Test normal colors
 		set_color_emphasis(0x00); // No emphasis
-		uint8_t normal_color = read_palette(0x3F01);
+		[[maybe_unused]] uint8_t normal_color = read_palette(0x3F01);
 
 		// Test red emphasis
 		set_color_emphasis(0x01); // Red emphasis
-		uint8_t red_emphasized = read_palette(0x3F01);
+		[[maybe_unused]] uint8_t red_emphasized = read_palette(0x3F01);
 
 		// Test green emphasis
 		set_color_emphasis(0x02); // Green emphasis
-		uint8_t green_emphasized = read_palette(0x3F01);
+		[[maybe_unused]] uint8_t green_emphasized = read_palette(0x3F01);
 
 		// Test blue emphasis
 		set_color_emphasis(0x04); // Blue emphasis
-		uint8_t blue_emphasized = read_palette(0x3F01);
+		[[maybe_unused]] uint8_t blue_emphasized = read_palette(0x3F01);
 
 		// Colors should be affected by emphasis
 		// (exact behavior depends on implementation)
@@ -320,11 +353,11 @@ TEST_CASE_METHOD(PaletteTestFixture, "Color Emphasis", "[ppu][palette][emphasis]
 
 		// Test red + green emphasis
 		set_color_emphasis(0x03); // Red + Green
-		uint8_t rg_emphasized = read_palette(0x3F01);
+		[[maybe_unused]] uint8_t rg_emphasized = read_palette(0x3F01);
 
 		// Test all emphasis bits
 		set_color_emphasis(0x07); // Red + Green + Blue
-		uint8_t all_emphasized = read_palette(0x3F01);
+		[[maybe_unused]] uint8_t all_emphasized = read_palette(0x3F01);
 
 		// Should see combined effects
 	}

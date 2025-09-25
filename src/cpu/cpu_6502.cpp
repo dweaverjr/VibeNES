@@ -1935,9 +1935,7 @@ void CPU6502::NOP() {
 	// Cycle 2: Do nothing
 	consume_cycle(); // NOP still takes 1 cycle to execute
 					 // Total: 2 cycles
-}
-
-// Stack Operations
+} // Stack Operations
 void CPU6502::PHA() {
 	// Push Accumulator - Store accumulator on stack
 	// Cycle 1: Fetch opcode (already consumed in execute_instruction)

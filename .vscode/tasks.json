@@ -140,6 +140,8 @@
                 "-g3",
                 "-O0",
                 "-std=c++23",
+                "-Wall",
+                "-Wextra",
                 "${workspaceFolder}/tests/test_main.cpp",
                 "${workspaceFolder}/tests/catch2/catch_amalgamated.cpp",
                 "${workspaceFolder}/tests/core/test_types.cpp",
@@ -161,6 +163,8 @@
                 "${workspaceFolder}/tests/ppu/bus_conflict_tests.cpp",
                 "${workspaceFolder}/tests/ppu/hardware_quirks_tests.cpp",
                 "${workspaceFolder}/tests/ppu/address_corruption_tests.cpp",
+                "${workspaceFolder}/tests/ppu/sprite_priority_transparency_tests.cpp",
+                "${workspaceFolder}/tests/ppu/sprite_8x16_vertical_flip_tests.cpp",
                 "${workspaceFolder}/src/core/bus.cpp",
                 "${workspaceFolder}/src/apu/apu.cpp",
                 "${workspaceFolder}/src/cpu/cpu_6502.cpp",
@@ -191,7 +195,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "detail": "Build all unit tests including CPU and PPU tests with Catch2 framework. NOTE: Add new test and source .cpp files to the args list when created (exclude main.cpp from src)"
+            "detail": "Build all unit tests including CPU and PPU tests with Catch2 framework. Includes robust test infrastructure with synthetic ROM data support for hardware-accurate testing."
         },
         {
             "type": "shell",
@@ -200,18 +204,6 @@
             "group": "test",
             "detail": "Run all unit tests"
         },
-        {
-            "type": "shell",
-            "label": "Run Tests Verbose",
-            "command": "${workspaceFolder}/build/debug/VibeNES_All_Tests.exe",
-            "args": [
-                "-s",
-                "--use-colour",
-                "yes"
-            ],
-            "group": "test",
-            "detail": "Run all unit tests with verbose output"
-        }
     ],
     "version": "2.0.0"
 }

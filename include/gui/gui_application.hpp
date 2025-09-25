@@ -98,6 +98,9 @@ class GuiApplication {
 	// Emulation control
 	void step_emulation();
 	void step_frame();
+
+	// System reset
+	void reset_system();
 };
 
 } // namespace nes::gui

@@ -10,6 +10,7 @@
 #include "../../include/ppu/ppu.hpp"
 #include "../../include/ppu/ppu_memory.hpp"
 #include "../catch2/catch_amalgamated.hpp"
+#include "test_chr_data.hpp"
 #include <memory>
 
 using namespace nes;
@@ -19,10 +20,12 @@ class BusConflictTestFixture {
 	BusConflictTestFixture() {
 		bus = std::make_unique<SystemBus>();
 		ram = std::make_shared<Ram>();
-		cartridge = std::make_shared<Cartridge>();
 		apu = std::make_shared<APU>();
 		cpu = std::make_shared<CPU6502>(bus.get());
 		ppu_memory = std::make_shared<PPUMemory>();
+
+		// Load synthetic CHR ROM data FIRST for sprite 0 hit testing
+		cartridge = nes::test::TestCHRData::create_test_cartridge();
 
 		// Connect components to bus (like TimingTestFixture)
 		bus->connect_ram(ram);
@@ -137,7 +140,7 @@ TEST_CASE_METHOD(BusConflictTestFixture, "VBlank Flag Race Conditions", "[ppu][b
 		// Reading PPUSTATUS exactly when VBlank flag is being set
 		// This creates a race condition in real hardware
 		advance_to_cycle(1);
-		uint8_t status_during = read_ppu_register(0x2002);
+		[[maybe_unused]] uint8_t status_during = read_ppu_register(0x2002);
 
 		// The read should clear the flag that was just set
 		// This is the infamous VBlank flag race condition
@@ -201,7 +204,7 @@ TEST_CASE_METHOD(BusConflictTestFixture, "VRAM Access During Rendering", "[ppu][
 		write_ppu_register(0x2006, 0x00);
 
 		// VRAM read during rendering should return corrupted data
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// The exact value depends on what the PPU is fetching
 		// but it should not be the expected nametable data
@@ -239,8 +242,8 @@ TEST_CASE_METHOD(BusConflictTestFixture, "VRAM Access During Rendering", "[ppu][
 		write_ppu_register(0x2006, 0x45);
 
 		// Reading during rendering can corrupt the address
-		uint8_t data1 = read_ppu_register(0x2007);
-		uint8_t data2 = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data1 = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data2 = read_ppu_register(0x2007);
 
 		// The second read may not be from the expected address
 		// due to address corruption during rendering
@@ -285,7 +288,7 @@ TEST_CASE_METHOD(BusConflictTestFixture, "OAM Access Conflicts", "[ppu][bus_conf
 		// (Hardware behavior: OAMADDR is incremented during sprite evaluation)
 
 		// Read OAM data - address may not be where we expect
-		uint8_t oam_data = read_ppu_register(0x2004);
+		[[maybe_unused]] uint8_t oam_data = read_ppu_register(0x2004);
 	}
 
 	SECTION("OAM DMA during sprite evaluation conflict") {
@@ -331,7 +334,7 @@ TEST_CASE_METHOD(BusConflictTestFixture, "Register Write Timing Conflicts", "[pp
 		write_ppu_register(0x2006, 0x00);
 
 		// All writes should be processed correctly
-		uint8_t status = read_ppu_register(0x2002);
+		[[maybe_unused]] uint8_t status = read_ppu_register(0x2002);
 		// Test that PPU state is consistent
 	}
 
@@ -400,6 +403,9 @@ TEST_CASE_METHOD(BusConflictTestFixture, "Sprite 0 Hit Edge Cases", "[ppu][bus_c
 	}
 
 	SECTION("Sprite 0 hit pixel precision") {
+		// Reset PPU state for clean test
+		ppu->reset();
+
 		// Test exact pixel timing for sprite 0 hit
 		write_ppu_register(0x2003, 0x00);
 		write_ppu_register(0x2004, 100);  // Y position
@@ -476,7 +482,7 @@ TEST_CASE_METHOD(BusConflictTestFixture, "Power-On vs Reset Behavior", "[ppu][bu
 		reset_toggle();
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
-		uint8_t dummy = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007);
 		uint8_t vram_data = read_ppu_register(0x2007);
 		REQUIRE(vram_data == 0x33);
 	}

@@ -166,6 +166,17 @@ class RenderingPipelineTestFixture {
 	void advance_to_cycle(int target_cycle) {
 		int safety_counter = 0;
 		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
+
+		// If target cycle is less than current cycle, we need to advance to next scanline
+		if (target_cycle < ppu->get_current_cycle()) {
+			// Advance to next scanline first
+			while (ppu->get_current_cycle() != 0 && safety_counter < MAX_CYCLES) {
+				ppu->tick(nes::CpuCycle{1});
+				safety_counter++;
+			}
+		}
+
+		// Now advance to the target cycle within the current scanline
 		while (ppu->get_current_cycle() < target_cycle && safety_counter < MAX_CYCLES) {
 			ppu->tick(nes::CpuCycle{1});
 			safety_counter++;
@@ -188,17 +199,16 @@ class RenderingPipelineTestFixture {
 	}
 
 	void advance_to_rendering_start() {
-		// Advance to start of visible scanlines
+		// Advance to start of visible scanlines (scanline 0, cycle 0)
 		int safety_counter = 0;
 		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
-		while ((ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) && safety_counter < MAX_CYCLES) {
+		while ((ppu->get_current_scanline() != 0 || ppu->get_current_cycle() != 0) && safety_counter < MAX_CYCLES) {
 			ppu->tick(nes::CpuCycle{1});
 			safety_counter++;
 		}
 		if (safety_counter >= MAX_CYCLES) {
 			throw std::runtime_error("advance_to_rendering_start hit safety limit - possible infinite loop");
 		}
-		advance_to_cycle(0);
 	}
 
 	void set_scroll(uint8_t x, uint8_t y) {
@@ -358,12 +368,12 @@ TEST_CASE_METHOD(RenderingPipelineTestFixture, "Pixel Priority System", "[ppu][p
 		// 3. Not at X=0 or Y=0
 
 		// Check if sprite 0 hit flag is set
-		bool hit_before = is_sprite_0_hit_set();
+		[[maybe_unused]] bool hit_before = is_sprite_0_hit_set();
 
 		// Advance through sprite 0's X position
 		advance_ppu_cycles(8);
 
-		bool hit_after = is_sprite_0_hit_set();
+		[[maybe_unused]] bool hit_after = is_sprite_0_hit_set();
 		// Hit flag should be set if collision occurred
 	}
 }
@@ -502,6 +512,7 @@ TEST_CASE_METHOD(RenderingPipelineTestFixture, "Frame Timing", "[ppu][pipeline][
 
 	SECTION("VBlank should be scanlines 241-260") {
 		advance_to_scanline(241);
+		advance_to_cycle(1); // VBlank flag is set at cycle 1
 		REQUIRE(ppu->get_current_scanline() == 241);
 
 		// VBlank flag should be set

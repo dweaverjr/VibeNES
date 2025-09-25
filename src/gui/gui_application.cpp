@@ -237,8 +237,11 @@ void GuiApplication::render_frame() {
 				ImGui::Text("CPU STATE");
 				ImGui::Separator();
 				if (cpu_panel_) {
-					// Pass step_emulation as callback so CPU panel uses proper coordination
-					cpu_panel_->render(cpu_.get(), [this]() { step_emulation(); });
+					// Pass step_emulation and reset_system as callbacks for proper coordination
+					cpu_panel_->render(
+						cpu_.get(), [this]() { step_emulation(); }, // step callback
+						[this]() { reset_system(); }				// reset callback
+					);
 				}
 			}
 			ImGui::EndChild();
@@ -404,8 +407,7 @@ void GuiApplication::render_main_menu_bar() {
 
 			if (ImGui::MenuItem("Reset", "F8")) {
 				if (cpu_) {
-					cpu_->reset();
-					emulation_paused_ = true;
+					reset_system(); // Use system-wide reset instead of just CPU reset
 				}
 			}
 
@@ -476,6 +478,23 @@ void GuiApplication::step_frame() {
 	// NES runs at ~1.79 MHz CPU, ~60 FPS, so about 29,830 cycles per frame
 	// We'll use a smaller chunk to simulate frame stepping
 	bus_->tick(cpu_cycles(1000));
+}
+
+void GuiApplication::reset_system() {
+	if (!bus_) {
+		std::cerr << "Cannot reset system: SystemBus not initialized" << std::endl;
+		return;
+	}
+
+	// Reset the entire NES system through the SystemBus
+	// This resets all connected components in the proper order
+	bus_->reset();
+
+	// Pause emulation after reset so user can examine the state
+	emulation_paused_ = true;
+	emulation_running_ = false;
+
+	std::cout << "NES System Reset: All components reset to initial state" << std::endl;
 }
 
 void GuiApplication::setup_callbacks() {

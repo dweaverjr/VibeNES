@@ -72,8 +72,8 @@ TEST_CASE("RAM Address Mirroring", "[ram][memory][mirroring]") {
 		ram.write(0x1234, 0xEF);
 
 		// Calculate mirrored addresses
-		Address mirror1 = 0x1234 - 0x0800; // Should be 0x0A34
-		Address mirror2 = 0x1234 + 0x0800; // Should be 0x1A34
+		[[maybe_unused]] Address mirror1 = 0x1234 - 0x0800; // Should be 0x0A34
+		[[maybe_unused]] Address mirror2 = 0x1234 + 0x0800; // Should be 0x1A34
 
 		REQUIRE(ram.read(0x0A34) == 0xEF);
 		REQUIRE(ram.read(0x1234) == 0xEF);
@@ -129,8 +129,8 @@ TEST_CASE("RAM Component Interface", "[ram][component]") {
 		ram.power_on();
 
 		// Read initial values (should be random garbage)
-		Byte initial_1 = ram.read(0x0200);
-		Byte initial_2 = ram.read(0x0600);
+		[[maybe_unused]] Byte initial_1 = ram.read(0x0200);
+		[[maybe_unused]] Byte initial_2 = ram.read(0x0600);
 
 		// Write known values
 		ram.write(0x0200, 0xDD);

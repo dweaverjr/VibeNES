@@ -76,7 +76,7 @@ TEST_CASE("CPU Load Instructions - Immediate Mode", "[cpu][instructions][load]")
 		bus->write(0x0200, 0xA9);		 // LDA immediate opcode
 		bus->write(0x0201, 0x42);		 // Immediate value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x42);
 		REQUIRE(cpu.get_program_counter() == 0x0202);
@@ -90,7 +90,7 @@ TEST_CASE("CPU Load Instructions - Immediate Mode", "[cpu][instructions][load]")
 		bus->write(0x0200, 0xA9); // LDA immediate opcode
 		bus->write(0x0201, 0x00); // Zero value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x00);
 		REQUIRE(cpu.get_zero_flag() == true);
@@ -103,7 +103,7 @@ TEST_CASE("CPU Load Instructions - Immediate Mode", "[cpu][instructions][load]")
 		bus->write(0x0200, 0xA9); // LDA immediate opcode
 		bus->write(0x0201, 0x80); // Negative value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x80);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -116,7 +116,7 @@ TEST_CASE("CPU Load Instructions - Immediate Mode", "[cpu][instructions][load]")
 		bus->write(0x0200, 0xA2); // LDX immediate opcode
 		bus->write(0x0201, 0x33); // Immediate value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_x_register() == 0x33);
 		REQUIRE(cpu.get_program_counter() == 0x0202);
@@ -130,7 +130,7 @@ TEST_CASE("CPU Load Instructions - Immediate Mode", "[cpu][instructions][load]")
 		bus->write(0x0200, 0xA0); // LDY immediate opcode
 		bus->write(0x0201, 0x44); // Immediate value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_y_register() == 0x44);
 		REQUIRE(cpu.get_program_counter() == 0x0202);
@@ -152,7 +152,7 @@ TEST_CASE("CPU Transfer Instructions", "[cpu][instructions][transfer]") {
 		cpu.set_program_counter(0x0200);
 		bus->write(0x0200, 0xAA); // TAX opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_x_register() == 0x55);
 		REQUIRE(cpu.get_accumulator() == 0x55); // A unchanged
@@ -167,7 +167,7 @@ TEST_CASE("CPU Transfer Instructions", "[cpu][instructions][transfer]") {
 		cpu.set_program_counter(0x0200);
 		bus->write(0x0200, 0xA8); // TAY opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_y_register() == 0x66);
 		REQUIRE(cpu.get_accumulator() == 0x66); // A unchanged
@@ -180,7 +180,7 @@ TEST_CASE("CPU Transfer Instructions", "[cpu][instructions][transfer]") {
 		cpu.set_program_counter(0x0200);
 		bus->write(0x0200, 0x8A); // TXA opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x77);
 		REQUIRE(cpu.get_x_register() == 0x77); // X unchanged
@@ -193,7 +193,7 @@ TEST_CASE("CPU Transfer Instructions", "[cpu][instructions][transfer]") {
 		cpu.set_program_counter(0x0200);
 		bus->write(0x0200, 0x98); // TYA opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x88);
 		REQUIRE(cpu.get_y_register() == 0x88); // Y unchanged
@@ -206,7 +206,7 @@ TEST_CASE("CPU Transfer Instructions", "[cpu][instructions][transfer]") {
 		cpu.set_program_counter(0x0200);
 		bus->write(0x0200, 0xAA); // TAX opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_zero_flag() == true);
 		REQUIRE(cpu.get_negative_flag() == false);
@@ -216,7 +216,7 @@ TEST_CASE("CPU Transfer Instructions", "[cpu][instructions][transfer]") {
 		cpu.set_program_counter(0x0201);
 		bus->write(0x0201, 0xAA); // TAX opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_zero_flag() == false);
 		REQUIRE(cpu.get_negative_flag() == true);
@@ -240,7 +240,7 @@ TEST_CASE("CPU NOP Instruction", "[cpu][instructions][nop]") {
 		cpu.set_program_counter(0x0200);
 		bus->write(0x0200, 0xEA); // NOP opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// All registers should be unchanged
 		REQUIRE(cpu.get_accumulator() == initial_a);
@@ -276,18 +276,18 @@ TEST_CASE("CPU Simple Program Execution", "[cpu][program]") {
 		bus->write(0x0204, 0x00); // Value $00
 
 		// Execute LDA #$42
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_accumulator() == 0x42);
 		REQUIRE(cpu.get_program_counter() == 0x0202);
 
 		// Execute TAX
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_x_register() == 0x42);
 		REQUIRE(cpu.get_accumulator() == 0x42);
 		REQUIRE(cpu.get_program_counter() == 0x0203);
 
 		// Execute LDY #$00
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_y_register() == 0x00);
 		REQUIRE(cpu.get_zero_flag() == true);
 		REQUIRE(cpu.get_program_counter() == 0x0205);
@@ -2003,7 +2003,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0200, 0xC9); // CMP immediate opcode
 		bus->write(0x0201, 0x42); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Equal: C=1, Z=1, N=0
 		REQUIRE(cpu.get_carry_flag() == true); // A >= memory
@@ -2020,7 +2020,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0200, 0xC9); // CMP immediate opcode
 		bus->write(0x0201, 0x30); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Greater: C=1, Z=0, N=0 (positive result)
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2035,7 +2035,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0200, 0xC9); // CMP immediate opcode
 		bus->write(0x0201, 0x50); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Less: C=0, Z=0, N=1 (negative result)
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2050,7 +2050,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0200, 0xC9); // CMP immediate opcode
 		bus->write(0x0201, 0xFF); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// 0x00 - 0xFF = 0x01 (with borrow), so C=0, Z=0, N=0
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2066,7 +2066,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0201, 0x80); // Zero page address
 		bus->write(0x0080, 0x25); // Value to compare
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// 0x30 > 0x25, so C=1, Z=0, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2084,7 +2084,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0201, 0x80); // Base zero page address
 		bus->write(0x0085, 0x20); // Value at $80+$05 = $85
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Equal values, so C=1, Z=1, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2101,7 +2101,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0202, 0x12); // High byte of address
 		bus->write(0x1234, 0x50); // Value to compare
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// 0x40 < 0x50, so C=0, Z=0, N=1
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2120,7 +2120,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0202, 0x12); // High byte of base address
 		bus->write(0x1234, 0x40); // Value at $1200+$34 = $1234
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// 0x60 > 0x40, so C=1, Z=0, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2138,7 +2138,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0202, 0x12); // High byte of base address
 		bus->write(0x1244, 0x35); // Value at $1200+$44 = $1244
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Equal values, so C=1, Z=1, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2159,7 +2159,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0085, 0x15); // High byte of target address
 		bus->write(0x1500, 0x30); // Value to compare
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// 0x25 < 0x30, so C=0, Z=0, N=1
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2180,7 +2180,7 @@ TEST_CASE("CPU Compare Instructions - CMP", "[cpu][instructions][compare][CMP]")
 		bus->write(0x0091, 0x16); // High byte of base address
 		bus->write(0x1610, 0x35); // Value to compare at $1600+$10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// 0x45 > 0x35, so C=1, Z=0, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2203,7 +2203,7 @@ TEST_CASE("CPU Compare Instructions - CPX", "[cpu][instructions][compare][CPX]")
 		bus->write(0x0200, 0xE0); // CPX immediate opcode
 		bus->write(0x0201, 0x55); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Equal: C=1, Z=1, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2220,7 +2220,7 @@ TEST_CASE("CPU Compare Instructions - CPX", "[cpu][instructions][compare][CPX]")
 		bus->write(0x0200, 0xE0); // CPX immediate opcode
 		bus->write(0x0201, 0x40); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Greater: C=1, Z=0, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2235,7 +2235,7 @@ TEST_CASE("CPU Compare Instructions - CPX", "[cpu][instructions][compare][CPX]")
 		bus->write(0x0200, 0xE0); // CPX immediate opcode
 		bus->write(0x0201, 0x80); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Less: C=0, Z=0, N=1
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2251,7 +2251,7 @@ TEST_CASE("CPU Compare Instructions - CPX", "[cpu][instructions][compare][CPX]")
 		bus->write(0x0201, 0xA0); // Zero page address
 		bus->write(0x00A0, 0x33); // Value to compare
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Equal values, so C=1, Z=1, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2269,7 +2269,7 @@ TEST_CASE("CPU Compare Instructions - CPX", "[cpu][instructions][compare][CPX]")
 		bus->write(0x0202, 0x20); // High byte of address
 		bus->write(0x2000, 0x60); // Value to compare
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// 0x70 > 0x60, so C=1, Z=0, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2293,7 +2293,7 @@ TEST_CASE("CPU Compare Instructions - CPY", "[cpu][instructions][compare][CPY]")
 		bus->write(0x0200, 0xC0); // CPY immediate opcode
 		bus->write(0x0201, 0xAA); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Equal: C=1, Z=1, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2310,7 +2310,7 @@ TEST_CASE("CPU Compare Instructions - CPY", "[cpu][instructions][compare][CPY]")
 		bus->write(0x0200, 0xC0); // CPY immediate opcode
 		bus->write(0x0201, 0x80); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Greater: C=1, Z=0, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2325,7 +2325,7 @@ TEST_CASE("CPU Compare Instructions - CPY", "[cpu][instructions][compare][CPY]")
 		bus->write(0x0200, 0xC0); // CPY immediate opcode
 		bus->write(0x0201, 0xC0); // Compare value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Less: C=0, Z=0, N=1
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2341,7 +2341,7 @@ TEST_CASE("CPU Compare Instructions - CPY", "[cpu][instructions][compare][CPY]")
 		bus->write(0x0201, 0xB0); // Zero page address
 		bus->write(0x00B0, 0x77); // Value to compare
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// 0x88 > 0x77, so C=1, Z=0, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2359,7 +2359,7 @@ TEST_CASE("CPU Compare Instructions - CPY", "[cpu][instructions][compare][CPY]")
 		bus->write(0x0202, 0x15); // High byte of address
 		bus->write(0x1500, 0x40); // Value to compare
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Equal values, so C=1, Z=1, N=0
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2382,7 +2382,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0200, 0x29); // AND immediate opcode
 		bus->write(0x0201, 0x0F); // AND with 0x0F
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x0F);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2395,7 +2395,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0200, 0x29); // AND immediate opcode
 		bus->write(0x0201, 0x0F); // AND with 0x0F
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x00);
 		REQUIRE(cpu.get_zero_flag() == true);
@@ -2408,7 +2408,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0200, 0x29); // AND immediate opcode
 		bus->write(0x0201, 0x80); // AND with 0x80
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x80);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2422,7 +2422,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0201, 0x80); // Zero page address 0x80
 		bus->write(0x0080, 0x55); // Value at zero page 0x80
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x55);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2437,7 +2437,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0201, 0x80); // Base zero page address 0x80
 		bus->write(0x0085, 0x33); // Value at zero page 0x85 (0x80 + 0x05)
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x33);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2452,7 +2452,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0202, 0x15); // High byte of address (0x1500)
 		bus->write(0x1500, 0xAA); // Value at absolute address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xAA);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2468,7 +2468,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
 		bus->write(0x1510, 0x77); // Value at 0x1500 + 0x10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x77);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2484,7 +2484,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
 		bus->write(0x1520, 0x11); // Value at 0x1500 + 0x20
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x11);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2502,7 +2502,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0025, 0x15); // High byte of target address
 		bus->write(0x1500, 0x66); // Value at target address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x66);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2520,7 +2520,7 @@ TEST_CASE("CPU Logical Instructions - AND", "[cpu][and]") {
 		bus->write(0x0021, 0x15); // High byte of base address
 		bus->write(0x1510, 0x44); // Value at 0x1500 + 0x10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x44);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2542,7 +2542,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0200, 0x09); // ORA immediate opcode
 		bus->write(0x0201, 0xF0); // OR with 0xF0
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xFF);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2555,7 +2555,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0200, 0x09); // ORA immediate opcode
 		bus->write(0x0201, 0x00); // OR with 0x00
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x00);
 		REQUIRE(cpu.get_zero_flag() == true);
@@ -2568,7 +2568,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0200, 0x09);  // ORA immediate opcode
 		bus->write(0x0201, 0xAA);  // OR with 10101010
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xFF); // Should be 11111111
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2582,7 +2582,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0201, 0x80); // Zero page address 0x80
 		bus->write(0x0080, 0x70); // Value at zero page 0x80
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x7F);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2597,7 +2597,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0201, 0x80); // Base zero page address 0x80
 		bus->write(0x0085, 0x22); // Value at zero page 0x85 (0x80 + 0x05)
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x33);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2612,7 +2612,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0202, 0x15); // High byte of address (0x1500)
 		bus->write(0x1500, 0x80); // Value at absolute address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x8F);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2628,7 +2628,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
 		bus->write(0x1510, 0x02); // Value at 0x1500 + 0x10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x03);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2644,7 +2644,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
 		bus->write(0x1520, 0x20); // Value at 0x1500 + 0x20
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x30);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2662,7 +2662,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0025, 0x15); // High byte of target address
 		bus->write(0x1500, 0x04); // Value at target address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x0C);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2680,7 +2680,7 @@ TEST_CASE("CPU Logical Instructions - ORA", "[cpu][ora]") {
 		bus->write(0x0021, 0x15); // High byte of base address
 		bus->write(0x1510, 0x80); // Value at 0x1500 + 0x10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xC0);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2702,7 +2702,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0200, 0x49); // EOR immediate opcode
 		bus->write(0x0201, 0x0F); // XOR with 0x0F
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xF0);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2715,7 +2715,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0200, 0x49); // EOR immediate opcode
 		bus->write(0x0201, 0xAA); // XOR with same value
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x00);
 		REQUIRE(cpu.get_zero_flag() == true);
@@ -2728,7 +2728,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0200, 0x49);  // EOR immediate opcode
 		bus->write(0x0201, 0xFF);  // XOR with 11111111
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xAA); // Should be 10101010
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2742,7 +2742,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0201, 0x80); // Zero page address 0x80
 		bus->write(0x0080, 0x55); // Value at zero page 0x80
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x66);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2757,7 +2757,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0201, 0x80); // Base zero page address 0x80
 		bus->write(0x0085, 0x0F); // Value at zero page 0x85 (0x80 + 0x05)
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xF0);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2772,7 +2772,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0202, 0x15); // High byte of address (0x1500)
 		bus->write(0x1500, 0x77); // Value at absolute address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xFF);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2788,7 +2788,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
 		bus->write(0x1510, 0x30); // Value at 0x1500 + 0x10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xF0);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2804,7 +2804,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0202, 0x15); // High byte of base address (0x1500)
 		bus->write(0x1520, 0x22); // Value at 0x1500 + 0x20
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x33);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2822,7 +2822,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0025, 0x15); // High byte of target address
 		bus->write(0x1500, 0x66); // Value at target address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xFF);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2840,7 +2840,7 @@ TEST_CASE("CPU Logical Instructions - EOR", "[cpu][eor]") {
 		bus->write(0x0021, 0x15); // High byte of base address
 		bus->write(0x1510, 0xF0); // Value at 0x1500 + 0x10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xFF);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -2862,7 +2862,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ASL", "[cpu][asl]") {
 		cpu.set_carry_flag(false);
 		bus->write(0x0200, 0x0A); // ASL A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xAA); // 10101010
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2876,7 +2876,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ASL", "[cpu][asl]") {
 		cpu.set_carry_flag(false);
 		bus->write(0x0200, 0x0A); // ASL A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x00);
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2889,7 +2889,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ASL", "[cpu][asl]") {
 		bus->write(0x0200, 0x06); // ASL zp opcode
 		bus->write(0x0201, 0x50); // Zero page address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x0050) == 0x80);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2904,7 +2904,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ASL", "[cpu][asl]") {
 		bus->write(0x0200, 0x16); // ASL zp,X opcode
 		bus->write(0x0201, 0x50); // Zero page base address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x0055) == 0xFE);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2918,7 +2918,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ASL", "[cpu][asl]") {
 		bus->write(0x0201, 0x34); // Low byte of address
 		bus->write(0x0202, 0x12); // High byte of address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x1234) == 0x02);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2934,7 +2934,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ASL", "[cpu][asl]") {
 		bus->write(0x0201, 0x34); // Low byte of base address
 		bus->write(0x0202, 0x12); // High byte of base address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x1244) == 0xFE);
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2956,7 +2956,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - LSR", "[cpu][lsr]") {
 		cpu.set_carry_flag(false);
 		bus->write(0x0200, 0x4A); // LSR A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x55); // 01010101
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2970,7 +2970,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - LSR", "[cpu][lsr]") {
 		cpu.set_carry_flag(false);
 		bus->write(0x0200, 0x4A); // LSR A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x00);
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -2983,7 +2983,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - LSR", "[cpu][lsr]") {
 		bus->write(0x0200, 0x46); // LSR zp opcode
 		bus->write(0x0201, 0x50); // Zero page address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x0050) == 0x40);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -2998,7 +2998,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - LSR", "[cpu][lsr]") {
 		bus->write(0x0200, 0x56); // LSR zp,X opcode
 		bus->write(0x0201, 0x50); // Zero page base address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x0055) == 0x7F);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3012,7 +3012,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - LSR", "[cpu][lsr]") {
 		bus->write(0x0201, 0x34); // Low byte of address
 		bus->write(0x0202, 0x12); // High byte of address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x1234) == 0x01);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3028,7 +3028,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - LSR", "[cpu][lsr]") {
 		bus->write(0x0201, 0x34); // Low byte of base address
 		bus->write(0x0202, 0x12); // High byte of base address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x1244) == 0x7F);
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -3050,7 +3050,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROL", "[cpu][rol]") {
 		cpu.set_carry_flag(false);
 		bus->write(0x0200, 0x2A); // ROL A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0xAA); // 10101010
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3064,7 +3064,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROL", "[cpu][rol]") {
 		cpu.set_carry_flag(true);
 		bus->write(0x0200, 0x2A); // ROL A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x81); // 10000001
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3077,7 +3077,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROL", "[cpu][rol]") {
 		cpu.set_carry_flag(false);
 		bus->write(0x0200, 0x2A); // ROL A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x00);
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -3091,7 +3091,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROL", "[cpu][rol]") {
 		bus->write(0x0200, 0x26); // ROL zp opcode
 		bus->write(0x0201, 0x50); // Zero page address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x0050) == 0x81);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3107,7 +3107,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROL", "[cpu][rol]") {
 		bus->write(0x0200, 0x36); // ROL zp,X opcode
 		bus->write(0x0201, 0x50); // Zero page base address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x0055) == 0xFE);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3122,7 +3122,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROL", "[cpu][rol]") {
 		bus->write(0x0201, 0x34); // Low byte of address
 		bus->write(0x0202, 0x12); // High byte of address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x1234) == 0xFE);
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -3139,7 +3139,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROL", "[cpu][rol]") {
 		bus->write(0x0201, 0x34); // Low byte of base address
 		bus->write(0x0202, 0x12); // High byte of base address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x1244) == 0x03);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3161,7 +3161,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROR", "[cpu][ror]") {
 		cpu.set_carry_flag(false);
 		bus->write(0x0200, 0x6A); // ROR A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x55); // 01010101
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3175,7 +3175,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROR", "[cpu][ror]") {
 		cpu.set_carry_flag(true);
 		bus->write(0x0200, 0x6A); // ROR A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x81); // 10000001
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3188,7 +3188,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROR", "[cpu][ror]") {
 		cpu.set_carry_flag(false);
 		bus->write(0x0200, 0x6A); // ROR A opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_accumulator() == 0x00);
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -3202,7 +3202,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROR", "[cpu][ror]") {
 		bus->write(0x0200, 0x66); // ROR zp opcode
 		bus->write(0x0201, 0x50); // Zero page address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x0050) == 0x81);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3218,7 +3218,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROR", "[cpu][ror]") {
 		bus->write(0x0200, 0x76); // ROR zp,X opcode
 		bus->write(0x0201, 0x50); // Zero page base address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x0055) == 0x7F);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3233,7 +3233,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROR", "[cpu][ror]") {
 		bus->write(0x0201, 0x34); // Low byte of address
 		bus->write(0x0202, 0x12); // High byte of address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x1234) == 0x7F);
 		REQUIRE(cpu.get_carry_flag() == true);
@@ -3250,7 +3250,7 @@ TEST_CASE("CPU Shift/Rotate Instructions - ROR", "[cpu][ror]") {
 		bus->write(0x0201, 0x34); // Low byte of base address
 		bus->write(0x0202, 0x12); // High byte of base address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(bus->read(0x1244) == 0xC0);
 		REQUIRE(cpu.get_carry_flag() == false);
@@ -3273,7 +3273,7 @@ TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][
 		bus->write(0x0200, 0x10); // BPL opcode
 		bus->write(0x0201, 0x0A); // Offset +10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x020C); // 0x0202 + 0x0A = 0x020C
 	}
@@ -3286,7 +3286,7 @@ TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][
 		bus->write(0x0200, 0x10); // BPL opcode
 		bus->write(0x0201, 0x0A); // Offset +10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0202); // No branch, PC advances normally
 	}
@@ -3299,7 +3299,7 @@ TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][
 		bus->write(0x0200, 0x30); // BMI opcode
 		bus->write(0x0201, 0xFB); // Offset -5 (as signed byte)
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x01FD); // 0x0202 + (-5) = 0x01FD
 	}
@@ -3312,7 +3312,7 @@ TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][
 		bus->write(0x0200, 0x50); // BVC opcode
 		bus->write(0x0201, 0x14); // Offset +20
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0216); // 0x0202 + 0x14 = 0x0216
 	}
@@ -3325,7 +3325,7 @@ TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][
 		bus->write(0x0200, 0x70); // BVS opcode
 		bus->write(0x0201, 0x08); // Offset +8
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x020A); // 0x0202 + 0x08 = 0x020A
 	}
@@ -3338,7 +3338,7 @@ TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][
 		bus->write(0x0200, 0x90); // BCC opcode
 		bus->write(0x0201, 0x0F); // Offset +15
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0211); // 0x0202 + 0x0F = 0x0211
 	}
@@ -3351,7 +3351,7 @@ TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][
 		bus->write(0x0200, 0xB0); // BCS opcode
 		bus->write(0x0201, 0xF6); // Offset -10 (as signed byte)
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x01F8); // 0x0202 + (-10) = 0x01F8
 	}
@@ -3364,7 +3364,7 @@ TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][
 		bus->write(0x0200, 0xD0); // BNE opcode
 		bus->write(0x0201, 0x19); // Offset +25
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x021B); // 0x0202 + 0x19 = 0x021B
 	}
@@ -3377,7 +3377,7 @@ TEST_CASE("CPU Branch Instructions - Basic Functionality", "[cpu][instructions][
 		bus->write(0x0200, 0xF0); // BEQ opcode
 		bus->write(0x0201, 0x1E); // Offset +30
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0220); // 0x0202 + 0x1E = 0x0220
 	}
@@ -3397,7 +3397,7 @@ TEST_CASE("CPU Branch Instructions - Page Boundary Crossing", "[cpu][instruction
 		bus->write(0x0280, 0x10); // BPL opcode
 		bus->write(0x0281, 0x0A); // Offset +10
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x028C); // 0x0282 + 0x0A = 0x028C (same page)
 													  // Branch taken, same page = 3 cycles total
@@ -3411,7 +3411,7 @@ TEST_CASE("CPU Branch Instructions - Page Boundary Crossing", "[cpu][instruction
 		bus->write(0x02F0, 0x10); // BPL opcode
 		bus->write(0x02F1, 0x14); // Offset +20
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0306); // 0x02F2 + 0x14 = 0x0306 (crosses page)
 													  // Branch taken, page boundary crossed = 4 cycles total
@@ -3425,7 +3425,7 @@ TEST_CASE("CPU Branch Instructions - Page Boundary Crossing", "[cpu][instruction
 		bus->write(0x0310, 0x30); // BMI opcode
 		bus->write(0x0311, 0xEC); // Offset -20 (as signed byte)
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x02FE); // 0x0312 + (-20) = 0x02FE (crosses page)
 													  // Branch taken, page boundary crossed = 4 cycles total
@@ -3439,7 +3439,7 @@ TEST_CASE("CPU Branch Instructions - Page Boundary Crossing", "[cpu][instruction
 		bus->write(0x0200, 0xF0); // BEQ opcode
 		bus->write(0x0201, 0x32); // Offset +50
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0202); // No branch, PC advances normally
 													  // Branch not taken = 2 cycles total
@@ -3460,7 +3460,7 @@ TEST_CASE("CPU Branch Instructions - Edge Cases", "[cpu][instructions][branch][e
 		bus->write(0x0200, 0xF0); // BEQ opcode
 		bus->write(0x0201, 0x00); // Offset 0
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0202); // 0x0202 + 0 = 0x0202
 	}
@@ -3473,7 +3473,7 @@ TEST_CASE("CPU Branch Instructions - Edge Cases", "[cpu][instructions][branch][e
 		bus->write(0x0200, 0x90); // BCC opcode
 		bus->write(0x0201, 0x7F); // Offset +127
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0281); // 0x0202 + 127 = 0x0281
 	}
@@ -3486,7 +3486,7 @@ TEST_CASE("CPU Branch Instructions - Edge Cases", "[cpu][instructions][branch][e
 		bus->write(0x0300, 0xB0); // BCS opcode
 		bus->write(0x0301, 0x80); // Offset -128 (as signed byte)
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0282); // 0x0302 + (-128) = 0x0282
 	}
@@ -3499,7 +3499,7 @@ TEST_CASE("CPU Branch Instructions - Edge Cases", "[cpu][instructions][branch][e
 		bus->write(0x01F0, 0x50); // BVC opcode
 		bus->write(0x01F1, 0x20); // Offset +32
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0212); // 0x01F2 + 32 = 0x0212 (crosses page)
 	}
@@ -3548,7 +3548,7 @@ TEST_CASE("CPU Branch Instructions - All Opcodes", "[cpu][instructions][branch][
 			bus->write(0x0201, static_cast<Byte>(test.offset));
 
 			// Execute and verify
-			cpu.execute_instruction();
+			(void)cpu.execute_instruction();
 
 			Address expected_pc = static_cast<Address>(0x0202 + test.offset);
 			REQUIRE(cpu.get_program_counter() == expected_pc);
@@ -3570,7 +3570,7 @@ TEST_CASE("CPU Jump Instructions - JMP", "[cpu][instructions][jump]") {
 		bus->write(0x0201, 0x34); // Low byte of target address
 		bus->write(0x0202, 0x12); // High byte of target address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x1234);
 	}
@@ -3587,7 +3587,7 @@ TEST_CASE("CPU Jump Instructions - JMP", "[cpu][instructions][jump]") {
 		bus->write(0x1000, 0x56); // Low byte of target
 		bus->write(0x1001, 0x78); // High byte of target
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x7856);
 	}
@@ -3605,7 +3605,7 @@ TEST_CASE("CPU Jump Instructions - JMP", "[cpu][instructions][jump]") {
 		bus->write(0x1100, 0xAB); // This should be high byte but won't be read due to bug
 		bus->write(0x1000, 0x56); // This will be read instead (wraps to start of page)
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x5634); // 0x56 from $1000, 0x34 from $10FF
 	}
@@ -3626,7 +3626,7 @@ TEST_CASE("CPU Subroutine Instructions - JSR/RTS", "[cpu][instructions][subrouti
 		bus->write(0x0201, 0x00); // Low byte of subroutine address
 		bus->write(0x0202, 0x15); // High byte of subroutine address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x1500);
 		REQUIRE(cpu.get_stack_pointer() == 0xFD); // Stack pointer decremented by 2
@@ -3647,7 +3647,7 @@ TEST_CASE("CPU Subroutine Instructions - JSR/RTS", "[cpu][instructions][subrouti
 		// Write instruction: RTS = 0x60
 		bus->write(0x1500, 0x60); // RTS opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x0203); // Return address + 1
 		REQUIRE(cpu.get_stack_pointer() == 0xFF);	  // Stack pointer restored
@@ -3666,12 +3666,12 @@ TEST_CASE("CPU Subroutine Instructions - JSR/RTS", "[cpu][instructions][subrouti
 		bus->write(0x1500, 0x60); // RTS opcode
 
 		// Execute JSR
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x1500);
 		REQUIRE(cpu.get_stack_pointer() == 0xFD);
 
 		// Execute RTS
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x0203); // Next instruction after JSR
 		REQUIRE(cpu.get_stack_pointer() == 0xFF);
 	}
@@ -3695,7 +3695,7 @@ TEST_CASE("CPU Interrupt Instructions - RTI", "[cpu][instructions][interrupt]") 
 		// Write instruction: RTI = 0x40
 		bus->write(0x8000, 0x40); // RTI opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_program_counter() == 0x1234); // Return address restored
 		REQUIRE(cpu.get_stack_pointer() == 0xFF);	  // Stack pointer restored
@@ -3721,7 +3721,7 @@ TEST_CASE("CPU Interrupt Instructions - RTI", "[cpu][instructions][interrupt]") 
 
 		bus->write(0x8000, 0x40); // RTI opcode
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_carry_flag() == false);
 		REQUIRE(cpu.get_zero_flag() == true);
@@ -3814,7 +3814,7 @@ TEST_CASE("CPU Jump/Subroutine Instructions - All Opcodes", "[cpu][instructions]
 			test.setup(cpu, bus.get());
 
 			// Execute instruction
-			cpu.execute_instruction();
+			(void)cpu.execute_instruction();
 
 			// Verify results
 			test.verify(cpu);
@@ -3944,7 +3944,7 @@ TEST_CASE("CPU Stack Operations - All Opcodes", "[cpu][instructions][stack][opco
 				test.setup(cpu, bus.get());
 
 				// Execute instruction
-				cpu.execute_instruction();
+				(void)cpu.execute_instruction();
 
 				// Verify results
 				test.verify(cpu);
@@ -4047,7 +4047,7 @@ TEST_CASE("CPU Status Flag Instructions - All Opcodes", "[cpu][instructions][fla
 				bool initial_negative = cpu.get_negative_flag();
 
 				// Execute instruction
-				cpu.execute_instruction();
+				(void)cpu.execute_instruction();
 
 				// Verify target flag changed
 				test.verify(cpu);
@@ -4073,7 +4073,7 @@ TEST_CASE("CPU Status Flag Instructions - All Opcodes", "[cpu][instructions][fla
 
 		// Test CLC doesn't affect other flags
 		bus->write(0x0200, 0x18); // CLC
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_carry_flag() == false);	   // Changed
 		REQUIRE(cpu.get_zero_flag() == true);	   // Unchanged
@@ -4099,7 +4099,7 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 		bus->write(0x0200, 0x9A); // TXS opcode
 
 		// Execute instruction
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Verify results
 		REQUIRE(static_cast<int>(cpu.get_stack_pointer()) == 0x80); // Stack pointer should match X register
@@ -4120,7 +4120,7 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 		bus->write(0x0200, 0xBA); // TSX opcode
 
 		// Execute instruction
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Verify results
 		REQUIRE(cpu.get_x_register() == 0x42);	  // X register should match stack pointer
@@ -4137,7 +4137,7 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 		cpu.set_stack_pointer(0x00);
 
 		bus->write(0x0200, 0xBA); // TSX opcode
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_x_register() == 0x00);
 		REQUIRE(cpu.get_zero_flag() == true); // Should be set for zero
@@ -4149,7 +4149,7 @@ TEST_CASE("CPU Transfer Instructions - TXS/TSX", "[cpu][instructions][transfer][
 		cpu.set_stack_pointer(0x80); // Bit 7 set
 
 		bus->write(0x0200, 0xBA); // TSX opcode
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		REQUIRE(cpu.get_x_register() == 0x80);
 		REQUIRE(cpu.get_zero_flag() == false);
@@ -4172,7 +4172,7 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 		bus->write(0x0200, 0x24); // BIT zero page opcode
 		bus->write(0x0201, 0x80); // Zero page address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Verify results
 		REQUIRE(cpu.get_accumulator() == 0x0F); // Accumulator unchanged
@@ -4194,7 +4194,7 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 		bus->write(0x0201, 0x00); // Low byte of address
 		bus->write(0x0202, 0x03); // High byte of address
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Verify results
 		REQUIRE(cpu.get_accumulator() == 0x50); // Accumulator unchanged
@@ -4237,7 +4237,7 @@ TEST_CASE("CPU BIT Instructions - Zero Page and Absolute", "[cpu][instructions][
 				bus->write(0x0200, 0x24);
 				bus->write(0x0201, 0x80);
 
-				cpu.execute_instruction();
+				(void)cpu.execute_instruction();
 
 				REQUIRE(cpu.get_zero_flag() == test.expected_zero);
 				REQUIRE(cpu.get_negative_flag() == test.expected_negative);
@@ -4268,7 +4268,7 @@ TEST_CASE("CPU BRK Instruction", "[cpu][instructions][brk][interrupt][opcodes]")
 		cpu.set_carry_flag(true);
 		cpu.set_zero_flag(true);
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Verify stack operations
 		// PC+2 should be pushed (0x0302)
@@ -4306,7 +4306,7 @@ TEST_CASE("CPU BRK Instruction", "[cpu][instructions][brk][interrupt][opcodes]")
 		cpu.set_overflow_flag(false);
 		cpu.set_negative_flag(true);
 
-		cpu.execute_instruction();
+		(void)cpu.execute_instruction();
 
 		// Check pushed status register
 		Byte pushed_status = bus->read(0x01FD);

@@ -33,15 +33,17 @@ class PPUMemory {
 	}
 
 	// Pattern table access (reads from cartridge CHR ROM/RAM)
-	uint8_t read_pattern_table(uint16_t address);
+	uint8_t read_pattern_table(uint16_t address) const;
+	void write_pattern_table(uint16_t address, uint8_t value);
 
 	// Nametable mirroring support
 	void set_mirroring_mode(bool vertical_mirroring);
 
   private:
 	// Internal memory arrays
-	std::array<uint8_t, 2048> vram_;	  // 2KB VRAM (nametables)
-	std::array<uint8_t, 32> palette_ram_; // 32 bytes palette RAM
+	std::array<uint8_t, 2048> vram_;			   // 2KB VRAM (nametables)
+	std::array<uint8_t, 32> palette_ram_;		   // 32 bytes palette RAM
+	std::array<uint8_t, 8192> chr_ram_fallback_{}; // 8KB CHR RAM for tests/no-mapper
 
 	// Mirroring state
 	bool vertical_mirroring_;

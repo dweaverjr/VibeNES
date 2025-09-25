@@ -191,20 +191,21 @@ class PatternTableTestFixture {
 TEST_CASE_METHOD(PatternTableTestFixture, "Pattern Table Access", "[ppu][pattern_table][access]") {
 	SECTION("Should read from pattern table 0") {
 		// Test reading pattern table 0 data
-		uint8_t data = read_vram(0x0000); // First byte of pattern 0
-										  // Note: This test assumes CHR data is accessible through VRAM
-										  // In real hardware, pattern tables are read-only from cartridge
+		[[maybe_unused]] uint8_t data =
+			read_vram(0x0000); // First byte of pattern 0
+							   // Note: This test assumes CHR data is accessible through VRAM
+							   // In real hardware, pattern tables are read-only from cartridge
 	}
 
 	SECTION("Should read from pattern table 1") {
 		// Test reading pattern table 1 data
-		uint8_t data = read_vram(0x1000); // First byte of pattern 0 in table 1
+		[[maybe_unused]] uint8_t data = read_vram(0x1000); // First byte of pattern 0 in table 1
 	}
 
 	SECTION("Pattern table addresses should wrap correctly") {
 		// Test address wrapping within pattern table space
-		uint8_t data1 = read_vram(0x0FFF); // Last byte of pattern table 0
-		uint8_t data2 = read_vram(0x1FFF); // Last byte of pattern table 1
+		[[maybe_unused]] uint8_t data1 = read_vram(0x0FFF); // Last byte of pattern table 0
+		[[maybe_unused]] uint8_t data2 = read_vram(0x1FFF); // Last byte of pattern table 1
 	}
 }
 
@@ -341,12 +342,12 @@ TEST_CASE_METHOD(PatternTableTestFixture, "Pattern Data Format", "[ppu][pattern_
 	SECTION("Pattern tiles should be 8x8 pixels with 2 bit planes") {
 		// Each pattern is 16 bytes: 8 bytes low bit plane + 8 bytes high bit plane
 		// Test pattern 0 layout
-		uint8_t pattern_0_low_0 = read_vram(0x0000);  // Row 0, low bit plane
-		uint8_t pattern_0_high_0 = read_vram(0x0008); // Row 0, high bit plane
+		[[maybe_unused]] uint8_t pattern_0_low_0 = read_vram(0x0000);  // Row 0, low bit plane
+		[[maybe_unused]] uint8_t pattern_0_high_0 = read_vram(0x0008); // Row 0, high bit plane
 
 		// Test pattern 1 layout (next pattern)
-		uint8_t pattern_1_low_0 = read_vram(0x0010);  // Row 0, low bit plane
-		uint8_t pattern_1_high_0 = read_vram(0x0018); // Row 0, high bit plane
+		[[maybe_unused]] uint8_t pattern_1_low_0 = read_vram(0x0010);  // Row 0, low bit plane
+		[[maybe_unused]] uint8_t pattern_1_high_0 = read_vram(0x0018); // Row 0, high bit plane
 	}
 
 	SECTION("8x16 sprites should use consecutive patterns") {
@@ -370,10 +371,10 @@ TEST_CASE_METHOD(PatternTableTestFixture, "Pattern Data Format", "[ppu][pattern_
 		// Pattern table 1: $1000-$1FFF (256 patterns)
 
 		// Last pattern in table 0
-		uint8_t last_pattern_table_0 = read_vram(0x0FF0);
+		[[maybe_unused]] uint8_t last_pattern_table_0 = read_vram(0x0FF0);
 
 		// First pattern in table 1
-		uint8_t first_pattern_table_1 = read_vram(0x1000);
+		[[maybe_unused]] uint8_t first_pattern_table_1 = read_vram(0x1000);
 
 		// Should not wrap between tables
 		REQUIRE(read_vram(0x0FFF) != read_vram(0x1000));

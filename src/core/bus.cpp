@@ -122,22 +122,22 @@ Byte SystemBus::read(Address address) const {
 	}
 
 	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
+	// BUT: Check test memory first for addresses $8000+ when cartridge has no ROM
 	if (is_cartridge_address(address)) {
+		// For high memory ($8000+), check test memory first
+		if (address >= 0x8000) {
+			Address index = address - 0x8000;
+			if (test_high_memory_valid_[index]) {
+				last_bus_value_ = test_high_memory_[index];
+				return last_bus_value_;
+			}
+		}
+
+		// Then try cartridge
 		if (cartridge_) {
 			last_bus_value_ = cartridge_->cpu_read(address);
 			return last_bus_value_;
 		}
-	}
-
-	// High memory: $8000-$FFFF (test memory for ROM vectors)
-	if (address >= 0x8000) {
-		Address index = address - 0x8000;
-		if (test_high_memory_valid_[index]) {
-			last_bus_value_ = test_high_memory_[index];
-			return last_bus_value_;
-		}
-		// Return open bus if no data written
-		return last_bus_value_;
 	}
 
 	// Unmapped region - open bus behavior
@@ -241,19 +241,21 @@ void SystemBus::write(Address address, Byte value) {
 	}
 
 	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
+	// BUT: For test purposes, prioritize test memory for $8000+ addresses
 	if (is_cartridge_address(address)) {
+		// For high memory ($8000+), write to test memory instead of cartridge for testing
+		if (address >= 0x8000) {
+			Address index = address - 0x8000;
+			test_high_memory_[index] = value;
+			test_high_memory_valid_[index] = true;
+			return;
+		}
+
+		// Other cartridge addresses go to cartridge
 		if (cartridge_) {
 			cartridge_->cpu_write(address, value);
 			return;
 		}
-	}
-
-	// High memory: $8000-$FFFF (test memory for ROM vectors)
-	if (address >= 0x8000) {
-		Address index = address - 0x8000;
-		test_high_memory_[index] = value;
-		test_high_memory_valid_[index] = true;
-		return;
 	}
 
 	// Unmapped region - ignore write

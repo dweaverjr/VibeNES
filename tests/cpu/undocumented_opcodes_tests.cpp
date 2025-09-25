@@ -46,7 +46,7 @@ TEST_CASE("LAX - Load A and X", "[cpu][undocumented][lax]") {
 		fixture.bus->write(0x10, 0x42);
 		fixture.setup_memory(0x0200, {0xA7, 0x10}); // LAX zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		REQUIRE(fixture.cpu->get_accumulator() == 0x42);
 		REQUIRE(fixture.cpu->get_x_register() == 0x42);
@@ -61,7 +61,7 @@ TEST_CASE("LAX - Load A and X", "[cpu][undocumented][lax]") {
 		fixture.bus->write(0x15, 0x80);				// Negative value
 		fixture.setup_memory(0x0200, {0xB7, 0x10}); // LAX zp,Y
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		REQUIRE(fixture.cpu->get_accumulator() == 0x80);
 		REQUIRE(fixture.cpu->get_x_register() == 0x80);
@@ -73,7 +73,7 @@ TEST_CASE("LAX - Load A and X", "[cpu][undocumented][lax]") {
 		fixture.bus->write(0x1234, 0x00);				  // Zero value
 		fixture.setup_memory(0x0200, {0xAF, 0x34, 0x12}); // LAX abs
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		REQUIRE(fixture.cpu->get_accumulator() == 0x00);
 		REQUIRE(fixture.cpu->get_x_register() == 0x00);
@@ -86,7 +86,7 @@ TEST_CASE("LAX - Load A and X", "[cpu][undocumented][lax]") {
 		fixture.bus->write(0x1236, 0x7F);				  // Positive value
 		fixture.setup_memory(0x0200, {0xBF, 0x34, 0x12}); // LAX abs,Y
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		REQUIRE(fixture.cpu->get_accumulator() == 0x7F);
 		REQUIRE(fixture.cpu->get_x_register() == 0x7F);
@@ -102,7 +102,7 @@ TEST_CASE("LAX - Load A and X", "[cpu][undocumented][lax]") {
 		fixture.bus->write(0x1500, 0x33);
 		fixture.setup_memory(0x0200, {0xA3, 0x10}); // LAX (zp,X)
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		REQUIRE(fixture.cpu->get_accumulator() == 0x33);
 		REQUIRE(fixture.cpu->get_x_register() == 0x33);
@@ -116,7 +116,7 @@ TEST_CASE("LAX - Load A and X", "[cpu][undocumented][lax]") {
 		fixture.bus->write(0x1203, 0x99);
 		fixture.setup_memory(0x0200, {0xB3, 0x10}); // LAX (zp),Y
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		REQUIRE(fixture.cpu->get_accumulator() == 0x99);
 		REQUIRE(fixture.cpu->get_x_register() == 0x99);
@@ -131,7 +131,7 @@ TEST_CASE("SAX - Store A AND X", "[cpu][undocumented][sax]") {
 		fixture.cpu->set_x_register(0x0F);
 		fixture.setup_memory(0x0200, {0x87, 0x10}); // SAX zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// A AND X = 0xF0 AND 0x0F = 0x00
 		REQUIRE(fixture.bus->read(0x10) == 0x00);
@@ -144,7 +144,7 @@ TEST_CASE("SAX - Store A AND X", "[cpu][undocumented][sax]") {
 		fixture.cpu->set_y_register(0x05);
 		fixture.setup_memory(0x0200, {0x97, 0x10}); // SAX zp,Y
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// A AND X = 0xFF AND 0x33 = 0x33, stored at $10+Y = $15
 		REQUIRE(fixture.bus->read(0x15) == 0x33);
@@ -155,7 +155,7 @@ TEST_CASE("SAX - Store A AND X", "[cpu][undocumented][sax]") {
 		fixture.cpu->set_x_register(0x42);
 		fixture.setup_memory(0x0200, {0x8F, 0x34, 0x12}); // SAX abs
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// A AND X = 0x81 AND 0x42 = 0x00
 		REQUIRE(fixture.bus->read(0x1234) == 0x00);
@@ -172,7 +172,7 @@ TEST_CASE("SAX - Store A AND X", "[cpu][undocumented][sax]") {
 
 		fixture.cpu->set_accumulator(0xAA);
 		fixture.cpu->set_x_register(0x55);
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// A AND X = 0xAA AND 0x55 = 0x00
 		REQUIRE(fixture.bus->read(0x1500) == 0x00);
@@ -187,7 +187,7 @@ TEST_CASE("DCP - Decrement and Compare", "[cpu][undocumented][dcp]") {
 		fixture.bus->write(0x10, 0x08);
 		fixture.setup_memory(0x0200, {0xC7, 0x10}); // DCP zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory decremented: 0x08 -> 0x07
 		// Compare A (0x05) with decremented value (0x07)
@@ -204,7 +204,7 @@ TEST_CASE("DCP - Decrement and Compare", "[cpu][undocumented][dcp]") {
 		fixture.bus->write(0x15, 0x11);				// Will be decremented to 0x10
 		fixture.setup_memory(0x0200, {0xD7, 0x10}); // DCP zp,X
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		REQUIRE(fixture.bus->read(0x15) == 0x10);
 		REQUIRE(fixture.cpu->get_carry_flag() == true); // A >= memory
@@ -217,7 +217,7 @@ TEST_CASE("DCP - Decrement and Compare", "[cpu][undocumented][dcp]") {
 		fixture.bus->write(0x1234, 0x15);
 		fixture.setup_memory(0x0200, {0xCF, 0x34, 0x12}); // DCP abs
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory: 0x15 -> 0x14, compare with A (0x20)
 		// 0x20 > 0x14, so carry set, zero clear, negative clear
@@ -237,7 +237,7 @@ TEST_CASE("ISC - Increment and Subtract with Carry", "[cpu][undocumented][isc]")
 		fixture.bus->write(0x10, 0x0F);
 		fixture.setup_memory(0x0200, {0xE7, 0x10}); // ISC zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory incremented: 0x0F -> 0x10
 		// SBC: A = 0x50 - 0x10 - (1 - carry) = 0x50 - 0x10 - 0 = 0x40
@@ -252,7 +252,7 @@ TEST_CASE("ISC - Increment and Subtract with Carry", "[cpu][undocumented][isc]")
 		fixture.bus->write(0x10, 0x09);
 		fixture.setup_memory(0x0200, {0xE7, 0x10}); // ISC zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory incremented: 0x09 -> 0x0A
 		// SBC: A = 0x05 - 0x0A - (1 - carry) = 0x05 - 0x0A - 1 = 0xFA
@@ -271,7 +271,7 @@ TEST_CASE("SLO - Shift Left and OR", "[cpu][undocumented][slo]") {
 		fixture.bus->write(0x10, 0x81);				// Will become 0x02 after shift
 		fixture.setup_memory(0x0200, {0x07, 0x10}); // SLO zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory shifted: 0x81 -> 0x02, carry set from bit 7
 		// A = A OR shifted = 0x0F OR 0x02 = 0x0F
@@ -286,7 +286,7 @@ TEST_CASE("SLO - Shift Left and OR", "[cpu][undocumented][slo]") {
 		fixture.bus->write(0x15, 0x44);				// Will become 0x88 after shift
 		fixture.setup_memory(0x0200, {0x17, 0x10}); // SLO zp,X
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory shifted: 0x44 -> 0x88
 		// A = A OR shifted = 0x30 OR 0x88 = 0xB8
@@ -306,7 +306,7 @@ TEST_CASE("RLA - Rotate Left and AND", "[cpu][undocumented][rla]") {
 		fixture.bus->write(0x10, 0x80);				// Will become 0x01 after rotate
 		fixture.setup_memory(0x0200, {0x27, 0x10}); // RLA zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory rotated: 0x80 -> 0x01 (carry=1 rotated in, bit 7=1 to carry)
 		// A = A AND rotated = 0xFF AND 0x01 = 0x01
@@ -321,7 +321,7 @@ TEST_CASE("RLA - Rotate Left and AND", "[cpu][undocumented][rla]") {
 		fixture.bus->write(0x10, 0x2A);				// Will become 0x54 after rotate
 		fixture.setup_memory(0x0200, {0x27, 0x10}); // RLA zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory rotated: 0x2A -> 0x54 (carry=0 rotated in, bit 7=0 to carry)
 		// A = A AND rotated = 0x55 AND 0x54 = 0x54
@@ -339,7 +339,7 @@ TEST_CASE("SRE - Shift Right and EOR", "[cpu][undocumented][sre]") {
 		fixture.bus->write(0x10, 0x81);				// Will become 0x40 after shift
 		fixture.setup_memory(0x0200, {0x47, 0x10}); // SRE zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory shifted: 0x81 -> 0x40, carry set from bit 0
 		// A = A EOR shifted = 0xFF EOR 0x40 = 0xBF
@@ -354,7 +354,7 @@ TEST_CASE("SRE - Shift Right and EOR", "[cpu][undocumented][sre]") {
 		fixture.bus->write(0x10, 0x40);				// Will become 0x20 after shift
 		fixture.setup_memory(0x0200, {0x47, 0x10}); // SRE zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory shifted: 0x40 -> 0x20
 		// A = A EOR shifted = 0x20 EOR 0x20 = 0x00
@@ -374,7 +374,7 @@ TEST_CASE("RRA - Rotate Right and Add with Carry", "[cpu][undocumented][rra]") {
 		fixture.bus->write(0x10, 0x02);				// Will become 0x81 after rotate
 		fixture.setup_memory(0x0200, {0x67, 0x10}); // RRA zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory rotated: 0x02 -> 0x81 (carry=1 rotated into bit 7, bit 0=0 to carry)
 		// ADC: A = 0x10 + 0x81 + carry = 0x10 + 0x81 + 0 = 0x91
@@ -390,7 +390,7 @@ TEST_CASE("RRA - Rotate Right and Add with Carry", "[cpu][undocumented][rra]") {
 		fixture.bus->write(0x10, 0x03);				// Will become 0x01 after rotate
 		fixture.setup_memory(0x0200, {0x67, 0x10}); // RRA zp
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Memory rotated: 0x03 -> 0x01 (carry=0 rotated into bit 7, bit 0=1 to carry)
 		// ADC: A = 0xFF + 0x01 + carry = 0xFF + 0x01 + 1 = 0x101 -> 0x01 (carry set)
@@ -412,7 +412,7 @@ TEST_CASE("NOP Variants", "[cpu][undocumented][nop]") {
 
 		fixture.setup_memory(0x0200, {0x80, 0x42}); // NOP #$42 (0x80 is actual NOP immediate)
 
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Should do nothing except advance PC
 		REQUIRE(fixture.cpu->get_accumulator() == initial_a);
@@ -431,7 +431,7 @@ TEST_CASE("Crash Opcodes", "[cpu][undocumented][crash]") {
 
 		// The CPU should handle this gracefully - in our implementation it prints and continues
 		Address pc_before = fixture.cpu->get_program_counter();
-		fixture.cpu->execute_instruction();
+		(void)fixture.cpu->execute_instruction();
 
 		// Should advance PC and not actually crash the test
 		REQUIRE(fixture.cpu->get_program_counter() > pc_before);

@@ -25,6 +25,7 @@ class Cartridge final : public Component {
 
 	// Cartridge operations
 	bool load_rom(const std::string &filepath);
+	bool load_from_rom_data(const RomData &rom_data); // For testing with synthetic ROM data
 	void unload_rom();
 	bool is_loaded() const noexcept {
 		return mapper_ != nullptr;

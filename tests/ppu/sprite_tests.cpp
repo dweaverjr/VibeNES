@@ -175,7 +175,7 @@ TEST_CASE_METHOD(SpriteTestFixture, "Sprite 0 Hit Detection", "[ppu][sprites][sp
 		advance_to_cycle(341);
 
 		// Check PPUSTATUS for sprite 0 hit flag
-		uint8_t status = read_ppu_register(0x2002);
+		[[maybe_unused]] uint8_t status = read_ppu_register(0x2002);
 		// Bit 6 should be set if sprite 0 hit occurred
 	}
 
@@ -199,8 +199,8 @@ TEST_CASE_METHOD(SpriteTestFixture, "Sprite 0 Hit Detection", "[ppu][sprites][sp
 		advance_to_cycle(341);
 
 		// Read status to clear flags
-		uint8_t status1 = read_ppu_register(0x2002);
-		uint8_t status2 = read_ppu_register(0x2002);
+		[[maybe_unused]] uint8_t status1 = read_ppu_register(0x2002);
+		[[maybe_unused]] uint8_t status2 = read_ppu_register(0x2002);
 
 		// Second read should have sprite 0 hit flag cleared
 	}
@@ -218,7 +218,7 @@ TEST_CASE_METHOD(SpriteTestFixture, "Sprite Overflow Detection", "[ppu][sprites]
 		advance_to_cycle(256);
 
 		// Check PPUSTATUS for sprite overflow flag
-		uint8_t status = read_ppu_register(0x2002);
+		[[maybe_unused]] uint8_t status = read_ppu_register(0x2002);
 		// Bit 5 should be set
 	}
 
@@ -232,7 +232,7 @@ TEST_CASE_METHOD(SpriteTestFixture, "Sprite Overflow Detection", "[ppu][sprites]
 		advance_to_scanline(100);
 		advance_to_cycle(256);
 
-		uint8_t status = read_ppu_register(0x2002);
+		[[maybe_unused]] uint8_t status = read_ppu_register(0x2002);
 		// Bit 5 should be clear
 	}
 }

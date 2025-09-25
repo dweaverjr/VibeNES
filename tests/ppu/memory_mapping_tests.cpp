@@ -64,8 +64,11 @@ class MemoryMappingTestFixture {
 	uint8_t read_vram(uint16_t address) {
 		set_vram_address(address);
 
+		// Apply PPU memory mirroring to check if this is a palette address
+		uint16_t effective_address = address & 0x3FFF;
+
 		// Hardware behavior: PPUDATA reads are buffered except for palette memory
-		if (address >= 0x3F00 && address <= 0x3F1F) {
+		if (effective_address >= 0x3F00 && effective_address <= 0x3FFF) {
 			// Palette reads return immediately (no buffering)
 			return read_ppu_register(0x2007);
 		} else {
@@ -127,7 +130,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Pattern Table Mapping", "[ppu][memor
 			throw std::runtime_error("Loop hit safety limit - possible infinite loop");
 		}
 
-		uint8_t data = read_vram(0x0100);
+		[[maybe_unused]] uint8_t data = read_vram(0x0100);
 		// Should read successfully during VBlank
 	}
 }
@@ -241,15 +244,17 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Palette Memory Mapping", "[ppu][memo
 	}
 
 	SECTION("Sprite palette should map to $3F10-$3F1F") {
-		// Write sprite palette
+		// Write sprite palette (use 6-bit values since NES palette RAM is 6-bit)
 		for (uint8_t i = 0; i < 16; i++) {
-			write_vram(0x3F10 + i, i * 8);
+			uint8_t pal_value = (i * 4) & 0x3F; // Keep within 6-bit range
+			write_vram(0x3F10 + i, pal_value);
 		}
 
 		// Read back and verify
 		for (uint8_t i = 0; i < 16; i++) {
+			uint8_t expected = (i * 4) & 0x3F;
 			uint8_t value = read_vram(0x3F10 + i);
-			REQUIRE(static_cast<int>(value) == i * 8);
+			REQUIRE(static_cast<int>(value) == static_cast<int>(expected));
 		}
 	}
 
@@ -281,17 +286,17 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Palette Memory Mapping", "[ppu][memo
 
 TEST_CASE_METHOD(MemoryMappingTestFixture, "VRAM Address Mirroring", "[ppu][memory][mirroring]") {
 	SECTION("Address space should mirror at $4000") {
-		// Write to base addresses
+		// Write to base addresses (using valid 6-bit palette values)
 		write_vram(0x2000, 0x12);
 		write_vram(0x2345, 0x34);
-		write_vram(0x3F00, 0x56);
-		write_vram(0x3F1F, 0x78);
+		write_vram(0x3F00, 0x16); // Valid 6-bit value instead of 0x56
+		write_vram(0x3F1F, 0x38); // Valid 6-bit value instead of 0x78
 
 		// Test mirrors
 		REQUIRE(static_cast<int>(read_vram(0x6000)) == 0x12); // $6000 mirrors $2000
 		REQUIRE(static_cast<int>(read_vram(0x6345)) == 0x34); // $6345 mirrors $2345
-		REQUIRE(static_cast<int>(read_vram(0x7F00)) == 0x56); // $7F00 mirrors $3F00
-		REQUIRE(static_cast<int>(read_vram(0x7F1F)) == 0x78); // $7F1F mirrors $3F1F
+		REQUIRE(static_cast<int>(read_vram(0x7F00)) == 0x16); // $7F00 mirrors $3F00
+		REQUIRE(static_cast<int>(read_vram(0x7F1F)) == 0x38); // $7F1F mirrors $3F1F
 	}
 
 	SECTION("Nametable mirroring should depend on cartridge") {
@@ -356,13 +361,13 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "VRAM Increment Mode", "[ppu][memory]
 
 		set_vram_address(0x3FFE);
 
-		write_ppu_register(0x2007, 0xAA);
-		write_ppu_register(0x2007, 0xBB);
-		write_ppu_register(0x2007, 0xCC);
+		write_ppu_register(0x2007, 0x2A); // Valid 6-bit value (was 0xAA)
+		write_ppu_register(0x2007, 0x3B); // Valid 6-bit value (was 0xBB)
+		write_ppu_register(0x2007, 0x0C); // Valid 6-bit value (was 0xCC)
 
-		REQUIRE(static_cast<int>(read_vram(0x3FFE)) == 0xAA);
-		REQUIRE(static_cast<int>(read_vram(0x3FFF)) == 0xBB);
-		REQUIRE(static_cast<int>(read_vram(0x0000)) == 0xCC); // Wrapped to beginning
+		REQUIRE(static_cast<int>(read_vram(0x3FFE)) == 0x2A);
+		REQUIRE(static_cast<int>(read_vram(0x3FFF)) == 0x3B);
+		REQUIRE(static_cast<int>(read_vram(0x0000)) == 0x0C); // Wrapped to beginning
 	}
 }
 
@@ -374,7 +379,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 		// Advance to visible scanline
 		int safety_counter = 0;
 		const int MAX_CYCLES = 100000; // Safety limit to prevent infinite loops
-		while ((ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) && safety_counter < MAX_CYCLES) {
+		while (ppu->get_current_scanline() >= 240 && safety_counter < MAX_CYCLES) {
 			ppu->tick(CpuCycle{1});
 			safety_counter++;
 		}
@@ -384,7 +389,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 
 		// Try to access VRAM during rendering
 		set_vram_address(0x2000);
-		uint8_t data = read_ppu_register(0x2007);
+		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 
 		// Access should be blocked or return garbage
 		// Exact behavior depends on timing
@@ -397,8 +402,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 		// Advance to visible scanline
 		int safety_counter_2 = 0;
 		const int MAX_CYCLES_2 = 100000; // Safety limit to prevent infinite loops
-		while ((ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) &&
-			   safety_counter_2 < MAX_CYCLES_2) {
+		while (ppu->get_current_scanline() >= 240 && safety_counter_2 < MAX_CYCLES_2) {
 			ppu->tick(CpuCycle{1});
 			safety_counter_2++;
 		}
@@ -419,8 +423,7 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Memory Access During Rendering", "[p
 		// Advance to sprite evaluation time (cycles 65-256)
 		int safety_counter_3 = 0;
 		const int MAX_CYCLES_3 = 100000; // Safety limit to prevent infinite loops
-		while ((ppu->get_current_scanline() >= 240 || ppu->get_current_scanline() < 0) &&
-			   safety_counter_3 < MAX_CYCLES_3) {
+		while (ppu->get_current_scanline() >= 240 && safety_counter_3 < MAX_CYCLES_3) {
 			ppu->tick(CpuCycle{1});
 			safety_counter_3++;
 		}
