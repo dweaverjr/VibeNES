@@ -71,22 +71,26 @@ class TestCHRData {
 		// Create tile 0x00 with transparent pattern
 		create_solid_tile(chr_data, 0x00, 0x00); // Tile 0 = transparent
 
-		// Create some background tiles in pattern table 0
-		for (int tile = 0; tile < 16; ++tile) {
-			create_test_pattern_tile(chr_data, tile, tile);
+		// Create background tiles in pattern table 0 (cover full 256-tile range)
+		for (int tile = 0; tile < 256; ++tile) {
+			create_test_pattern_tile(chr_data, static_cast<uint16_t>(tile), static_cast<uint8_t>(tile));
 		}
 
-		// Create sprite tiles in pattern table 1 (offset by 0x1000)
-		for (int tile = 0; tile < 16; ++tile) {
-			create_test_pattern_tile(chr_data, 0x100 + tile, tile);
+		// Create sprite tiles in pattern table 1 (offset by 0x1000, full 256-tile range)
+		for (int tile = 0; tile < 256; ++tile) {
+			create_test_pattern_tile(chr_data, static_cast<uint16_t>(0x100 + tile), static_cast<uint8_t>(tile));
 		}
+
+		// Ensure tile 0x01 remains a solid pattern for sprite 0 hit tests
+		create_solid_tile(chr_data, 0x01, 0xFF);
+		create_solid_tile(chr_data, 0x101, 0xFF);
 
 		return chr_data;
 	}
 
   private:
 	/// Create a solid tile pattern (8x8 pixels)
-	static void create_solid_tile(std::vector<uint8_t> &chr_data, uint8_t tile_index, uint8_t pattern) {
+	static void create_solid_tile(std::vector<uint8_t> &chr_data, uint16_t tile_index, uint8_t pattern) {
 		uint16_t tile_offset = tile_index * 16; // Each tile is 16 bytes
 
 		// Low bit plane (8 bytes)

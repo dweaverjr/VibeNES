@@ -159,6 +159,8 @@
                 "${workspaceFolder}/tests/ppu/oam_dma_tests.cpp",
                 "${workspaceFolder}/tests/ppu/pattern_table_tests.cpp",
                 "${workspaceFolder}/tests/ppu/palette_tests.cpp",
+                "${workspaceFolder}/tests/ppu/ppu_trace_harness.cpp",
+                "${workspaceFolder}/tests/ppu/ppu_trace_harness_tests.cpp",
                 "${workspaceFolder}/tests/ppu/rendering_pipeline_tests.cpp",
                 "${workspaceFolder}/tests/ppu/bus_conflict_tests.cpp",
                 "${workspaceFolder}/tests/ppu/hardware_quirks_tests.cpp",

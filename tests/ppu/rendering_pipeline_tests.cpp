@@ -3,9 +3,11 @@
 #include "../../include/core/bus.hpp"
 #include "../../include/cpu/cpu_6502.hpp"
 #include "../../include/memory/ram.hpp"
+#include "../../include/ppu/nes_palette.hpp"
 #include "../../include/ppu/ppu.hpp"
 #include "../../include/ppu/ppu_memory.hpp"
 #include "../catch2/catch_amalgamated.hpp"
+#include "test_chr_data.hpp"
 #include <memory>
 
 using namespace nes;
@@ -15,7 +17,7 @@ class RenderingPipelineTestFixture {
 	RenderingPipelineTestFixture() {
 		bus = std::make_unique<nes::SystemBus>();
 		ram = std::make_shared<nes::Ram>();
-		cartridge = std::make_shared<nes::Cartridge>();
+		cartridge = nes::test::TestCHRData::create_test_cartridge();
 		apu = std::make_shared<nes::APU>();
 		cpu = std::make_shared<nes::CPU6502>(bus.get());
 		ppu_memory = std::make_shared<nes::PPUMemory>();
@@ -269,6 +271,43 @@ TEST_CASE_METHOD(RenderingPipelineTestFixture, "Background Tile Fetching", "[ppu
 		// Next 4 tiles should still use same attribute byte
 		advance_ppu_cycles(32);
 	}
+}
+
+TEST_CASE_METHOD(RenderingPipelineTestFixture, "Background prefetch maintains left edge alignment",
+				 "[ppu][render][alignment][regression]") {
+	// Ensure a known tile and palette at the top-left of the screen
+	disable_all_rendering();
+	write_vram(0x2000, 0x01); // Top-left tile uses solid pattern
+
+	// Configure palette 0 with a distinctive color so differences are obvious
+	write_vram(0x23C0, 0x00);	 // All quadrants use palette 0
+	write_palette(0x3F00, 0x0F); // Universal background (dark backdrop)
+	write_palette(0x3F01, 0x30);
+	write_palette(0x3F02, 0x30);
+	write_palette(0x3F03, 0x30);
+
+	// Enable background rendering and ensure the leftmost 8 pixels are enabled
+	write_ppu_register(0x2001, 0x0A);
+
+	// Render two frames to allow the prefetch pipeline to settle before sampling
+	ppu->clear_frame_ready();
+	advance_ppu_cycles(PPUTiming::CYCLES_PER_SCANLINE * PPUTiming::TOTAL_SCANLINES);
+	ppu->clear_frame_ready();
+	advance_ppu_cycles(PPUTiming::CYCLES_PER_SCANLINE * PPUTiming::TOTAL_SCANLINES);
+	REQUIRE(ppu->is_frame_ready());
+
+	const uint32_t *frame = ppu->get_frame_buffer();
+	REQUIRE(frame != nullptr);
+
+	uint32_t expected_tile_color = nes::NESPalette::get_rgba_color(0x30);
+	uint32_t expected_background_color = nes::NESPalette::get_rgba_color(0x0F);
+	CAPTURE(frame[0], frame[1], frame[8], frame[9]);
+
+	// The very first pixel should use the prefetched leftmost tile
+	REQUIRE(frame[0] == expected_tile_color);
+
+	// Sanity check: tile color must differ from backdrop to detect mixing issues
+	REQUIRE(frame[0] != expected_background_color);
 }
 
 TEST_CASE_METHOD(RenderingPipelineTestFixture, "Sprite Evaluation", "[ppu][pipeline][sprites]") {

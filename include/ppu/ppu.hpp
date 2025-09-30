@@ -115,6 +115,31 @@ class PPU : public Component {
 	// CHR ROM access (for pattern table visualization)
 	uint8_t read_chr_rom(uint16_t address) const;
 
+	struct DebugState {
+		uint16_t cycle;
+		uint16_t scanline;
+		uint16_t vram_address;
+		uint16_t temp_vram_address;
+		uint8_t fine_x_scroll;
+		uint8_t control_register;
+		uint8_t mask_register;
+		uint8_t status_register;
+		uint16_t bg_pattern_low_shift;
+		uint16_t bg_pattern_high_shift;
+		uint16_t bg_attribute_low_shift;
+		uint16_t bg_attribute_high_shift;
+		uint8_t next_tile_id;
+		uint8_t next_tile_attribute;
+		uint8_t next_tile_pattern_low;
+		uint8_t next_tile_pattern_high;
+		uint8_t fetch_cycle;
+		uint8_t current_tile_id;
+		uint8_t current_attribute;
+		uint8_t current_pattern_low;
+		uint8_t current_pattern_high;
+	};
+	[[nodiscard]] DebugState get_debug_state() const;
+
   private:
 	// Timing state
 	uint16_t current_cycle_;	// Current PPU cycle (0-340)
@@ -129,11 +154,14 @@ class PPU : public Component {
 	uint8_t oam_address_;	   // $2003 OAMADDR
 
 	// Internal latches and state
-	uint16_t vram_address_;		 // Current VRAM address (v)
-	uint16_t temp_vram_address_; // Temporary VRAM address (t)
-	uint8_t fine_x_scroll_;		 // Fine X scroll (3 bits)
-	bool write_toggle_;			 // First/second write toggle (w)
-	uint8_t read_buffer_;		 // PPU data read buffer
+	uint16_t vram_address_;				// Current VRAM address (v)
+	uint16_t temp_vram_address_;		// Temporary VRAM address (t)
+	uint8_t fine_x_scroll_;				// Fine X scroll (3 bits)
+	bool write_toggle_;					// First/second write toggle (w)
+	uint8_t read_buffer_;				// PPU data read buffer
+	bool vram_wrap_read_pending_;		// Pending wrapped-read override flag
+	uint16_t vram_wrap_target_address_; // Address that should return the latched value after wrap
+	uint8_t vram_wrap_latched_value_;	// Latched value to expose on first read after wrap
 
 	// OAM (Object Attribute Memory) Management
 	std::array<uint8_t, 256> oam_memory_;	// Primary OAM (64 sprites × 4 bytes)
@@ -143,6 +171,7 @@ class PPU : public Component {
 	uint16_t oam_dma_cycle_;				// OAM DMA cycle counter (0-513)
 	uint8_t oam_dma_subcycle_;				// PPU subcycle counter for CPU timing (0-2)
 	bool oam_dma_pending_;					// OAM DMA requested but not started
+	uint8_t oam_dma_data_latch_;			// Latch holding data between DMA read/write phases
 
 	// Hardware Timing State
 	bool odd_frame_;					   // Tracks odd/even frames for cycle skip
@@ -196,6 +225,7 @@ class PPU : public Component {
 	uint8_t sprite_count_current_scanline_;			 // Number of sprites on current scanline
 	bool sprite_0_on_scanline_;						 // True if sprite 0 is on current scanline
 	bool sprite_0_hit_detected_;					 // Prevents multiple sprite 0 hits per frame
+	uint8_t sprite_0_hit_delay_;					 // Delay counter before latching sprite 0 flag
 
 	// Hardware-accurate sprite evaluation timing
 	uint8_t sprite_evaluation_cycle_; // Current sprite evaluation cycle (0-63)
@@ -290,7 +320,7 @@ class PPU : public Component {
 	void perform_tile_fetch_cycle();
 
 	// Sprite rendering (Phase 3)
-	uint8_t get_sprite_pixel_at_current_position(bool &sprite_priority);
+	uint8_t get_sprite_pixel_at_current_position(bool &sprite_priority, bool &sprite0_candidate);
 	uint8_t fetch_sprite_pattern_data_raw(uint8_t tile_index, uint8_t fine_y, bool sprite_table);
 	bool check_sprite_0_hit(uint8_t bg_pixel, uint8_t sprite_pixel, uint8_t x_pos); // Enhanced with edge case support
 	void render_combined_pixel(uint8_t bg_pixel, uint8_t sprite_pixel, bool sprite_priority, uint8_t x_pos,

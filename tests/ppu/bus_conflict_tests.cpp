@@ -10,10 +10,69 @@
 #include "../../include/ppu/ppu.hpp"
 #include "../../include/ppu/ppu_memory.hpp"
 #include "../catch2/catch_amalgamated.hpp"
+#include "ppu_trace_harness.hpp"
 #include "test_chr_data.hpp"
+#include <iomanip>
 #include <memory>
+#include <sstream>
+#include <string>
 
 using namespace nes;
+
+namespace {
+
+std::string format_byte(uint8_t value) {
+	std::ostringstream ss;
+	ss << "0x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(value)
+	   << std::dec;
+	return ss.str();
+}
+
+std::string format_word(uint16_t value) {
+	std::ostringstream ss;
+	ss << "0x" << std::hex << std::uppercase << std::setw(4) << std::setfill('0') << value << std::dec;
+	return ss.str();
+}
+
+std::string format_debug_state(const PPU::DebugState &state) {
+	std::ostringstream ss;
+	ss << "sl=" << state.scanline << " cy=" << state.cycle << " v=" << format_word(state.vram_address)
+	   << " t=" << format_word(state.temp_vram_address) << " fineX=" << static_cast<int>(state.fine_x_scroll)
+	   << " fetch=" << static_cast<int>(state.fetch_cycle) << " tile{id=" << format_byte(state.current_tile_id)
+	   << ", attr=" << format_byte(state.current_attribute) << "}"
+	   << " next{id=" << format_byte(state.next_tile_id) << ", attr=" << format_byte(state.next_tile_attribute) << "}";
+	return ss.str();
+}
+
+uint8_t sample_shift_pixel(uint16_t shift_reg, uint8_t fine_x) {
+	uint8_t shift_amount = 15 - (fine_x & 0x07);
+	return static_cast<uint8_t>((shift_reg >> shift_amount) & 0x01);
+}
+
+uint8_t estimate_background_pixel_with_offset(const PPU::DebugState &state, uint8_t fine_x_offset) {
+	uint8_t effective_fine_x = static_cast<uint8_t>((state.fine_x_scroll + fine_x_offset) & 0x07);
+	uint8_t pattern_low = sample_shift_pixel(state.bg_pattern_low_shift, effective_fine_x);
+	uint8_t pattern_high = sample_shift_pixel(state.bg_pattern_high_shift, effective_fine_x);
+	uint8_t pixel_value = static_cast<uint8_t>((pattern_high << 1) | pattern_low);
+	if (pixel_value == 0) {
+		return 0;
+	}
+
+	uint8_t attr_low = sample_shift_pixel(state.bg_attribute_low_shift, effective_fine_x);
+	uint8_t attr_high = sample_shift_pixel(state.bg_attribute_high_shift, effective_fine_x);
+	uint8_t palette = static_cast<uint8_t>((attr_high << 1) | attr_low);
+	return static_cast<uint8_t>((palette * 4) + pixel_value);
+}
+
+uint8_t estimate_background_pixel(const PPU::DebugState &state) {
+	return estimate_background_pixel_with_offset(state, 0);
+}
+
+uint8_t estimate_next_background_pixel(const PPU::DebugState &state) {
+	return estimate_background_pixel_with_offset(state, 1);
+}
+
+} // namespace
 
 class BusConflictTestFixture {
   public:
@@ -372,14 +431,22 @@ TEST_CASE_METHOD(BusConflictTestFixture, "Sprite 0 Hit Edge Cases", "[ppu][bus_c
 		advance_to_scanline(51); // Y + 1
 		advance_to_cycle(108);	 // X + 8
 
+		auto debug_before = ppu->get_debug_state();
+		INFO(std::string("Before PPUSTATUS read: ") + format_debug_state(debug_before));
+
 		// Reading PPUSTATUS when sprite 0 hit occurs
 		uint8_t status = read_ppu_register(0x2002);
+		INFO(std::string("PPUSTATUS read value: ") + format_byte(status));
+
+		auto debug_after_first_read = ppu->get_debug_state();
+		INFO(std::string("After first PPUSTATUS read: ") + format_debug_state(debug_after_first_read));
 
 		// Sprite 0 hit should be detected
 		REQUIRE((status & 0x40) != 0);
 
 		// Reading again should clear the flag
 		uint8_t status2 = read_ppu_register(0x2002);
+		INFO(std::string("Second PPUSTATUS read value: ") + format_byte(status2));
 		REQUIRE((status2 & 0x40) == 0);
 	}
 
@@ -406,6 +473,29 @@ TEST_CASE_METHOD(BusConflictTestFixture, "Sprite 0 Hit Edge Cases", "[ppu][bus_c
 		// Reset PPU state for clean test
 		ppu->reset();
 
+		int first_hit_cycle = -1;
+		// Probe latching behaviour with dedicated harness for diagnostics
+		{
+			nes::test::PPUTraceHarness probe;
+			probe.write_ppu_register(0x2003, 0x00);
+			probe.write_ppu_register(0x2004, 100);
+			probe.write_ppu_register(0x2004, 0x01);
+			probe.write_ppu_register(0x2004, 0x00);
+			probe.write_ppu_register(0x2004, 200);
+			probe.write_ppu_register(0x2001, 0x18);
+			probe.advance_to_position(101, 0, false);
+			for (int cycle = 0; cycle <= 256; ++cycle) {
+				probe.advance_to_position(101, static_cast<uint16_t>(cycle), false);
+				auto status = probe.ppu()->get_status_register();
+				if ((status & 0x40) != 0) {
+					first_hit_cycle = cycle;
+					break;
+				}
+			}
+		}
+		INFO(std::string("Probe sprite 0 hit latched by cycle: ") +
+			 format_word(static_cast<uint16_t>(first_hit_cycle)));
+
 		// Test exact pixel timing for sprite 0 hit
 		write_ppu_register(0x2003, 0x00);
 		write_ppu_register(0x2004, 100);  // Y position
@@ -419,11 +509,25 @@ TEST_CASE_METHOD(BusConflictTestFixture, "Sprite 0 Hit Edge Cases", "[ppu][bus_c
 
 		// Hit should occur at exact pixel position
 		advance_to_cycle(207); // Before hit
+		auto debug_before_hit = ppu->get_debug_state();
+		INFO(std::string("Before sprite 0 hit status read: ") + format_debug_state(debug_before_hit));
+		auto bg_pixel_before = estimate_background_pixel(debug_before_hit);
+		auto bg_pixel_next_before = estimate_next_background_pixel(debug_before_hit);
+		INFO(std::string("Estimated BG pixel before hit: ") + format_byte(bg_pixel_before));
+		INFO(std::string("Estimated BG pixel (next) before hit: ") + format_byte(bg_pixel_next_before));
 		uint8_t status_before = read_ppu_register(0x2002);
+		INFO(std::string("Status before expected hit: ") + format_byte(status_before));
 		REQUIRE((status_before & 0x40) == 0);
 
 		advance_to_cycle(208); // At hit pixel
+		auto debug_at_hit = ppu->get_debug_state();
+		INFO(std::string("At expected sprite 0 hit: ") + format_debug_state(debug_at_hit));
+		auto bg_pixel_at_hit = estimate_background_pixel(debug_at_hit);
+		auto bg_pixel_next_at_hit = estimate_next_background_pixel(debug_at_hit);
+		INFO(std::string("Estimated BG pixel at hit: ") + format_byte(bg_pixel_at_hit));
+		INFO(std::string("Estimated BG pixel (next) at hit: ") + format_byte(bg_pixel_next_at_hit));
 		uint8_t status_hit = read_ppu_register(0x2002);
+		INFO(std::string("Status at expected hit: ") + format_byte(status_hit));
 		REQUIRE((status_hit & 0x40) != 0);
 	}
 }
