@@ -7,12 +7,12 @@ namespace nes::gui {
 CPUStatePanel::CPUStatePanel() : visible_(true) {
 }
 
-void CPUStatePanel::render(nes::CPU6502 *cpu, std::function<void()> step_callback,
-						   std::function<void()> reset_callback) {
+void CPUStatePanel::render(nes::CPU6502 *cpu, std::function<void()> step_callback, std::function<void()> reset_callback,
+						   std::function<void()> toggle_run_callback, bool is_running, bool run_enabled) {
 	if (!cpu)
 		return;
 
-	render_controls(cpu, step_callback, reset_callback);
+	render_controls(cpu, step_callback, reset_callback, toggle_run_callback, is_running, run_enabled);
 	ImGui::Separator();
 	render_registers(cpu);
 	ImGui::Separator();
@@ -77,7 +77,8 @@ void CPUStatePanel::render_stack_info(const nes::CPU6502 *cpu) {
 }
 
 void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> step_callback,
-									std::function<void()> reset_callback) {
+									std::function<void()> reset_callback, std::function<void()> toggle_run_callback,
+									bool is_running, bool run_enabled) {
 	ImGui::Separator();
 	ImGui::Text("CPU Debug Controls:");
 
@@ -123,6 +124,21 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 		}
 	}
 	ImGui::PopButtonRepeat();
+
+	ImGui::SameLine();
+
+	const char *run_label = is_running ? "Pause" : "Run";
+	if (!run_enabled) {
+		ImGui::BeginDisabled();
+	}
+	if (ImGui::Button(run_label)) {
+		if (toggle_run_callback) {
+			toggle_run_callback();
+		}
+	}
+	if (!run_enabled) {
+		ImGui::EndDisabled();
+	}
 
 	// Second row of step buttons
 	// Mega step button for extremely rapid stepping (with repeat when held)
@@ -173,6 +189,7 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 		ImGui::SetTooltip("Step 1x: Execute one CPU instruction\n"
 						  "Step 100x: Execute 100 CPU instructions\n"
 						  "Step 1000x: Execute 1000 CPU instructions\n"
+						  "Run/Pause: Toggle continuous execution at normal speed\n"
 						  "Step 10,000x: Execute 10,000 CPU instructions\n"
 						  "Step 100,000x: Execute 100,000 CPU instructions\n"
 						  "NES Reset: Reset entire NES system to initial state\n"

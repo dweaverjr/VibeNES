@@ -20,7 +20,8 @@ void SystemBus::tick(CpuCycle cycles) {
 		ram_->tick(cycles);
 	}
 	if (ppu_) {
-		ppu_->tick(cycles);
+		// PPU runs at 3× the CPU clock; convert CPU cycles to PPU dot units
+		ppu_->tick(cpu_cycles(cycles.count() * 3));
 	}
 	if (apu_) {
 		apu_->tick(cycles);
@@ -124,7 +125,13 @@ Byte SystemBus::read(Address address) const {
 	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
 	// BUT: Check test memory first for addresses $8000+ when cartridge has no ROM
 	if (is_cartridge_address(address)) {
-		// For high memory ($8000+), check test memory first
+		// If a cartridge is loaded, always defer to mapper-provided memory first
+		if (cartridge_ && cartridge_->is_loaded()) {
+			last_bus_value_ = cartridge_->cpu_read(address);
+			return last_bus_value_;
+		}
+
+		// Otherwise fall back to high-memory mirrors for unit tests without a cartridge
 		if (address >= 0x8000) {
 			Address index = address - 0x8000;
 			if (test_high_memory_valid_[index]) {
@@ -133,11 +140,14 @@ Byte SystemBus::read(Address address) const {
 			}
 		}
 
-		// Then try cartridge
+		// If a cartridge object exists, allow it to supply open-bus semantics (0xFF when unloaded)
 		if (cartridge_) {
 			last_bus_value_ = cartridge_->cpu_read(address);
 			return last_bus_value_;
 		}
+
+		// No cartridge data available and no mirror value—return open bus (last_bus_value_)
+		return last_bus_value_;
 	}
 
 	// Unmapped region - open bus behavior
@@ -243,7 +253,13 @@ void SystemBus::write(Address address, Byte value) {
 	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
 	// BUT: For test purposes, prioritize test memory for $8000+ addresses
 	if (is_cartridge_address(address)) {
-		// For high memory ($8000+), write to test memory instead of cartridge for testing
+		// Writes go to the active cartridge when a ROM is loaded (handles PRG RAM / mapper regs)
+		if (cartridge_ && cartridge_->is_loaded()) {
+			cartridge_->cpu_write(address, value);
+			return;
+		}
+
+		// When no cartridge is loaded, retain the high-memory mirror for tests at $8000-$FFFF
 		if (address >= 0x8000) {
 			Address index = address - 0x8000;
 			test_high_memory_[index] = value;
@@ -251,11 +267,8 @@ void SystemBus::write(Address address, Byte value) {
 			return;
 		}
 
-		// Other cartridge addresses go to cartridge
-		if (cartridge_) {
-			cartridge_->cpu_write(address, value);
-			return;
-		}
+		// Otherwise nothing is mapped—ignore write
+		return;
 	}
 
 	// Unmapped region - ignore write

@@ -2,6 +2,7 @@
 
 #include "core/types.hpp"
 #include <SDL2/SDL.h>
+#include <cstdint>
 #include <memory>
 
 struct ImGuiIO;
@@ -63,6 +64,9 @@ class GuiApplication {
 	bool emulation_running_;
 	bool emulation_paused_;
 	float emulation_speed_; // Speed multiplier (1.0 = normal speed)
+	double cycle_accumulator_;
+	std::uint64_t last_frame_counter_;
+	bool frame_timer_initialized_;
 
 	// Emulator references
 	std::shared_ptr<nes::CPU6502> cpu_;
@@ -98,6 +102,12 @@ class GuiApplication {
 	// Emulation control
 	void step_emulation();
 	void step_frame();
+	void start_emulation();
+	void pause_emulation();
+	void toggle_run_pause();
+	void process_continuous_emulation(double delta_seconds);
+	bool can_run_emulation() const;
+	bool is_emulation_active() const;
 
 	// System reset
 	void reset_system();

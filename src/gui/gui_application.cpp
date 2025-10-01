@@ -28,8 +28,9 @@ namespace nes::gui {
 
 GuiApplication::GuiApplication()
 	: window_(nullptr), gl_context_(nullptr), io_(nullptr), running_(false), show_demo_window_(false),
-	  emulation_running_(false), emulation_paused_(true), emulation_speed_(1.0f), cpu_(nullptr), bus_(nullptr),
-	  cartridge_(nullptr), ppu_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
+	  emulation_running_(false), emulation_paused_(true), emulation_speed_(1.0f), cycle_accumulator_(0.0),
+	  last_frame_counter_(0), frame_timer_initialized_(false), cpu_(nullptr), bus_(nullptr), cartridge_(nullptr),
+	  ppu_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
 	  disassembler_panel_(std::make_unique<DisassemblerPanel>()), memory_panel_(std::make_unique<MemoryViewerPanel>()),
 	  rom_loader_panel_(std::make_unique<RomLoaderPanel>()), ppu_viewer_panel_(std::make_unique<PPUViewerPanel>()),
 	  timing_panel_(std::make_unique<TimingPanel>()) {
@@ -158,14 +159,23 @@ void GuiApplication::initialize_emulation_components() {
 
 void GuiApplication::run() {
 	running_ = true;
+	last_frame_counter_ = SDL_GetPerformanceCounter();
+	frame_timer_initialized_ = true;
 
 	while (running_) {
+		uint64_t current_counter = SDL_GetPerformanceCounter();
+		double delta_seconds = 0.0;
+		if (frame_timer_initialized_) {
+			delta_seconds = static_cast<double>(current_counter - last_frame_counter_) /
+							static_cast<double>(SDL_GetPerformanceFrequency());
+		}
+		last_frame_counter_ = current_counter;
+
 		handle_events();
 
-		// Emulation loop - run CPU and coordinate with PPU timing
+		// Emulation loop - run CPU and coordinate with PPU timing using real-time delta
 		if (emulation_running_ && !emulation_paused_ && cpu_ && ppu_) {
-			// Use bus coordination for proper timing
-			bus_->tick(cpu_cycles(1));
+			process_continuous_emulation(delta_seconds);
 		}
 
 		render_frame();
@@ -239,9 +249,8 @@ void GuiApplication::render_frame() {
 				if (cpu_panel_) {
 					// Pass step_emulation and reset_system as callbacks for proper coordination
 					cpu_panel_->render(
-						cpu_.get(), [this]() { step_emulation(); }, // step callback
-						[this]() { reset_system(); }				// reset callback
-					);
+						cpu_.get(), [this]() { step_emulation(); }, [this]() { reset_system(); },
+						[this]() { toggle_run_pause(); }, is_emulation_active(), can_run_emulation());
 				}
 			}
 			ImGui::EndChild();
@@ -379,28 +388,30 @@ void GuiApplication::render_main_menu_bar() {
 
 		if (ImGui::BeginMenu("Emulation")) {
 			bool rom_loaded = cartridge_ && cartridge_->is_loaded();
+			bool running = is_emulation_active();
 
 			if (!rom_loaded) {
 				ImGui::BeginDisabled();
 			}
 
-			if (ImGui::MenuItem("Start/Resume", "F5", !emulation_paused_)) {
-				emulation_paused_ = false;
-				emulation_running_ = true;
+			if (ImGui::MenuItem("Start/Resume", "F5", running)) {
+				start_emulation();
 			}
 
-			if (ImGui::MenuItem("Pause", "F6", emulation_paused_)) {
-				emulation_paused_ = true;
+			if (ImGui::MenuItem("Pause", "F6", !running)) {
+				pause_emulation();
 			}
 
 			if (ImGui::MenuItem("Step", "F7")) {
 				if (cpu_) {
+					pause_emulation();
 					step_emulation();
 				}
 			}
 
 			if (ImGui::MenuItem("Step Frame", "F9")) {
 				if (cpu_) {
+					pause_emulation();
 					step_frame();
 				}
 			}
@@ -480,6 +491,65 @@ void GuiApplication::step_frame() {
 	bus_->tick(cpu_cycles(1000));
 }
 
+void GuiApplication::start_emulation() {
+	if (!can_run_emulation()) {
+		return;
+	}
+
+	emulation_running_ = true;
+	emulation_paused_ = false;
+	cycle_accumulator_ = 0.0;
+	last_frame_counter_ = SDL_GetPerformanceCounter();
+	frame_timer_initialized_ = true;
+}
+
+void GuiApplication::pause_emulation() {
+	emulation_paused_ = true;
+}
+
+void GuiApplication::toggle_run_pause() {
+	if (is_emulation_active()) {
+		pause_emulation();
+	} else {
+		start_emulation();
+	}
+}
+
+void GuiApplication::process_continuous_emulation(double delta_seconds) {
+	if (!can_run_emulation() || delta_seconds <= 0.0) {
+		return;
+	}
+
+	const double cpu_cycles_per_second = static_cast<double>(CPU_CLOCK_NTSC);
+	cycle_accumulator_ += delta_seconds * cpu_cycles_per_second * static_cast<double>(emulation_speed_);
+	const auto target_cycles = static_cast<std::int64_t>(cycle_accumulator_);
+	if (target_cycles <= 0) {
+		return;
+	}
+
+	cycle_accumulator_ -= static_cast<double>(target_cycles);
+
+	std::int64_t executed_cycles = 0;
+	while (executed_cycles < target_cycles) {
+		int consumed = cpu_->execute_instruction();
+		if (consumed <= 0) {
+			break;
+		}
+		bus_->tick(cpu_cycles(consumed));
+		executed_cycles += consumed;
+	}
+
+	cycle_accumulator_ += static_cast<double>(executed_cycles - target_cycles);
+}
+
+bool GuiApplication::can_run_emulation() const {
+	return cpu_ && bus_ && ppu_ && cartridge_ && cartridge_->is_loaded();
+}
+
+bool GuiApplication::is_emulation_active() const {
+	return emulation_running_ && !emulation_paused_;
+}
+
 void GuiApplication::reset_system() {
 	if (!bus_) {
 		std::cerr << "Cannot reset system: SystemBus not initialized" << std::endl;
@@ -491,8 +561,9 @@ void GuiApplication::reset_system() {
 	bus_->reset();
 
 	// Pause emulation after reset so user can examine the state
-	emulation_paused_ = true;
+	pause_emulation();
 	emulation_running_ = false;
+	cycle_accumulator_ = 0.0;
 
 	std::cout << "NES System Reset: All components reset to initial state" << std::endl;
 }
