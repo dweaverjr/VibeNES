@@ -1,4 +1,5 @@
 #include "ppu/ppu_memory.hpp"
+#include <cstdio>
 #include <cstring>
 
 namespace nes {
@@ -15,7 +16,8 @@ void PPUMemory::power_on() {
 	for (size_t i = 0; i < chr_ram_fallback_.size(); ++i) {
 		chr_ram_fallback_[i] = static_cast<uint8_t>(i & 0xFF);
 	}
-	vertical_mirroring_ = false;
+	// NOTE: vertical_mirroring_ is NOT reset here - it's set by the cartridge
+	// and should persist through power cycles
 }
 
 void PPUMemory::reset() {

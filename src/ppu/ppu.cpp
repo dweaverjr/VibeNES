@@ -257,11 +257,9 @@ uint8_t PPU::read_register(uint16_t address) {
 		result = read_ppudata();
 		break;
 	case PPURegister::PPUSCROLL:
-		// Return 0 or last latched is debated; expose 0 to mimic open bus not critical to tests
-		result = 0;
+		result = 0; // Open bus behavior
 		break;
 	case PPURegister::PPUADDR:
-		// Return current latched address (temp/current): prefer exposing current VRAM address for tests
 		result = static_cast<uint8_t>(vram_address_ & 0xFF);
 		break;
 	default:
@@ -357,27 +355,11 @@ void PPU::write_register(uint16_t address, uint8_t value) {
 void PPU::process_visible_scanline() {
 	// Hardware-accurate PPU processing for visible scanlines
 
-	// Initialize shift registers at the start of the scanline and pre-load first tiles
 	if (current_cycle_ == 0 && is_rendering_enabled()) {
-		// DON'T clear shift registers - they should contain pre-loaded data from pre-render scanline
-		// The NES hardware maintains shift register state between scanlines
-
-		// Sprites for current scanline should already be prepared during cycles 257-320 of previous scanline
-		// No additional sprite preparation needed here
-	}
-
-	// During the first 8 cycles, we need to fetch the first two tiles
-	// to populate the shift registers before visible rendering starts
-	if (current_cycle_ < 8 && is_rendering_enabled() && is_background_enabled()) {
-		perform_tile_fetch_cycle();
-
-		// Load shift registers when entering the first visible tile
-		if ((current_cycle_ & 7) == 1 && current_cycle_ > 0) {
-			load_shift_registers();
-		}
-	}
-
-	// Sprite evaluation happens during cycles 64-256
+		// Shift registers contain pre-loaded tiles 0-1 from pre-render scanline
+		// coarse_x is at position 2 (after prefetch increments)
+		// Sprites for current scanline already prepared during cycles 257-320 of previous scanline
+	} // Sprite evaluation happens during cycles 64-256
 	if (current_cycle_ == 64 && is_rendering_enabled()) {
 		clear_secondary_oam();
 	}
@@ -386,7 +368,6 @@ void PPU::process_visible_scanline() {
 	if (current_cycle_ >= PPUTiming::SPRITE_EVAL_START_CYCLE && current_cycle_ <= PPUTiming::SPRITE_EVAL_END_CYCLE &&
 		is_rendering_enabled()) {
 		perform_sprite_evaluation_cycle();
-		// Note: Background fetching continues below - no duplicates needed here
 	}
 
 	// Background and sprite rendering during visible cycles (0-255)
@@ -401,8 +382,9 @@ void PPU::process_visible_scanline() {
 			}
 		}
 
-		// Background tile fetching and VRAM updates (every 8 cycles, continuing from pre-fetch)
-		if (is_background_enabled() && current_cycle_ >= 8) {
+		// Background tile fetching and VRAM updates (cycles 1-255)
+		// Tiles are fetched in 8-cycle groups aligned to cycles 1-8, 9-16, 17-24, etc.
+		if (is_background_enabled() && current_cycle_ >= 1) {
 			perform_tile_fetch_cycle();
 		}
 
@@ -417,7 +399,9 @@ void PPU::process_visible_scanline() {
 				load_shift_registers();
 			}
 		}
-	} // HBLANK period: Critical VRAM address updates and tile fetching for next scanline
+	}
+
+	// HBLANK period: VRAM address updates and tile fetching for next scanline
 	else if (current_cycle_ >= 256 && current_cycle_ < 341 && is_rendering_enabled()) {
 		// At cycle 256: Increment fine Y (move to next row)
 		if (current_cycle_ == 256) {
@@ -425,7 +409,6 @@ void PPU::process_visible_scanline() {
 		}
 
 		// At cycle 257: Copy horizontal scroll from temp to current
-		// This resets the horizontal position for the next scanline
 		if (current_cycle_ == 257) {
 			copy_horizontal_scroll();
 
@@ -433,14 +416,25 @@ void PPU::process_visible_scanline() {
 			if (is_sprites_enabled()) {
 				prepare_scanline_sprites();
 			}
-		} // Continue background tile fetching for next scanline (cycles 320-335)
+		} // Continue background tile fetching for next scanline (cycles 320-337)
 		// These are the first two tiles that will be rendered on the next scanline
-		if (current_cycle_ >= 320 && current_cycle_ < 336 && is_background_enabled()) {
-			perform_tile_fetch_cycle();
+		// Cycles 321-328: Fetch tile 0
+		// Cycle 328: Increment coarse_x, Cycle 329: Load tile 0
+		// Cycles 329-336: Fetch tile 1
+		// Cycle 336: Increment coarse_x, Cycle 337: Load tile 1
+		if (current_cycle_ >= 320 && current_cycle_ <= 337 && is_background_enabled()) {
+			if (current_cycle_ <= 336) {
+				perform_tile_fetch_cycle();
+			}
 
-			// Increment coarse X for these pre-fetch cycles too
-			if ((current_cycle_ & 7) == 7) {
+			// Increment coarse X at end of each tile (cycles 328, 336)
+			if ((current_cycle_ & 7) == 0 && current_cycle_ > 320) {
 				increment_coarse_x();
+			}
+
+			// Load shift registers at start of next tile (cycles 329, 337)
+			if ((current_cycle_ & 7) == 1 && current_cycle_ > 320) {
+				load_shift_registers();
 			}
 		}
 
@@ -510,22 +504,26 @@ void PPU::process_pre_render_scanline() {
 			shift_background_registers();
 		}
 
-		// Critical: Continue fetching during HBLANK (cycles 320-335)
-		// These fetches prepare the first two tiles for the next frame and must be precise
-		if (current_cycle_ >= 320 && current_cycle_ < 336 && is_background_enabled()) {
-			perform_tile_fetch_cycle();
+		// Continue fetching during HBLANK (cycles 320-337) to prepare first two tiles
+		if (current_cycle_ >= 320 && current_cycle_ <= 337 && is_background_enabled()) {
+			if (current_cycle_ <= 336) {
+				perform_tile_fetch_cycle();
+			}
 
-			// Increment coarse X and load shift registers for the initial tiles of next frame
-			if ((current_cycle_ & 7) == 0 && current_cycle_ > 0) {
+			// Increment coarse X at end of each tile (cycles 328, 336)
+			if ((current_cycle_ & 7) == 0 && current_cycle_ > 320) {
 				increment_coarse_x();
 			}
 
-			if ((current_cycle_ & 7) == 1) {
+			// Load shift registers at start of next tile (cycles 329, 337)
+			if ((current_cycle_ & 7) == 1 && current_cycle_ > 320) {
 				load_shift_registers();
 			}
 
-			// Keep shift registers progressing across the prefetch region
-			shift_background_registers();
+			// Shift 8 times after loading first tile to move it to high byte before loading second tile
+			if (current_cycle_ > 329 && current_cycle_ <= 337) {
+				shift_background_registers();
+			}
 		}
 
 		if (current_cycle_ == 256) {
@@ -638,6 +636,8 @@ void PPU::write_ppuscroll(uint8_t value) {
 		write_toggle_ = true;
 	} else {
 		// Second write: Y scroll
+		// Mask 0x73E0 clears fine Y (bits 14-12) and coarse Y (bits 9-5)
+		// Preserves both nametable select bits (11-10) which are controlled by PPUCTRL
 		temp_vram_address_ = (temp_vram_address_ & ~0x73E0) | (((static_cast<uint16_t>(value) & 0xF8) << 2) |
 															   ((static_cast<uint16_t>(value) & 0x07) << 12));
 		write_toggle_ = false;
@@ -655,6 +655,7 @@ void PPU::write_ppuaddr(uint8_t value) {
 	} else {
 		// Second write: low byte
 		temp_vram_address_ = (temp_vram_address_ & 0xFF00) | value;
+		temp_vram_address_ &= 0x7FFF; // Mask to 15 bits
 		vram_address_ = temp_vram_address_;
 		write_toggle_ = false;
 	}
@@ -677,6 +678,9 @@ void PPU::write_ppudata(uint8_t value) {
 		vram_wrap_latched_value_ = static_cast<uint8_t>(value & 0x3F);
 	} else if (current_address >= PPUMemoryMap::PALETTE_START) {
 		// Writes within the palette region without wrapping cancel any previous pending latch
+		vram_wrap_read_pending_ = false;
+	} else {
+		// Any non-palette write should clear pending palette wrap so real VRAM data is observed
 		vram_wrap_read_pending_ = false;
 	}
 
@@ -813,6 +817,7 @@ void PPU::render_pixel() {
 	}
 
 	uint8_t pixel_x = static_cast<uint8_t>(current_cycle_ - 1);
+
 	uint8_t bg_pixel = 0;
 	uint8_t sprite_pixel = 0;
 	bool sprite_priority = false;
@@ -1156,23 +1161,28 @@ void PPU::clear_vblank_flag() {
 void PPU::copy_horizontal_scroll() {
 	// Copy horizontal scroll bits from temp to current VRAM address
 	// Copies: coarse X (bits 0-4) and horizontal nametable (bit 10)
-
-	vram_address_ = (vram_address_ & 0xFBE0) | (temp_vram_address_ & 0x041F);
+	vram_address_ = (vram_address_ & 0x7BE0) | (temp_vram_address_ & 0x041F);
+	// Note: Mask 0x7BE0 clears bits 0-4, 10, and 15 (preserves fine Y, coarse Y, and bit 11)
 }
 
 void PPU::copy_vertical_scroll() {
 	// Copy vertical scroll bits from temp to current VRAM address
 	// Copies: coarse Y (bits 5-9), vertical nametable (bit 11), fine Y (bits 12-14)
-	vram_address_ = (vram_address_ & 0x041F) | (temp_vram_address_ & 0xFBE0);
+
+	vram_address_ = (vram_address_ & 0x041F) | (temp_vram_address_ & 0x7BE0);
+	// Note: Mask 0x041F keeps coarse X and bit 10, clears everything else including bit 15
 }
 
 void PPU::increment_coarse_x() {
-	// Increment coarse X and handle nametable wrapping
-	if ((vram_address_ & 0x001F) == 31) {
-		vram_address_ &= ~0x001F; // Reset coarse X to 0
-		vram_address_ ^= 0x0400;  // Switch horizontal nametable
-	} else {
-		vram_address_++; // Just increment coarse X
+	if (is_rendering_enabled()) {
+		// Increment coarse X and handle nametable wrapping
+		if ((vram_address_ & 0x001F) == 31) {
+			vram_address_ &= ~0x001F; // Reset coarse X to 0
+			vram_address_ ^= 0x0400;  // Switch horizontal nametable
+		} else {
+			vram_address_++; // Just increment coarse X
+		}
+		vram_address_ &= 0x7FFF; // Mask to 15 bits
 	}
 }
 
@@ -1180,6 +1190,7 @@ void PPU::increment_fine_y() {
 	// Increment fine Y and handle coarse Y/nametable wrapping
 	if ((vram_address_ & 0x7000) != 0x7000) {
 		vram_address_ += 0x1000; // Increment fine Y
+		vram_address_ &= 0x7FFF; // Mask to 15 bits
 	} else {
 		vram_address_ &= ~0x7000; // Reset fine Y to 0
 		int coarse_y = (vram_address_ & 0x03E0) >> 5;
@@ -1194,21 +1205,14 @@ void PPU::increment_fine_y() {
 		}
 
 		vram_address_ = (vram_address_ & ~0x03E0) | (coarse_y << 5);
+		vram_address_ &= 0x7FFF; // Mask to 15 bits
 	}
 }
-
 uint16_t PPU::get_current_nametable_address() {
 	// Extract nametable address from current VRAM address
-	// Use only coarse X, coarse Y, and nametable select (NOT fine Y)
-	// Fine Y is used for pattern table row selection, not nametable addressing
-	uint16_t addr = 0x2000 | (vram_address_ & 0x0FFF & ~0x7000);
-
-	// Ensure address is within nametable range
-	if (addr > 0x2FFF) {
-		addr = 0x2000 + (addr & 0x3FF); // Wrap to valid nametable
-	}
-
-	return addr;
+	// Use only coarse X, coarse Y, and nametable select (bits 11-0)
+	// Fine Y (bits 14-12) is used for pattern table row selection, not nametable addressing
+	return 0x2000 | (vram_address_ & 0x0FFF);
 }
 
 // =============================================================================
@@ -1246,6 +1250,9 @@ void PPU::perform_oam_dma_cycle() {
 	// Perform OAM DMA transfer
 	if (oam_dma_active_) {
 		// OAM DMA takes 513 or 514 cycles depending on CPU alignment
+		// Cycle 0: Dummy cycle for CPU alignment
+		// Cycles 1-512: Transfer 256 bytes (odd cycles read, even cycles write)
+
 		if (oam_dma_cycle_ == 0) {
 			// First cycle is a dummy read for CPU alignment
 			oam_dma_cycle_++;
@@ -1253,9 +1260,9 @@ void PPU::perform_oam_dma_cycle() {
 		}
 
 		// Cycles 1-512: Transfer 256 bytes (every other cycle reads, then writes)
-		if (oam_dma_cycle_ <= PPUTiming::OAM_DMA_CYCLES - 1) {
+		if (oam_dma_cycle_ >= 1 && oam_dma_cycle_ <= 512) {
 			if ((oam_dma_cycle_ & 1) == 1) {
-				// Odd cycles: Read from CPU memory into dedicated DMA latch
+				// Odd cycles (1, 3, 5, ..., 511): Read from CPU memory
 				uint8_t byte_index = static_cast<uint8_t>((oam_dma_cycle_ - 1) >> 1);
 				uint16_t cpu_address = oam_dma_address_ + byte_index;
 				uint8_t value = 0x00;
@@ -1265,7 +1272,7 @@ void PPU::perform_oam_dma_cycle() {
 				oam_dma_data_latch_ = value;
 				ppu_data_bus_ = value; // Maintain open bus behavior with latest CPU data
 			} else {
-				// Even cycles: Write latched data into OAM (wrap automatically)
+				// Even cycles (2, 4, 6, ..., 512): Write latched data to OAM
 				uint8_t byte_index = static_cast<uint8_t>((oam_dma_cycle_ - 2) >> 1);
 				uint8_t oam_index = static_cast<uint8_t>(oam_address_ + byte_index);
 				oam_memory_[oam_index] = oam_dma_data_latch_;
@@ -1274,7 +1281,7 @@ void PPU::perform_oam_dma_cycle() {
 
 		oam_dma_cycle_++;
 
-		// Complete OAM DMA
+		// Complete OAM DMA after cycle 513
 		if (oam_dma_cycle_ >= PPUTiming::OAM_DMA_CYCLES) {
 			oam_dma_active_ = false;
 			oam_dma_cycle_ = 0;

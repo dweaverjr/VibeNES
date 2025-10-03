@@ -41,6 +41,11 @@ class OAMDMATestFixture {
 		ppu->power_on();
 		cpu->reset();
 
+		// Process the reset interrupt that was triggered by reset()
+		// This ensures the CPU is in a clean state before tests start
+		// Reset takes 7 cycles to complete
+		cpu->tick(CpuCycle{10}); // Give extra cycles to ensure reset completes
+
 		// Clear OAM
 		clear_oam();
 	}
@@ -397,6 +402,13 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA During Rendering", "[ppu][oam_dma][
 		clear_oam();
 		trigger_oam_dma(0x02);
 		wait_for_dma_completion();
+
+		// Advance to VBlank before verifying OAM contents
+		// During rendering, OAM reads are restricted and return garbage
+		while (ppu->get_current_scanline() < 241) {
+			ppu->tick(CpuCycle{1});
+		}
+
 		verify_oam_contents(0x00);
 	}
 }

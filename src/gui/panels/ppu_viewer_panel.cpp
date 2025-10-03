@@ -115,12 +115,6 @@ void PPUViewerPanel::render_display_controls() {
 }
 
 void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
-	// Debug: Simple check if this method is being called
-	static int render_call_count = 0;
-	if (render_call_count < 5) {
-		printf("DEBUG: render_main_display called (call #%d)\n", ++render_call_count);
-	}
-
 	ImGui::Text("NES Video Output (256x240)");
 
 	// Debug frame status
@@ -267,12 +261,7 @@ void PPUViewerPanel::render_pattern_tables(nes::PPU *ppu, nes::Cartridge *cartri
 				last_palette = selected_palette_;
 				last_cartridge = cartridge;
 				last_chr_size = rom_data.chr_rom.size();
-
-				if (rom_changed) {
-					printf("ROM changed detected - refreshing pattern tables\n");
-				}
 			}
-
 			if (pattern_table_texture_ != 0) {
 				// Scale display to fit available space - single pattern table is square (1:1 ratio)
 				float max_width = content_width - 20.0f;		   // Leave some margin
@@ -556,12 +545,9 @@ void PPUViewerPanel::update_main_display_texture(const uint32_t *frame_buffer) {
 
 void PPUViewerPanel::update_pattern_table_texture() {
 	if (pattern_table_texture_ == 0 || !pattern_table_buffer_) {
-		printf("Pattern table texture update failed: texture=%u, buffer=%p\n", pattern_table_texture_,
-			   pattern_table_buffer_.get());
 		return;
 	}
 
-	printf("Updating pattern table texture (256x128)...\n");
 	glBindTexture(GL_TEXTURE_2D, pattern_table_texture_);
 	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 128, GL_RGBA, GL_UNSIGNED_BYTE, pattern_table_buffer_.get());
 }
@@ -571,31 +557,6 @@ void PPUViewerPanel::generate_pattern_table_visualization(nes::PPU *ppu, nes::Ca
 		// Clear buffer if no data available
 		std::memset(pattern_table_buffer_.get(), 0, 256 * 128 * sizeof(uint32_t));
 		return;
-	}
-
-	// One-time debug output to verify CHR ROM is working
-	static bool debug_printed = false;
-	if (!debug_printed && cartridge->is_loaded()) {
-		printf("CHR ROM Debug (first time only):\n");
-		for (int i = 0; i < 16; i++) {
-			uint8_t value = ppu->read_chr_rom(i);
-			printf("  CHR[$%04X] = $%02X", i, value);
-			if ((i + 1) % 8 == 0)
-				printf("\n");
-		}
-		printf("CHR ROM samples: $0100=%02X, $1000=%02X\n", ppu->read_chr_rom(0x0100), ppu->read_chr_rom(0x1000));
-
-		// Compare first tile of each pattern table
-		printf("Pattern Table 0 first tile (tile 0):\n");
-		for (int i = 0; i < 16; i++) {
-			printf("  $%04X: %02X\n", i, ppu->read_chr_rom(i));
-		}
-		printf("Pattern Table 1 first tile (tile 0):\n");
-		for (int i = 0x1000; i < 0x1010; i++) {
-			printf("  $%04X: %02X\n", i, ppu->read_chr_rom(i));
-		}
-
-		debug_printed = true;
 	}
 
 	// Pattern table layout: 128x128 pixels (single pattern table)
@@ -652,16 +613,6 @@ void PPUViewerPanel::generate_pattern_table_visualization(nes::PPU *ppu, nes::Ca
 	}
 
 	// Debug: Check if we generated any non-zero pixel data
-	static bool debug_texture_once = false;
-	if (!debug_texture_once) {
-		int non_zero_pixels = 0;
-		for (int i = 0; i < 256 * 128; i++) {
-			if (pattern_table_buffer_[i] != 0)
-				non_zero_pixels++;
-		}
-		printf("Pattern table texture: %d non-zero pixels out of %d total\n", non_zero_pixels, 256 * 128);
-		debug_texture_once = true;
-	}
 }
 
 void PPUViewerPanel::generate_nametable_visualization(nes::PPU *ppu) {

@@ -1,5 +1,5 @@
 #include "cartridge/cartridge.hpp"
-#include "cartridge/mappers/mapper_000.hpp"
+#include "cartridge/mapper_factory.hpp"
 #include <iostream>
 
 namespace nes {
@@ -27,15 +27,15 @@ const char *Cartridge::get_name() const noexcept {
 }
 
 bool Cartridge::load_rom(const std::string &filepath) {
-	// Load ROM data
+	// Load ROM data using RomLoader
 	rom_data_ = RomLoader::load_rom(filepath);
 	if (!rom_data_.valid) {
 		std::cerr << "Failed to load ROM: " << filepath << std::endl;
 		return false;
 	}
 
-	// Create appropriate mapper
-	mapper_ = create_mapper(rom_data_);
+	// Create appropriate mapper using MapperFactory
+	mapper_ = MapperFactory::create_mapper(rom_data_);
 	if (!mapper_) {
 		std::cerr << "Unsupported mapper: " << static_cast<int>(rom_data_.mapper_id) << std::endl;
 		rom_data_ = {}; // Clear invalid data
@@ -43,6 +43,10 @@ bool Cartridge::load_rom(const std::string &filepath) {
 	}
 
 	std::cout << "Cartridge loaded successfully!" << std::endl;
+	std::cout << "ROM: " << filepath << std::endl;
+	std::cout << "Mapper: " << static_cast<int>(rom_data_.mapper_id) << " (" << mapper_->get_name() << ")" << std::endl;
+	std::cout << "PRG ROM: " << rom_data_.prg_rom_pages << " x 16KB" << std::endl;
+	std::cout << "CHR ROM: " << rom_data_.chr_rom_pages << " x 8KB" << std::endl;
 	return true;
 }
 
@@ -56,15 +60,14 @@ bool Cartridge::load_from_rom_data(const RomData &rom_data) {
 	// Store ROM data
 	rom_data_ = rom_data;
 
-	// Create appropriate mapper
-	mapper_ = create_mapper(rom_data_);
+	// Create appropriate mapper using MapperFactory
+	mapper_ = MapperFactory::create_mapper(rom_data_);
 	if (!mapper_) {
 		std::cerr << "Unsupported mapper: " << static_cast<int>(rom_data_.mapper_id) << std::endl;
 		rom_data_ = {}; // Clear invalid data
 		return false;
 	}
 
-	std::cout << "Cartridge loaded from ROM data successfully!" << std::endl;
 	return true;
 }
 
@@ -125,28 +128,6 @@ Mapper::Mirroring Cartridge::get_mirroring() const noexcept {
 void Cartridge::ppu_a12_toggle() const {
 	if (mapper_) {
 		mapper_->ppu_a12_toggle();
-	}
-}
-
-std::unique_ptr<Mapper> Cartridge::create_mapper(const RomData &rom_data) {
-	// Determine mirroring mode
-	Mapper::Mirroring mirroring;
-	if (rom_data.four_screen_vram) {
-		mirroring = Mapper::Mirroring::FourScreen;
-	} else if (rom_data.vertical_mirroring) {
-		mirroring = Mapper::Mirroring::Vertical;
-	} else {
-		mirroring = Mapper::Mirroring::Horizontal;
-	}
-
-	// Create mapper based on ID
-	switch (rom_data.mapper_id) {
-	case 0:
-		return std::make_unique<Mapper000>(rom_data.prg_rom, rom_data.chr_rom, mirroring);
-
-	default:
-		std::cerr << "Unsupported mapper ID: " << static_cast<int>(rom_data.mapper_id) << std::endl;
-		return nullptr;
 	}
 }
 

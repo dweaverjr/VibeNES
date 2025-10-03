@@ -5,6 +5,21 @@ namespace nes {
 
 Mapper000::Mapper000(std::vector<Byte> prg_rom, std::vector<Byte> chr_rom, Mirroring mirroring)
 	: prg_rom_(std::move(prg_rom)), chr_rom_(std::move(chr_rom)), mirroring_(mirroring) {
+	std::cout << "[Mapper000] Constructor: PRG ROM size = " << prg_rom_.size() << ", CHR ROM size = " << chr_rom_.size()
+			  << std::endl;
+	if (chr_rom_.size() > 0) {
+		std::cout << "[Mapper000] CHR ROM first 16 bytes: ";
+		for (size_t i = 0; i < 16 && i < chr_rom_.size(); ++i) {
+			std::cout << std::hex << static_cast<int>(chr_rom_[i]) << " ";
+		}
+		std::cout << std::dec << std::endl;
+
+		// Check address $1240 specifically
+		if (chr_rom_.size() > 0x1240) {
+			std::cout << "[Mapper000] CHR ROM at $1240: $" << std::hex << static_cast<int>(chr_rom_[0x1240]) << std::dec
+					  << std::endl;
+		}
+	}
 }
 
 Byte Mapper000::cpu_read(Address address) const {
@@ -47,7 +62,6 @@ Byte Mapper000::ppu_read(Address address) const {
 
 	return chr_rom_[address];
 }
-
 void Mapper000::ppu_write(Address address, Byte value) {
 	// NROM uses CHR ROM (read-only), writes are ignored
 	(void)address;

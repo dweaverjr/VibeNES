@@ -350,13 +350,6 @@ void SystemBus::perform_oam_dma(Byte page) {
 		return;
 	}
 
-	// Debug output for major DMA transfers
-	static Byte last_dma_page = 0xFF;
-	if (page != last_dma_page) {
-		printf("OAM DMA: Starting cycle-accurate transfer $%02X00-$%02XFF to PPU OAM\n", page, page);
-		last_dma_page = page;
-	}
-
 	// Start hardware-accurate OAM DMA in the PPU
 	// This will halt the CPU for 513-514 cycles while PPU handles the transfer
 	ppu_->write_oam_dma(page);

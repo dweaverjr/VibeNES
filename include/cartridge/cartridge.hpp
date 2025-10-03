@@ -51,9 +51,6 @@ class Cartridge final : public Component {
   private:
 	std::unique_ptr<Mapper> mapper_;
 	RomData rom_data_;
-
-	// Create appropriate mapper for ROM
-	std::unique_ptr<Mapper> create_mapper(const RomData &rom_data);
 };
 
 } // namespace nes

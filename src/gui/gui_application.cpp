@@ -571,30 +571,13 @@ void GuiApplication::reset_system() {
 void GuiApplication::setup_callbacks() {
 	if (rom_loader_panel_ && cpu_) {
 		rom_loader_panel_->set_rom_loaded_callback([this]() {
+			// Reconnect cartridge to PPU to update mirroring mode from newly loaded ROM
+			ppu_->connect_cartridge(cartridge_);
+
 			// When a ROM is loaded, trigger a reset to set the PC to the reset vector
 			cpu_->trigger_reset();
 			// Process the reset immediately by stepping once
 			(void)cpu_->execute_instruction(); // Discard return value for reset processing
-
-			// Debug: Check if PPU can read CHR ROM data
-			if (ppu_ && cartridge_) {
-				printf("ROM loaded - cartridge connected: %s, cartridge loaded: %s\n", cartridge_ ? "YES" : "NO",
-					   (cartridge_ && cartridge_->is_loaded()) ? "YES" : "NO");
-
-				// Test reading a pattern table byte
-				if (cartridge_->is_loaded()) {
-					uint8_t test_byte_0 = ppu_->read_chr_rom(0x0000);
-					uint8_t test_byte_1 = ppu_->read_chr_rom(0x0001);
-					uint8_t test_byte_10 = ppu_->read_chr_rom(0x0010);
-					uint8_t test_byte_100 = ppu_->read_chr_rom(0x0100);
-					printf("PPU CHR ROM test reads: $0000=%02X, $0001=%02X, $0010=%02X, $0100=%02X\n", test_byte_0,
-						   test_byte_1, test_byte_10, test_byte_100);
-
-					// Also test direct cartridge read
-					uint8_t direct_read = cartridge_->ppu_read(0x0000);
-					printf("Direct cartridge ppu_read($0000): $%02X\n", direct_read);
-				}
-			}
 		});
 	}
 }

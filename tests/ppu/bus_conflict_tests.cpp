@@ -508,7 +508,9 @@ TEST_CASE_METHOD(BusConflictTestFixture, "Sprite 0 Hit Edge Cases", "[ppu][bus_c
 		advance_to_scanline(101);
 
 		// Hit should occur at exact pixel position
-		advance_to_cycle(207); // Before hit
+		// Sprite at X=200 renders starting at cycle 201 (X+1)
+		// Hit detected at cycle 201, 2-cycle delay, flag visible at cycle 203+
+		advance_to_cycle(203); // Before hit flag becomes visible
 		auto debug_before_hit = ppu->get_debug_state();
 		INFO(std::string("Before sprite 0 hit status read: ") + format_debug_state(debug_before_hit));
 		auto bg_pixel_before = estimate_background_pixel(debug_before_hit);
@@ -519,7 +521,7 @@ TEST_CASE_METHOD(BusConflictTestFixture, "Sprite 0 Hit Edge Cases", "[ppu][bus_c
 		INFO(std::string("Status before expected hit: ") + format_byte(status_before));
 		REQUIRE((status_before & 0x40) == 0);
 
-		advance_to_cycle(208); // At hit pixel
+		advance_to_cycle(204); // Hit flag should be visible (set during cycle 203)
 		auto debug_at_hit = ppu->get_debug_state();
 		INFO(std::string("At expected sprite 0 hit: ") + format_debug_state(debug_at_hit));
 		auto bg_pixel_at_hit = estimate_background_pixel(debug_at_hit);
