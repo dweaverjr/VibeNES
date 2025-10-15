@@ -222,17 +222,28 @@ class PPU : public Component {
 		bool is_sprite_0;		   // True if this is sprite 0
 	};
 	std::array<ScanlineSprite, 8> scanline_sprites_; // Max 8 sprites per scanline
-	uint8_t sprite_count_current_scanline_;			 // Number of sprites on current scanline
-	bool sprite_0_on_scanline_;						 // True if sprite 0 is on current scanline
+	uint8_t sprite_count_current_scanline_;			 // Number of sprites rendering on current scanline
+	uint8_t sprite_count_next_scanline_;			 // Number of sprites evaluated for next scanline
+	bool sprite_0_on_scanline_;						 // True if sprite 0 is on current scanline (rendering)
+	bool sprite_0_on_next_scanline_;				 // True if sprite 0 is on next scanline (evaluation)
 	bool sprite_0_hit_detected_;					 // Prevents multiple sprite 0 hits per frame
 	uint8_t sprite_0_hit_delay_;					 // Delay counter before latching sprite 0 flag
 
-	// Hardware-accurate sprite evaluation timing
-	uint8_t sprite_evaluation_cycle_; // Current sprite evaluation cycle (0-63)
-	uint8_t sprite_evaluation_index_; // Current sprite being evaluated (0-63)
-	bool sprite_in_range_;			  // Current sprite Y-range check result
-	bool sprite_overflow_detected_;	  // Hardware sprite overflow bug state
-	uint8_t sprite_evaluation_temp_;  // Temporary sprite evaluation byte
+	// Hardware-accurate sprite evaluation state machine
+	enum class SpriteEvalState : uint8_t {
+		ReadY,		   // Reading sprite Y position from OAM
+		CheckRange,	   // Checking if sprite is in range for next scanline
+		CopySprite,	   // Copying sprite bytes to secondary OAM
+		OverflowCheck, // Checking for 9th+ sprite (overflow detection)
+		OverflowBug,   // Emulating sprite overflow hardware bug
+		Done		   // Evaluation complete, waiting for cycle 256
+	};
+	SpriteEvalState sprite_eval_state_; // Current state in evaluation state machine
+	uint8_t sprite_eval_n_;				// Current OAM sprite index being evaluated (0-63)
+	uint8_t sprite_eval_m_;				// Current byte within sprite (0-3: Y, Tile, Attr, X)
+	uint8_t sprite_eval_buffer_;		// Temporary buffer for Y value during range check
+	uint8_t secondary_oam_index_;		// Write position in secondary OAM (0-31)
+	bool sprite_overflow_detected_;		// Hardware sprite overflow flag state
 
 	// External connections
 	SystemBus *bus_;					   // For NMI generation
@@ -373,6 +384,9 @@ constexpr uint16_t OAM_DMA_CYCLES = 513;		// Total OAM DMA cycles (512 + 1 dummy
 constexpr uint16_t OAM_DMA_ALIGNMENT_CYCLE = 1; // Additional cycle for odd CPU cycle alignment
 
 // Sprite evaluation timing (cycles 65-256 of visible scanlines)
+// Hardware evaluates all 64 sprites within 192 cycles using byte-by-byte state machine
+// Our cycle-accurate implementation: 2 cycles/sprite minimum + copy cycles for matching sprites
+// Variable timing: ReadY(1 cycle) → CheckRange(1 cycle) → CopySprite(3 cycles if in range)
 constexpr uint16_t SPRITE_EVAL_START_CYCLE = 65;
 constexpr uint16_t SPRITE_EVAL_END_CYCLE = 256;
 constexpr uint8_t MAX_SPRITES_PER_SCANLINE = 8;

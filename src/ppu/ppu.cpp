@@ -22,13 +22,12 @@ PPU::PPU()
 	  // Initialize bus state
 	  ppu_data_bus_(0), io_db_(0), vram_address_corruption_pending_(false),
 	  // Initialize sprite state
-	  sprite_count_current_scanline_(0), sprite_0_on_scanline_(false), sprite_0_hit_detected_(false),
-	  sprite_0_hit_delay_(0), sprite_evaluation_cycle_(0), sprite_evaluation_index_(0), sprite_in_range_(false),
-	  sprite_overflow_detected_(false), sprite_evaluation_temp_(0),
+	  sprite_count_current_scanline_(0), sprite_count_next_scanline_(0), sprite_0_on_scanline_(false),
+	  sprite_0_on_next_scanline_(false), sprite_0_hit_detected_(false), sprite_0_hit_delay_(0),
+	  sprite_eval_state_(SpriteEvalState::ReadY), sprite_eval_n_(0), sprite_eval_m_(0), sprite_eval_buffer_(0),
+	  secondary_oam_index_(0), sprite_overflow_detected_(false),
 	  // Initialize connections
-	  bus_(nullptr), cpu_(nullptr), cartridge_(nullptr) {
-
-	// Initialize background shift registers
+	  bus_(nullptr), cpu_(nullptr), cartridge_(nullptr) { // Initialize background shift registers
 	bg_shift_registers_ = {};
 	tile_fetch_state_ = {};
 
@@ -97,11 +96,12 @@ void PPU::power_on() {
 	vram_address_corruption_pending_ = false;
 
 	// Initialize sprite evaluation state
-	sprite_evaluation_cycle_ = 0;
-	sprite_evaluation_index_ = 0;
-	sprite_in_range_ = false;
+	sprite_eval_state_ = SpriteEvalState::ReadY;
+	sprite_eval_n_ = 0;
+	sprite_eval_m_ = 0;
+	sprite_eval_buffer_ = 0;
+	secondary_oam_index_ = 0;
 	sprite_overflow_detected_ = false;
-	sprite_evaluation_temp_ = 0;
 
 	// Initialize background shift registers to prevent artifacts
 	clear_shift_registers();
@@ -355,49 +355,40 @@ void PPU::write_register(uint16_t address, uint8_t value) {
 void PPU::process_visible_scanline() {
 	// Hardware-accurate PPU processing for visible scanlines
 
-	if (current_cycle_ == 0 && is_rendering_enabled()) {
-		// Shift registers contain pre-loaded tiles 0-1 from pre-render scanline
-		// coarse_x is at position 2 (after prefetch increments)
-		// Sprites for current scanline already prepared during cycles 257-320 of previous scanline
-	} // Sprite evaluation happens during cycles 64-256
-	if (current_cycle_ == 64 && is_rendering_enabled()) {
-		clear_secondary_oam();
-	}
-
 	// Cycle-accurate sprite evaluation for NEXT scanline
+	// Secondary OAM is cleared at the start of evaluation (cycle 65, eval_cycle==0)
 	if (current_cycle_ >= PPUTiming::SPRITE_EVAL_START_CYCLE && current_cycle_ <= PPUTiming::SPRITE_EVAL_END_CYCLE &&
 		is_rendering_enabled()) {
 		perform_sprite_evaluation_cycle();
 	}
 
-	// Background and sprite rendering during visible cycles (0-255)
-	if (current_cycle_ < PPUTiming::VISIBLE_PIXELS && is_rendering_enabled()) {
-		if (current_cycle_ > 0) {
-			// Render the pixel using shift registers
-			render_pixel();
-
-			// Shift background registers after rendering to prepare for next pixel
-			if (is_background_enabled()) {
-				shift_background_registers();
-			}
-		}
-
+	// Background and sprite rendering during visible cycles (1-255)
+	if (current_cycle_ > 0 && current_cycle_ < PPUTiming::VISIBLE_PIXELS && is_rendering_enabled()) {
 		// Background tile fetching and VRAM updates (cycles 1-255)
 		// Tiles are fetched in 8-cycle groups aligned to cycles 1-8, 9-16, 17-24, etc.
-		if (is_background_enabled() && current_cycle_ >= 1) {
+		if (is_background_enabled()) {
 			perform_tile_fetch_cycle();
 		}
 
 		if (is_background_enabled()) {
 			// VRAM address increments happen at the end of each tile fetch (cycles 8, 16, ...)
-			if (((current_cycle_ & 7) == 0) && current_cycle_ > 0) {
+			if ((current_cycle_ & 7) == 0) {
 				increment_coarse_x();
 			}
 
-			// Load shift registers at the start of the next tile (cycles 9, 17, ...)
-			if ((current_cycle_ & 7) == 1 && current_cycle_ >= 9) {
+			// Load shift registers at the end of tile fetch (cycles 8, 16, 24...)
+			// This must happen BEFORE the shift for the next pixel
+			if ((current_cycle_ & 7) == 0) {
 				load_shift_registers();
 			}
+		}
+
+		// Render the pixel using shift registers
+		render_pixel();
+
+		// Shift background registers after rendering to prepare for next pixel
+		if (is_background_enabled()) {
+			shift_background_registers();
 		}
 	}
 
@@ -416,12 +407,22 @@ void PPU::process_visible_scanline() {
 			if (is_sprites_enabled()) {
 				prepare_scanline_sprites();
 			}
-		} // Continue background tile fetching for next scanline (cycles 320-337)
+		}
+
+		// At cycle 320: Copy sprite count for rendering on next scanline
+		// This happens after sprite preparation (cycles 257-320) completes
+		// and before rendering begins on the next scanline
+		if (current_cycle_ == 320) {
+			sprite_count_current_scanline_ = sprite_count_next_scanline_;
+			sprite_0_on_scanline_ = sprite_0_on_next_scanline_;
+		}
+
+		// Continue background tile fetching for next scanline (cycles 320-337)
 		// These are the first two tiles that will be rendered on the next scanline
 		// Cycles 321-328: Fetch tile 0
-		// Cycle 328: Increment coarse_x, Cycle 329: Load tile 0
+		// Cycle 328: Increment coarse_x, Load tile 0
 		// Cycles 329-336: Fetch tile 1
-		// Cycle 336: Increment coarse_x, Cycle 337: Load tile 1
+		// Cycle 336: Increment coarse_x, Load tile 1
 		if (current_cycle_ >= 320 && current_cycle_ <= 337 && is_background_enabled()) {
 			if (current_cycle_ <= 336) {
 				perform_tile_fetch_cycle();
@@ -432,8 +433,9 @@ void PPU::process_visible_scanline() {
 				increment_coarse_x();
 			}
 
-			// Load shift registers at start of next tile (cycles 329, 337)
-			if ((current_cycle_ & 7) == 1 && current_cycle_ > 320) {
+			// Load shift registers at end of tile fetch (cycles 328, 336)
+			// This must happen BEFORE the shift for the next pixel
+			if ((current_cycle_ & 7) == 0 && current_cycle_ > 320) {
 				load_shift_registers();
 			}
 		}
@@ -468,6 +470,12 @@ void PPU::process_pre_render_scanline() {
 		sprite_0_hit_delay_ = 0;
 	}
 
+	// Sprite evaluation for scanline 0 (happens during pre-render scanline)
+	if (current_cycle_ >= PPUTiming::SPRITE_EVAL_START_CYCLE && current_cycle_ <= PPUTiming::SPRITE_EVAL_END_CYCLE &&
+		is_rendering_enabled()) {
+		perform_sprite_evaluation_cycle();
+	}
+
 	// Copy vertical scroll from temp address to current at specific cycles
 	if (is_rendering_enabled()) {
 		// Initialize shift registers at start of pre-render to prepare for next frame
@@ -478,6 +486,11 @@ void PPU::process_pre_render_scanline() {
 		// Copy horizontal scroll
 		if (current_cycle_ == 257) {
 			copy_horizontal_scroll();
+
+			// Start sprite preparation for scanline 0 during cycles 257-320
+			if (is_sprites_enabled()) {
+				prepare_scanline_sprites();
+			}
 		}
 
 		// Copy vertical scroll during cycles 280-304
@@ -495,13 +508,22 @@ void PPU::process_pre_render_scanline() {
 				increment_coarse_x();
 			}
 
-			// Load freshly fetched tile data at the start of each tile
-			if ((current_cycle_ & 7) == 1) {
+			// Load freshly fetched tile data at the end of each tile fetch
+			// This must happen BEFORE the shift for the next pixel
+			if ((current_cycle_ & 7) == 0 && current_cycle_ > 0) {
 				load_shift_registers();
 			}
 
 			// Shift registers at the end of the cycle to keep pipeline advancing
 			shift_background_registers();
+		}
+
+		// At cycle 320: Copy sprite count for rendering on scanline 0
+		// This happens after sprite preparation (cycles 257-320) completes
+		// and before rendering begins on scanline 0
+		if (current_cycle_ == 320) {
+			sprite_count_current_scanline_ = sprite_count_next_scanline_;
+			sprite_0_on_scanline_ = sprite_0_on_next_scanline_;
 		}
 
 		// Continue fetching during HBLANK (cycles 320-337) to prepare first two tiles
@@ -515,8 +537,9 @@ void PPU::process_pre_render_scanline() {
 				increment_coarse_x();
 			}
 
-			// Load shift registers at start of next tile (cycles 329, 337)
-			if ((current_cycle_ & 7) == 1 && current_cycle_ > 320) {
+			// Load shift registers at end of tile fetch (cycles 328, 336)
+			// This must happen BEFORE the shift for the next pixel
+			if ((current_cycle_ & 7) == 0 && current_cycle_ > 320) {
 				load_shift_registers();
 			}
 
@@ -983,7 +1006,7 @@ uint32_t PPU::get_palette_color(uint8_t palette_index) {
 // =============================================================================
 
 uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority, bool &sprite0_candidate) {
-	// Only render sprites during visible pixels (cycles 0-255)
+	// Only render sprites during visible pixels (cycles 1-255)
 	if (current_cycle_ >= 256) {
 		sprite_priority = false;
 		return 0; // No sprites rendered outside visible area
@@ -1004,11 +1027,25 @@ uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority, bool &s
 	sprite_priority = false; // Default: sprite in front
 
 	// Check all sprites on current scanline (front to back priority)
-	for (int i = sprite_count_current_scanline_ - 1; i >= 0; i--) {
+	// NES hardware scans sprites 0-7 in order, with lower indices having higher priority
+	for (int i = 0; i < sprite_count_current_scanline_; i++) {
 		const ScanlineSprite &sprite = scanline_sprites_[i];
 
 		// Check if current pixel is within sprite bounds
-		if (current_x >= sprite.sprite_data.x_position && current_x < sprite.sprite_data.x_position + 8) {
+		// Handle wraparound: sprite X can be 0-255, and sprite extends 8 pixels
+		uint8_t sprite_x_start = sprite.sprite_data.x_position;
+		uint8_t sprite_x_end = sprite_x_start + 8; // May wrap past 255
+
+		bool pixel_in_sprite = false;
+		if (sprite_x_end > sprite_x_start) {
+			// Normal case: no wraparound (e.g., X=100, end=108)
+			pixel_in_sprite = (current_x >= sprite_x_start && current_x < sprite_x_end);
+		} else {
+			// Wraparound case: sprite extends past X=255 (e.g., X=250, end wraps to 2)
+			pixel_in_sprite = (current_x >= sprite_x_start || current_x < sprite_x_end);
+		}
+
+		if (pixel_in_sprite) {
 
 			// Calculate sprite-relative X position
 			uint8_t sprite_x = current_x - sprite.sprite_data.x_position;
@@ -1293,79 +1330,173 @@ void PPU::perform_oam_dma_cycle() {
 void PPU::clear_secondary_oam() {
 	// Clear secondary OAM at start of sprite evaluation
 	secondary_oam_.fill(0xFF);
-	sprite_count_current_scanline_ = 0;
-	sprite_0_on_scanline_ = false;
+	sprite_count_next_scanline_ = 0;	// Reset counter for next scanline being evaluated
+	sprite_0_on_next_scanline_ = false; // Reset sprite 0 flag for next scanline
 	sprite_overflow_detected_ = false;
 }
 
 void PPU::perform_sprite_evaluation_cycle() {
-	// Hardware-accurate sprite evaluation happens during cycles 65-256
+	// Hardware-accurate sprite evaluation happens during cycles 65-256 (192 cycles total)
 	if (current_cycle_ < PPUTiming::SPRITE_EVAL_START_CYCLE || current_cycle_ > PPUTiming::SPRITE_EVAL_END_CYCLE) {
 		return;
 	}
 
-	// Calculate evaluation cycle within the sprite evaluation window
+	// Calculate evaluation cycle within the sprite evaluation window (0-191)
 	uint8_t eval_cycle = current_cycle_ - PPUTiming::SPRITE_EVAL_START_CYCLE;
 
-	// Sprite evaluation state machine (simplified for key behavior)
+	// Initialize sprite evaluation at cycle 0
 	if (eval_cycle == 0) {
 		clear_secondary_oam();
-		sprite_evaluation_index_ = 0;
-		sprite_evaluation_cycle_ = 0;
+		sprite_eval_state_ = SpriteEvalState::ReadY;
+		sprite_eval_n_ = 0;
+		sprite_eval_m_ = 0;
+		sprite_eval_buffer_ = 0;
+		secondary_oam_index_ = 0;
 	}
 
-	// Check sprite Y range every 4 cycles (once per sprite)
-	if ((eval_cycle & 3) == 0 && sprite_evaluation_index_ < 64) {
-		uint8_t sprite_y_raw = oam_memory_[sprite_evaluation_index_ * 4];
+	// Cycle-accurate sprite evaluation state machine
+	// Real hardware processes sprites byte-by-byte with variable timing
+	switch (sprite_eval_state_) {
+	case SpriteEvalState::ReadY: {
+		// Read Y position from OAM (takes 1 cycle)
+		sprite_eval_buffer_ = oam_memory_[sprite_eval_n_ * 4];
+		sprite_eval_state_ = SpriteEvalState::CheckRange;
+		break;
+	}
+
+	case SpriteEvalState::CheckRange: {
+		// Check if sprite is in range for next scanline (takes 1 cycle)
 		uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
 
-		// Check if sprite is on next scanline (OAM Y is top minus 1)
-		int16_t next_scanline = static_cast<int16_t>((current_scanline_ + 1) & 0xFF);
-		int16_t sprite_top = static_cast<int16_t>(sprite_y_raw) + 1;
-		int16_t line_index = next_scanline - sprite_top;
-		sprite_in_range_ = (line_index >= 0 && line_index < static_cast<int16_t>(sprite_height));
-
-		if (sprite_in_range_ && sprite_count_current_scanline_ < 8) {
-			// Copy sprite to secondary OAM
-			uint8_t src_index = sprite_evaluation_index_ * 4;
-			uint8_t dst_index = sprite_count_current_scanline_ * 4;
-
-			for (int i = 0; i < 4; i++) {
-				secondary_oam_[dst_index + i] = oam_memory_[src_index + i];
-			}
-
-			if (sprite_evaluation_index_ == 0) {
-				sprite_0_on_scanline_ = true;
-			}
-
-			sprite_count_current_scanline_++;
-		} else if (sprite_in_range_ && sprite_count_current_scanline_ >= 8) {
-			// Sprite overflow condition
-			handle_sprite_overflow_bug();
+		// Calculate next scanline with wrap from pre-render (261) to scanline 0
+		int16_t next_scanline;
+		if (current_scanline_ == PPUTiming::PRE_RENDER_SCANLINE) {
+			next_scanline = 0;
+		} else {
+			next_scanline = static_cast<int16_t>(current_scanline_ + 1);
 		}
 
-		sprite_evaluation_index_++;
+		int16_t sprite_top = static_cast<int16_t>(sprite_eval_buffer_) + 1;
+		int16_t line_index = next_scanline - sprite_top;
+		bool in_range = (line_index >= 0 && line_index < static_cast<int16_t>(sprite_height));
+
+		if (in_range && sprite_count_next_scanline_ < 8) {
+			// Sprite is in range - start copying to secondary OAM
+			sprite_eval_state_ = SpriteEvalState::CopySprite;
+			sprite_eval_m_ = 0;
+
+			// Write Y to secondary OAM
+			secondary_oam_[secondary_oam_index_++] = sprite_eval_buffer_;
+
+			// Track sprite 0
+			if (sprite_eval_n_ == 0) {
+				sprite_0_on_next_scanline_ = true;
+			}
+		} else if (in_range && sprite_count_next_scanline_ >= 8) {
+			// Found 9th sprite - trigger overflow detection
+			sprite_eval_state_ = SpriteEvalState::OverflowCheck;
+		} else {
+			// Not in range - move to next sprite
+			sprite_eval_n_++;
+			if (sprite_eval_n_ < 64) {
+				sprite_eval_state_ = SpriteEvalState::ReadY;
+			} else {
+				sprite_eval_state_ = SpriteEvalState::Done;
+			}
+		}
+		break;
+	}
+
+	case SpriteEvalState::CopySprite: {
+		// Copy remaining sprite bytes to secondary OAM (1 byte per cycle)
+		sprite_eval_m_++;
+		if (sprite_eval_m_ < 4) {
+			// Copy tile, attributes, or X position
+			uint8_t byte = oam_memory_[sprite_eval_n_ * 4 + sprite_eval_m_];
+			secondary_oam_[secondary_oam_index_++] = byte;
+		}
+
+		if (sprite_eval_m_ == 3) {
+			// Finished copying this sprite (all 4 bytes done)
+			sprite_count_next_scanline_++;
+			sprite_eval_n_++;
+
+			if (sprite_eval_n_ < 64 && sprite_count_next_scanline_ < 8) {
+				// More sprites to check
+				sprite_eval_state_ = SpriteEvalState::ReadY;
+			} else if (sprite_eval_n_ < 64) {
+				// 8 sprites found, check for overflow
+				sprite_eval_m_ = 0; // Reset to read Y position of next sprite
+				sprite_eval_state_ = SpriteEvalState::OverflowCheck;
+			} else {
+				// All sprites checked
+				sprite_eval_state_ = SpriteEvalState::Done;
+			}
+		}
+		break;
+	}
+
+	case SpriteEvalState::OverflowCheck: {
+		// Check for sprite overflow (9th+ sprite on scanline)
+		if (sprite_eval_n_ < 64) {
+			uint8_t y = oam_memory_[sprite_eval_n_ * 4 + sprite_eval_m_];
+			uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
+
+			int16_t next_scanline;
+			if (current_scanline_ == PPUTiming::PRE_RENDER_SCANLINE) {
+				next_scanline = 0;
+			} else {
+				next_scanline = static_cast<int16_t>(current_scanline_ + 1);
+			}
+
+			int16_t sprite_top = static_cast<int16_t>(y) + 1;
+			int16_t line_index = next_scanline - sprite_top;
+			bool in_range = (line_index >= 0 && line_index < static_cast<int16_t>(sprite_height));
+
+			if (in_range) {
+				// Overflow detected
+				sprite_overflow_detected_ = true;
+				status_register_ |= PPUConstants::PPUSTATUS_OVERFLOW_MASK;
+				sprite_eval_state_ = SpriteEvalState::Done;
+			} else {
+				// Hardware bug: incorrectly increments both n and m
+				sprite_eval_n_++;
+				sprite_eval_m_ = (sprite_eval_m_ + 1) & 3; // Wrap m within 0-3
+
+				if (sprite_eval_n_ >= 64) {
+					sprite_eval_state_ = SpriteEvalState::Done;
+				}
+			}
+		} else {
+			sprite_eval_state_ = SpriteEvalState::Done;
+		}
+		break;
+	}
+
+	case SpriteEvalState::OverflowBug:
+		// Hardware bug state - not currently implemented in detail
+		// Jump to Done state
+		sprite_eval_state_ = SpriteEvalState::Done;
+		break;
+
+	case SpriteEvalState::Done:
+		// Evaluation complete - wait for cycle 256
+		break;
 	}
 }
 
 void PPU::handle_sprite_overflow_bug() {
-	// The NES PPU has a bug in sprite overflow detection
-	// When 9th sprite is found, it incorrectly increments both sprite index
-	// and the byte index within the sprite, causing erratic behavior
-
+	// This function is no longer needed - overflow handled in state machine
+	// Kept for compatibility but should not be called
 	sprite_overflow_detected_ = true;
 	status_register_ |= PPUConstants::PPUSTATUS_OVERFLOW_MASK;
-
-	// The hardware bug: sprite index increments incorrectly
-	// This simplified implementation just sets the overflow flag
-	// Real hardware behavior is more complex but rarely matters for games
 }
 
 void PPU::prepare_scanline_sprites() {
 	// Convert secondary OAM to scanline sprites with pattern data
 	// This happens during cycles 257-320 in hardware
 
-	for (uint8_t i = 0; i < sprite_count_current_scanline_ && i < 8; i++) {
+	for (uint8_t i = 0; i < sprite_count_next_scanline_ && i < 8; i++) {
 		uint8_t base_addr = i * 4;
 
 		// Get sprite data from secondary OAM
@@ -1378,12 +1509,20 @@ void PPU::prepare_scanline_sprites() {
 		// Store sprite data and index
 		ScanlineSprite &scanline_sprite = scanline_sprites_[i];
 		scanline_sprite.sprite_data = sprite;
-		scanline_sprite.sprite_index = i;								 // Index in secondary OAM (0-7)
-		scanline_sprite.is_sprite_0 = (i == 0 && sprite_0_on_scanline_); // True if this is sprite 0
+		scanline_sprite.sprite_index = i;									  // Index in secondary OAM (0-7)
+		scanline_sprite.is_sprite_0 = (i == 0 && sprite_0_on_next_scanline_); // True if sprite 0 on next scanline
 
 		// Calculate sprite row for next scanline (OAM Y is sprite top minus 1)
 		uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
-		int16_t next_scanline = static_cast<int16_t>((current_scanline_ + 1) & 0xFF);
+
+		// Calculate next scanline with proper wrap from pre-render (261) to scanline 0
+		int16_t next_scanline;
+		if (current_scanline_ == PPUTiming::PRE_RENDER_SCANLINE) {
+			next_scanline = 0; // Pre-render scanline prepares for scanline 0
+		} else {
+			next_scanline = static_cast<int16_t>(current_scanline_ + 1);
+		}
+
 		int16_t sprite_top = static_cast<int16_t>(sprite.y_position) + 1;
 		int16_t sprite_row = next_scanline - sprite_top;
 
@@ -1394,7 +1533,9 @@ void PPU::prepare_scanline_sprites() {
 			continue;
 		}
 
-		// Apply vertical flip after determining base row
+		// Apply vertical flip to determine which pixel row to fetch
+		// For 8x16 sprites: tile selection uses UNFLIPPED sprite_row,
+		// but pixel row within each tile uses FLIPPED fetch_row
 		int16_t fetch_row = sprite.attributes.flip_vertical ? (sprite_height - 1 - sprite_row) : sprite_row;
 		uint8_t row_in_tile = static_cast<uint8_t>(fetch_row & 0x07);
 
@@ -1405,7 +1546,9 @@ void PPU::prepare_scanline_sprites() {
 			// 8x16 sprites - bit 0 of tile_index selects pattern table
 			sprite_table = (sprite.tile_index & 0x01) != 0;
 			uint8_t base_tile = sprite.tile_index & 0xFE;
-			bool top_tile = fetch_row < 8;
+			// Use UNFLIPPED sprite_row to determine which tile (top or bottom)
+			// This prevents the tiles from swapping when vertically flipped
+			bool top_tile = sprite_row < 8;
 			uint8_t tile_number = base_tile + (top_tile ? 0 : 1);
 			uint8_t fine_y = row_in_tile;
 
