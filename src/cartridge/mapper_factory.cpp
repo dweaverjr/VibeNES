@@ -1,7 +1,7 @@
 #include "cartridge/mapper_factory.hpp"
 #include "cartridge/mappers/mapper_000.hpp"
+#include "cartridge/mappers/mapper_001.hpp"
 // TODO: Add other mapper headers as they are implemented
-// #include "cartridge/mappers/mapper_001.hpp"
 // #include "cartridge/mappers/mapper_002.hpp"
 // #include "cartridge/mappers/mapper_003.hpp"
 // #include "cartridge/mappers/mapper_004.hpp"
@@ -20,13 +20,20 @@ std::unique_ptr<Mapper> MapperFactory::create_mapper(const RomData &rom_data) {
 		// Used by: Super Mario Bros, Donkey Kong, Ice Climber, etc.
 		return std::make_unique<Mapper000>(rom_data.prg_rom, rom_data.chr_rom, mirroring);
 
-		// TODO: Implement these mappers
-		// case 1:
-		// 	// Mapper 1 - MMC1 (SxROM)
-		// 	// Used by: The Legend of Zelda, Metroid, Mega Man 2, etc.
-		// 	std::cout << "Creating Mapper 001 (MMC1)" << std::endl;
-		// 	return std::make_unique<Mapper001>(rom_data.prg_rom, rom_data.chr_rom, mirroring);
+	case 1: {
+		// Mapper 1 - MMC1 (SxROM)
+		// Used by: The Legend of Zelda, Metroid, Mega Man 2, Faxanadu, etc.
+		std::cout << "Creating Mapper 001 (MMC1)" << std::endl;
 
+		// Detect if CHR is RAM (no CHR ROM pages)
+		bool chr_is_ram = (rom_data.chr_rom_pages == 0);
+		// Most MMC1 games have PRG RAM, battery-backed flag indicates save RAM
+		bool has_prg_ram = true; // MMC1 standard has 8KB PRG RAM
+
+		return std::make_unique<Mapper001>(rom_data.prg_rom, rom_data.chr_rom, mirroring, has_prg_ram, chr_is_ram);
+	}
+
+		// TODO: Implement these mappers
 		// case 2:
 		// 	// Mapper 2 - UxROM
 		// 	// Used by: Mega Man, Castlevania, Contra, etc.
