@@ -4,6 +4,8 @@
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "gui/style/retro_theme.hpp"
+#include "input/controller.hpp"
+#include "input/gamepad_manager.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
 
@@ -58,8 +60,8 @@ bool GuiApplication::initialize() {
 }
 
 bool GuiApplication::initialize_sdl() {
-	// Initialize SDL with both video and audio subsystems
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
+	// Initialize SDL with video, audio, and gamecontroller subsystems
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) {
 		std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
 		return false;
 	}
@@ -129,9 +131,21 @@ void GuiApplication::initialize_emulation_components() {
 		std::cerr << "Warning: Audio system initialization failed\n";
 	}
 
+	// Initialize gamepad/controller system
+	gamepad_manager_ = std::make_shared<nes::GamepadManager>();
+	if (gamepad_manager_->initialize()) {
+		std::cout << "Gamepad system initialized successfully\n";
+		std::cout << "Connected controllers: " << gamepad_manager_->get_connected_count() << std::endl;
+	} else {
+		std::cerr << "Warning: Gamepad system initialization failed\n";
+	}
+
 	// Create memory components
 	auto ram = std::make_shared<nes::Ram>();
 	auto apu = std::make_shared<nes::APU>();
+
+	// Create controller with gamepad manager
+	controllers_ = std::make_shared<nes::Controller>(gamepad_manager_);
 
 	// Create other core components
 	cartridge_ = std::make_shared<nes::Cartridge>();
@@ -142,6 +156,7 @@ void GuiApplication::initialize_emulation_components() {
 	bus_->connect_ram(ram);
 	bus_->connect_ppu(ppu_);
 	bus_->connect_apu(apu);
+	bus_->connect_controllers(controllers_);
 	bus_->connect_cartridge(cartridge_);
 	bus_->connect_cpu(cpu_); // Connect CPU to bus for APU IRQ handling
 
@@ -195,6 +210,12 @@ void GuiApplication::run() {
 void GuiApplication::handle_events() {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
+		// Let gamepad manager handle controller events first
+		if (gamepad_manager_ && gamepad_manager_->handle_sdl_event(event)) {
+			continue; // Event was handled, skip to next
+		}
+
+		// Let ImGui process the event
 		ImGui_ImplSDL2_ProcessEvent(&event);
 
 		if (event.type == SDL_QUIT) {

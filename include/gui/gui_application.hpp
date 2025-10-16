@@ -14,6 +14,8 @@ class SystemBus;
 class Cartridge;
 class PPU;
 class AudioPanel;
+class GamepadManager;
+class Controller;
 } // namespace nes
 
 namespace nes::gui {
@@ -74,6 +76,8 @@ class GuiApplication {
 	std::shared_ptr<nes::SystemBus> bus_;
 	std::shared_ptr<nes::Cartridge> cartridge_;
 	std::shared_ptr<nes::PPU> ppu_;
+	std::shared_ptr<nes::GamepadManager> gamepad_manager_;
+	std::shared_ptr<nes::Controller> controllers_;
 
 	// GUI panels
 	std::unique_ptr<CPUStatePanel> cpu_panel_;

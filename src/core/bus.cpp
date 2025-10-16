@@ -2,7 +2,7 @@
 #include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "cpu/cpu_6502.hpp"
-#include "input/controller_stub.hpp"
+#include "input/controller.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
 #include <iomanip>
@@ -246,7 +246,8 @@ void SystemBus::write(Address address, Byte value) {
 	// Controllers: $4016 (controller 1 strobe/data), $4017 handled by APU for writes
 	if (is_controller_address(address)) {
 		if (controllers_) {
-			controllers_->write(address, value);
+			// Controller write only uses the strobe bit (bit 0) from value, address doesn't matter
+			controllers_->write(value);
 		}
 		return;
 	}
@@ -299,7 +300,7 @@ void SystemBus::connect_apu(std::shared_ptr<APU> apu) {
 	}
 }
 
-void SystemBus::connect_controllers(std::shared_ptr<ControllerStub> controllers) {
+void SystemBus::connect_controllers(std::shared_ptr<Controller> controllers) {
 	controllers_ = std::move(controllers);
 }
 

@@ -12,7 +12,7 @@ namespace nes {
 class Ram;
 class PPU;
 class APU;
-class ControllerStub;
+class Controller;
 class Cartridge;
 class CPU6502;
 
@@ -40,7 +40,7 @@ class SystemBus final : public Component {
 	void connect_ram(std::shared_ptr<Ram> ram);
 	void connect_ppu(std::shared_ptr<PPU> ppu);
 	void connect_apu(std::shared_ptr<APU> apu);
-	void connect_controllers(std::shared_ptr<ControllerStub> controllers);
+	void connect_controllers(std::shared_ptr<Controller> controllers);
 	void connect_cartridge(std::shared_ptr<Cartridge> cartridge);
 	void connect_cpu(std::shared_ptr<CPU6502> cpu);
 
@@ -63,7 +63,7 @@ class SystemBus final : public Component {
 	std::shared_ptr<Ram> ram_;
 	std::shared_ptr<PPU> ppu_;
 	std::shared_ptr<APU> apu_;
-	std::shared_ptr<ControllerStub> controllers_;
+	std::shared_ptr<Controller> controllers_;
 	std::shared_ptr<Cartridge> cartridge_;
 	std::shared_ptr<CPU6502> cpu_;
 
