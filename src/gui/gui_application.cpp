@@ -124,6 +124,7 @@ void GuiApplication::initialize_emulation_components() {
 	// Initialize audio system
 	if (bus_->initialize_audio()) {
 		std::cout << "Audio system initialized successfully\n";
+		// Audio will be started by the audio panel on first render to match checkbox state
 	} else {
 		std::cerr << "Warning: Audio system initialization failed\n";
 	}
@@ -235,11 +236,11 @@ void GuiApplication::render_frame() {
 		const float right_start = LEFT_WIDTH + CENTER_WIDTH;
 		const float content_height = static_cast<float>(WINDOW_HEIGHT) - HEADER_HEIGHT;
 
-		// LEFT COLUMN - ROM Loader, CPU State, and Timing
+		// LEFT COLUMN - ROM Loader, CPU State, and PPU Registers
 		ImGui::SetCursorPos(ImVec2(left_start, 0));
 		if (ImGui::BeginChild("LeftColumn", ImVec2(LEFT_WIDTH, content_height), true)) {
-			// ROM Loader Section (top 1/3)
-			if (ImGui::BeginChild("ROMLoaderSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.33f), true)) {
+			// ROM Loader Section (top 40%)
+			if (ImGui::BeginChild("ROMLoaderSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.40f), true)) {
 				ImGui::Text("ROM LOADER");
 				ImGui::Separator();
 				// Render ROM loader content directly (no longer a popup)
@@ -251,8 +252,8 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// CPU State Section (middle 1/3)
-			if (ImGui::BeginChild("CPUStateSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.33f), true)) {
+			// CPU State Section (middle 25% - reduced since flags are now beside registers)
+			if (ImGui::BeginChild("CPUStateSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.25f), true)) {
 				ImGui::Text("CPU STATE");
 				ImGui::Separator();
 				if (cpu_panel_) {
@@ -266,12 +267,12 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// Timing Panel Section (bottom 1/3)
-			if (ImGui::BeginChild("TimingSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.33f - 20), true)) {
-				ImGui::Text("TIMING & CLOCK");
+			// PPU Registers Section (bottom 35% - increased by 2% to remove scrollbar)
+			if (ImGui::BeginChild("PPURegistersSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.35f - 20), true)) {
+				ImGui::Text("PPU REGISTERS & STATUS");
 				ImGui::Separator();
-				if (timing_panel_) {
-					timing_panel_->render(cpu_.get(), ppu_.get(), bus_.get());
+				if (ppu_viewer_panel_) {
+					ppu_viewer_panel_->render_registers_only(ppu_.get());
 				}
 			}
 			ImGui::EndChild();
@@ -321,20 +322,6 @@ void GuiApplication::render_frame() {
 					}
 				}
 				ImGui::EndChild();
-			}
-			ImGui::EndChild();
-
-			ImGui::Spacing();
-
-			// PPU Registers Section (bottom 50%)
-			if (ImGui::BeginChild("PPURegistersSection", ImVec2(CENTER_WIDTH - 10, content_height * 0.50f - 15),
-								  true)) {
-				ImGui::Text("PPU REGISTERS & STATUS");
-				ImGui::Separator();
-				if (ppu_viewer_panel_) {
-					// Show just the registers content
-					ppu_viewer_panel_->render_registers_only(ppu_.get());
-				}
 			}
 			ImGui::EndChild();
 		}

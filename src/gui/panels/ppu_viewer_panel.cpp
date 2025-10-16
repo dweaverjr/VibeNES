@@ -253,7 +253,11 @@ void PPUViewerPanel::render_pattern_tables(nes::PPU *ppu, nes::Cartridge *cartri
 			bool settings_changed =
 				(last_pattern_table != selected_pattern_table_) || (last_palette != selected_palette_);
 
-			if (pattern_table_dirty_ || settings_changed || rom_changed) {
+			// CHR RAM games need frequent updates since CPU can write to CHR at any time
+			bool is_chr_ram = (rom_data.chr_rom_pages == 0);
+
+			// Refresh every frame for CHR RAM, or when settings/ROM change for CHR ROM
+			if (pattern_table_dirty_ || settings_changed || rom_changed || is_chr_ram) {
 				generate_pattern_table_visualization(ppu, cartridge);
 				update_pattern_table_texture(); // Upload to OpenGL
 				pattern_table_dirty_ = false;
@@ -429,27 +433,38 @@ void PPUViewerPanel::render_sprite_viewer(nes::PPU *ppu) {
 void PPUViewerPanel::render_ppu_registers(nes::PPU *ppu) {
 	ImGui::Text("PPU Registers:");
 
-	// PPUCTRL ($2000)
+	// PPUCTRL ($2000) - Vertical format
 	uint8_t ctrl = ppu->get_control_register();
 	ImGui::TextColored(RetroTheme::get_register_color(), "PPUCTRL ($2000): $%02X", ctrl);
-	ImGui::SameLine();
-	ImGui::TextColored(RetroTheme::get_address_color(), "[NT:%d Inc:%s SPT:%04X BGT:%04X SS:%s NMI:%s]", ctrl & 0x03,
-					   (ctrl & 0x04) ? "+32" : "+1", (ctrl & 0x08) ? 0x1000 : 0x0000, (ctrl & 0x10) ? 0x1000 : 0x0000,
-					   (ctrl & 0x20) ? "8x16" : "8x8", (ctrl & 0x80) ? "ON" : "OFF");
+	ImGui::Indent();
+	ImGui::Text("  Nametable: %d", ctrl & 0x03);
+	ImGui::Text("  Increment: %s", (ctrl & 0x04) ? "+32" : "+1");
+	ImGui::Text("  Sprite Pattern: $%04X", (ctrl & 0x08) ? 0x1000 : 0x0000);
+	ImGui::Text("  BG Pattern: $%04X", (ctrl & 0x10) ? 0x1000 : 0x0000);
+	ImGui::Text("  Sprite Size: %s", (ctrl & 0x20) ? "8x16" : "8x8");
+	ImGui::Text("  NMI: %s", (ctrl & 0x80) ? "ON" : "OFF");
+	ImGui::Unindent();
 
-	// PPUMASK ($2001)
+	ImGui::Spacing();
+
+	// PPUMASK ($2001) - Vertical format
 	uint8_t mask = ppu->get_mask_register();
 	ImGui::TextColored(RetroTheme::get_register_color(), "PPUMASK ($2001): $%02X", mask);
-	ImGui::SameLine();
-	ImGui::TextColored(RetroTheme::get_address_color(), "[BG:%s SPR:%s]", (mask & 0x08) ? "ON" : "OFF",
-					   (mask & 0x10) ? "ON" : "OFF");
+	ImGui::Indent();
+	ImGui::Text("  BG: %s", (mask & 0x08) ? "ON" : "OFF");
+	ImGui::Text("  SPR: %s", (mask & 0x10) ? "ON" : "OFF");
+	ImGui::Unindent();
 
-	// PPUSTATUS ($2002)
+	ImGui::Spacing();
+
+	// PPUSTATUS ($2002) - Vertical format
 	uint8_t status = ppu->get_status_register();
 	ImGui::TextColored(RetroTheme::get_register_color(), "PPUSTATUS ($2002): $%02X", status);
-	ImGui::SameLine();
-	ImGui::TextColored(RetroTheme::get_address_color(), "[VBL:%s S0H:%s SOF:%s]", (status & 0x80) ? "1" : "0",
-					   (status & 0x40) ? "1" : "0", (status & 0x20) ? "1" : "0");
+	ImGui::Indent();
+	ImGui::Text("  VBlank: %s", (status & 0x80) ? "1" : "0");
+	ImGui::Text("  Sprite 0 Hit: %s", (status & 0x40) ? "1" : "0");
+	ImGui::Text("  Sprite Overflow: %s", (status & 0x20) ? "1" : "0");
+	ImGui::Unindent();
 }
 
 void PPUViewerPanel::render_timing_info(nes::PPU *ppu) {

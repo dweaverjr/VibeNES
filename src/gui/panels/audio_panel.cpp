@@ -6,7 +6,8 @@ namespace nes {
 
 using gui::RetroTheme;
 
-AudioPanel::AudioPanel() : volume_slider_(1.0f), audio_enabled_(false), audio_level_(0.0f), peak_hold_counter_(0) {
+AudioPanel::AudioPanel()
+	: volume_slider_(1.0f), audio_enabled_(true), audio_level_(0.0f), peak_hold_counter_(0), first_render_(true) {
 }
 
 void AudioPanel::render(SystemBus *bus) {
@@ -24,8 +25,16 @@ void AudioPanel::render(SystemBus *bus) {
 
 void AudioPanel::render_controls(SystemBus *bus) {
 	// Enable/Disable audio
-	bool is_playing = bus->is_audio_playing();
-	audio_enabled_ = is_playing;
+	// Checkbox controls whether audio should play when emulation runs
+	// Don't sync with backend state - checkbox is the user's preference
+
+	// On first render, sync backend with checkbox default state
+	if (first_render_) {
+		first_render_ = false;
+		if (audio_enabled_) {
+			bus->start_audio();
+		}
+	}
 
 	if (ImGui::Checkbox("Enable Audio", &audio_enabled_)) {
 		if (audio_enabled_) {

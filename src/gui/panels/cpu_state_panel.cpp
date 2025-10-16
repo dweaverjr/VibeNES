@@ -14,11 +14,23 @@ void CPUStatePanel::render(nes::CPU6502 *cpu, std::function<void()> step_callbac
 
 	render_controls(cpu, step_callback, reset_callback, toggle_run_callback, is_running, run_enabled);
 	ImGui::Separator();
-	render_registers(cpu);
-	ImGui::Separator();
-	render_flags(cpu);
-	ImGui::Separator();
-	render_stack_info(cpu);
+
+	// Create two-column layout for Registers and Flags side-by-side
+	float column_width = ImGui::GetContentRegionAvail().x * 0.5f;
+
+	// Left column: Registers
+	if (ImGui::BeginChild("RegistersColumn", ImVec2(column_width, 0), false)) {
+		render_registers(cpu);
+	}
+	ImGui::EndChild();
+
+	ImGui::SameLine();
+
+	// Right column: Status Flags
+	if (ImGui::BeginChild("FlagsColumn", ImVec2(column_width, 0), true)) {
+		render_flags(cpu);
+	}
+	ImGui::EndChild();
 }
 
 void CPUStatePanel::render_registers(const nes::CPU6502 *cpu) {
@@ -35,7 +47,7 @@ void CPUStatePanel::render_registers(const nes::CPU6502 *cpu) {
 
 	ImGui::TextColored(RetroTheme::get_register_color(), "PC: $%04X", cpu->get_program_counter());
 
-	ImGui::TextColored(RetroTheme::get_register_color(), "SP: $%02X", cpu->get_stack_pointer());
+	ImGui::TextColored(RetroTheme::get_register_color(), "SP: $01%02X", cpu->get_stack_pointer());
 }
 
 void CPUStatePanel::render_flags(const nes::CPU6502 *cpu) {

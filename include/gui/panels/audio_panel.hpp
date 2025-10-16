@@ -29,6 +29,7 @@ class AudioPanel {
 	bool audio_enabled_;	// Audio enable checkbox
 	float audio_level_;		// Current audio level for meter
 	int peak_hold_counter_; // Peak hold for level meter
+	bool first_render_;		// Track first render to sync state
 
 	// Render sub-components
 	void render_controls(SystemBus *bus);
