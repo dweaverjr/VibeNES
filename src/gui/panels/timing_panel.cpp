@@ -34,18 +34,6 @@ void TimingPanel::render(nes::CPU6502 *cpu, nes::PPU *ppu, nes::SystemBus *bus) 
 		}
 
 		ImGui::Spacing();
-
-		// Synchronization Section
-		if (ImGui::CollapsingHeader("Synchronization", ImGuiTreeNodeFlags_DefaultOpen)) {
-			render_synchronization_info(cpu, ppu);
-		}
-
-		ImGui::Spacing();
-
-		// Performance Metrics Section
-		if (ImGui::CollapsingHeader("Performance", ImGuiTreeNodeFlags_DefaultOpen)) {
-			render_performance_metrics();
-		}
 	}
 	ImGui::EndChild();
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "audio/audio_backend.hpp"
+#include "audio/sample_rate_converter.hpp"
 #include "core/component.hpp"
 #include "core/types.hpp"
 #include <array>
@@ -46,12 +48,38 @@ class APU : public Component {
 		dmc_irq_flag_ = false;
 	}
 
+	// DMC DMA cycle stealing
+	bool is_dmc_dma_active() const {
+		return dmc_dma_in_progress_;
+	}
+	uint8_t get_dmc_stall_cycles() const {
+		return dmc_stall_cycles_;
+	}
+	void clear_dmc_stall() {
+		dmc_dma_in_progress_ = false;
+		dmc_stall_cycles_ = 0;
+	}
+
 	// Audio output (future implementation)
 	float get_audio_sample();
 
 	// System connections
 	void connect_cpu(CPU6502 *cpu) {
 		cpu_ = cpu;
+	}
+	void connect_bus(SystemBus *bus) {
+		bus_ = bus;
+	}
+	void connect_audio_backend(AudioBackend *audio_backend) {
+		audio_backend_ = audio_backend;
+	}
+
+	// Audio control
+	void enable_audio(bool enabled) {
+		audio_enabled_ = enabled;
+	}
+	bool is_audio_enabled() const {
+		return audio_enabled_;
 	}
 
   private:
@@ -163,13 +191,16 @@ class APU : public Component {
 
 		uint8_t shift_register;
 		uint8_t bits_remaining;
+		uint8_t sample_buffer;	  // Current sample byte being processed
+		bool sample_buffer_empty; // True when we need to load next byte
 		bool silence;
 		bool irq_enabled;
 		bool loop_flag;
 		bool enabled;
 
-		void clock_timer();
+		void clock_timer(SystemBus *bus);
 		void start_sample();
+		void load_sample_byte(SystemBus *bus);
 		uint8_t get_output();
 	};
 
@@ -185,11 +216,21 @@ class APU : public Component {
 	bool frame_irq_flag_;
 	bool dmc_irq_flag_;
 
+	// DMC DMA tracking
+	bool dmc_dma_in_progress_;
+	uint8_t dmc_stall_cycles_;
+
 	// Cycle counter
 	uint64_t cycle_count_;
 
 	// External connections
 	CPU6502 *cpu_;
+	SystemBus *bus_;
+	AudioBackend *audio_backend_;
+
+	// Audio output
+	SampleRateConverter sample_rate_converter_;
+	bool audio_enabled_;
 
 	// Internal methods
 	void clock_frame_counter();

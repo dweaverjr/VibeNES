@@ -11,7 +11,8 @@
 namespace nes {
 
 SystemBus::SystemBus()
-	: ram_{nullptr}, ppu_{nullptr}, apu_{nullptr}, controllers_{nullptr}, cartridge_{nullptr}, cpu_{nullptr} {
+	: ram_{nullptr}, ppu_{nullptr}, apu_{nullptr}, controllers_{nullptr}, cartridge_{nullptr}, cpu_{nullptr},
+	  audio_backend_{std::make_unique<AudioBackend>()} {
 }
 
 void SystemBus::tick(CpuCycle cycles) {
@@ -288,6 +289,14 @@ void SystemBus::connect_apu(std::shared_ptr<APU> apu) {
 	if (cpu_ && apu_) {
 		apu_->connect_cpu(cpu_.get());
 	}
+	// Connect audio backend to APU
+	if (apu_ && audio_backend_) {
+		apu_->connect_audio_backend(audio_backend_.get());
+	}
+	// Connect bus to APU for DMC memory access
+	if (apu_) {
+		apu_->connect_bus(this);
+	}
 }
 
 void SystemBus::connect_controllers(std::shared_ptr<ControllerStub> controllers) {
@@ -357,6 +366,46 @@ void SystemBus::perform_oam_dma(Byte page) {
 
 bool SystemBus::is_dma_active() const noexcept {
 	return ppu_ && ppu_->is_oam_dma_active();
+}
+
+// Audio control implementation
+bool SystemBus::initialize_audio(int sample_rate, int buffer_size) {
+	if (!audio_backend_) {
+		return false;
+	}
+	return audio_backend_->initialize(sample_rate, buffer_size);
+}
+
+void SystemBus::start_audio() {
+	if (audio_backend_) {
+		audio_backend_->start();
+	}
+	if (apu_) {
+		apu_->enable_audio(true);
+	}
+}
+
+void SystemBus::stop_audio() {
+	if (audio_backend_) {
+		audio_backend_->stop();
+	}
+	if (apu_) {
+		apu_->enable_audio(false);
+	}
+}
+
+void SystemBus::set_audio_volume(float volume) {
+	if (audio_backend_) {
+		audio_backend_->set_volume(volume);
+	}
+}
+
+float SystemBus::get_audio_volume() const {
+	return audio_backend_ ? audio_backend_->get_volume() : 0.0f;
+}
+
+bool SystemBus::is_audio_playing() const {
+	return audio_backend_ ? audio_backend_->is_playing() : false;
 }
 
 } // namespace nes

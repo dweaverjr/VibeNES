@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/audio_backend.hpp"
 #include "core/component.hpp"
 #include "core/types.hpp"
 #include <array>
@@ -49,6 +50,14 @@ class SystemBus final : public Component {
 	// DMA interface
 	[[nodiscard]] bool is_dma_active() const noexcept;
 
+	// Audio control
+	bool initialize_audio(int sample_rate = 44100, int buffer_size = 1024);
+	void start_audio();
+	void stop_audio();
+	void set_audio_volume(float volume);
+	[[nodiscard]] float get_audio_volume() const;
+	[[nodiscard]] bool is_audio_playing() const;
+
   private:
 	// Connected components
 	std::shared_ptr<Ram> ram_;
@@ -57,6 +66,9 @@ class SystemBus final : public Component {
 	std::shared_ptr<ControllerStub> controllers_;
 	std::shared_ptr<Cartridge> cartridge_;
 	std::shared_ptr<CPU6502> cpu_;
+
+	// Audio backend
+	std::unique_ptr<AudioBackend> audio_backend_;
 
 	// Address decoding helpers
 	[[nodiscard]] bool is_ram_address(Address address) const noexcept;

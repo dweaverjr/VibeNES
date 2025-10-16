@@ -13,6 +13,7 @@ class CPU6502;
 class SystemBus;
 class Cartridge;
 class PPU;
+class AudioPanel;
 } // namespace nes
 
 namespace nes::gui {
@@ -81,6 +82,7 @@ class GuiApplication {
 	std::unique_ptr<RomLoaderPanel> rom_loader_panel_;
 	std::unique_ptr<PPUViewerPanel> ppu_viewer_panel_;
 	std::unique_ptr<TimingPanel> timing_panel_;
+	std::unique_ptr<nes::AudioPanel> audio_panel_;
 
 	// Layout constants
 	static constexpr int WINDOW_WIDTH = 1600;

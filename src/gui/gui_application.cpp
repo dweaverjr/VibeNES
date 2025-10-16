@@ -8,6 +8,7 @@
 #include "ppu/ppu.hpp"
 
 // Panel includes
+#include "gui/panels/audio_panel.hpp"
 #include "gui/panels/cpu_state_panel.hpp"
 #include "gui/panels/disassembler_panel.hpp"
 #include "gui/panels/memory_viewer_panel.hpp"
@@ -33,7 +34,7 @@ GuiApplication::GuiApplication()
 	  ppu_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
 	  disassembler_panel_(std::make_unique<DisassemblerPanel>()), memory_panel_(std::make_unique<MemoryViewerPanel>()),
 	  rom_loader_panel_(std::make_unique<RomLoaderPanel>()), ppu_viewer_panel_(std::make_unique<PPUViewerPanel>()),
-	  timing_panel_(std::make_unique<TimingPanel>()) {
+	  timing_panel_(std::make_unique<TimingPanel>()), audio_panel_(std::make_unique<nes::AudioPanel>()) {
 }
 
 GuiApplication::~GuiApplication() {
@@ -57,7 +58,8 @@ bool GuiApplication::initialize() {
 }
 
 bool GuiApplication::initialize_sdl() {
-	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+	// Initialize SDL with both video and audio subsystems
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
 		std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
 		return false;
 	}
@@ -118,6 +120,13 @@ bool GuiApplication::initialize_imgui() {
 void GuiApplication::initialize_emulation_components() {
 	// Create components in dependency order
 	bus_ = std::make_shared<nes::SystemBus>();
+
+	// Initialize audio system
+	if (bus_->initialize_audio()) {
+		std::cout << "Audio system initialized successfully\n";
+	} else {
+		std::cerr << "Warning: Audio system initialization failed\n";
+	}
 
 	// Create memory components
 	auto ram = std::make_shared<nes::Ram>();
@@ -334,8 +343,8 @@ void GuiApplication::render_frame() {
 		// RIGHT COLUMN - PPU Pattern Tables and Palettes
 		ImGui::SetCursorPos(ImVec2(right_start, 0));
 		if (ImGui::BeginChild("RightColumn", ImVec2(RIGHT_WIDTH, content_height), true)) {
-			// Pattern Tables Section (top 60%)
-			if (ImGui::BeginChild("PatternTablesSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.6f), true)) {
+			// Pattern Tables Section (top 45% - increased from 40%)
+			if (ImGui::BeginChild("PatternTablesSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.45f), true)) {
 				ImGui::Text("PATTERN TABLES");
 				ImGui::Separator();
 				if (ppu_viewer_panel_) {
@@ -346,12 +355,24 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// Palette Section (bottom 40%)
-			if (ImGui::BeginChild("PaletteSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.4f - 15), true)) {
+			// Palette Section (30% - decreased from 35%)
+			if (ImGui::BeginChild("PaletteSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.30f), true)) {
 				ImGui::Text("PPU PALETTES");
 				ImGui::Separator();
 				if (ppu_viewer_panel_) {
 					ppu_viewer_panel_->render_palette_viewer(ppu_.get());
+				}
+			}
+			ImGui::EndChild();
+
+			ImGui::Spacing();
+
+			// Audio Control Section (bottom 25%)
+			if (ImGui::BeginChild("AudioSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.25f - 20), true)) {
+				ImGui::Text("AUDIO CONTROL");
+				ImGui::Separator();
+				if (audio_panel_) {
+					audio_panel_->render(bus_.get());
 				}
 			}
 			ImGui::EndChild();
