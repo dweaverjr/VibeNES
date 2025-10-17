@@ -4,6 +4,7 @@
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "ppu/nes_palette.hpp"
+#include <algorithm>
 #include <cstring>
 #include <iostream>
 
@@ -210,6 +211,15 @@ void PPU::tick_internal() {
 
 	// Check for end of scanline
 	if (current_cycle_ >= PPUTiming::CYCLES_PER_SCANLINE) {
+		// CRITICAL: Swap sprite buffers at END of scanline, BEFORE incrementing to next scanline
+		// Sprites prepared during cycles 257-320 of THIS scanline are now ready for NEXT scanline
+		// This ensures the correct sprite data is active when rendering begins at cycle 1
+		if (current_scanline_ < PPUTiming::VISIBLE_SCANLINES || current_scanline_ == PPUTiming::PRE_RENDER_SCANLINE) {
+			sprite_count_current_scanline_ = sprite_count_next_scanline_;
+			sprite_0_on_scanline_ = sprite_0_on_next_scanline_;
+			scanline_sprites_current_ = scanline_sprites_next_;
+		}
+
 		current_cycle_ = 0;
 		current_scanline_++;
 
@@ -236,12 +246,12 @@ uint8_t PPU::read_register(uint16_t address) {
 	PPURegister reg = static_cast<PPURegister>(register_addr);
 	switch (reg) {
 	case PPURegister::PPUCTRL:
-		// Write-only on hardware; tests expect last-written value for read-modify-write convenience
-		result = control_register_;
+		// Write-only register - return open bus value (last value on PPU data bus)
+		result = ppu_data_bus_;
 		break;
 	case PPURegister::PPUMASK:
-		// Write-only on hardware; tests expect last-written value
-		result = mask_register_;
+		// Write-only register - return open bus value
+		result = ppu_data_bus_;
 		break;
 	case PPURegister::PPUSTATUS:
 		result = read_ppustatus();
@@ -250,21 +260,23 @@ uint8_t PPU::read_register(uint16_t address) {
 		result = read_oamdata();
 		break;
 	case PPURegister::OAMADDR:
-		// Write-only on hardware; tests expect last-written value
-		result = oam_address_;
+		// Write-only register - return open bus value
+		result = ppu_data_bus_;
 		break;
 	case PPURegister::PPUDATA:
 		result = read_ppudata();
 		break;
 	case PPURegister::PPUSCROLL:
-		result = 0; // Open bus behavior
+		// Write-only register - return open bus value
+		result = ppu_data_bus_;
 		break;
 	case PPURegister::PPUADDR:
-		result = static_cast<uint8_t>(vram_address_ & 0xFF);
+		// Write-only register - return open bus value
+		result = ppu_data_bus_;
 		break;
 	default:
-		// Write-only registers return stale bus data (simplified to 0)
-		result = 0;
+		// Invalid register - return open bus value
+		result = ppu_data_bus_;
 		break;
 	}
 
@@ -284,31 +296,31 @@ uint8_t PPU::peek_register(uint16_t address) const {
 	PPURegister reg = static_cast<PPURegister>(register_addr);
 	switch (reg) {
 	case PPURegister::PPUCTRL:
-		// Write-only, return last written value
+		// Write-only, return last written value for debugging convenience
 		return control_register_;
 	case PPURegister::PPUMASK:
-		// Write-only, return last written value
+		// Write-only, return last written value for debugging convenience
 		return mask_register_;
 	case PPURegister::PPUSTATUS:
-		// Read status without clearing VBlank flag
+		// Read status without clearing VBlank flag (non-intrusive peek)
 		return status_register_;
 	case PPURegister::OAMADDR:
-		// Write-only, return last written value
+		// Write-only, return last written value for debugging convenience
 		return oam_address_;
 	case PPURegister::OAMDATA:
 		// Return current OAM data without side effects
 		return oam_memory_[oam_address_];
 	case PPURegister::PPUSCROLL:
-		// Write-only, return 0 (open bus)
-		return 0;
+		// Write-only, return open bus for accuracy
+		return ppu_data_bus_;
 	case PPURegister::PPUADDR:
-		// Write-only, return 0 (open bus)
-		return 0;
+		// Write-only, return open bus for accuracy
+		return ppu_data_bus_;
 	case PPURegister::PPUDATA:
 		// Return read buffer without advancing address
 		return read_buffer_;
 	default:
-		return 0;
+		return ppu_data_bus_;
 	}
 }
 
@@ -370,6 +382,15 @@ void PPU::process_visible_scanline() {
 			perform_tile_fetch_cycle();
 		}
 
+		// CRITICAL: Shift BEFORE rendering!
+		// Real hardware shifts every cycle, then samples from the shifted position
+		if (is_background_enabled()) {
+			shift_background_registers();
+		}
+
+		// Render the pixel using shift registers (after shifting)
+		render_pixel();
+
 		if (is_background_enabled()) {
 			// VRAM address increments happen at the end of each tile fetch (cycles 8, 16, ...)
 			if ((current_cycle_ & 7) == 0) {
@@ -377,18 +398,10 @@ void PPU::process_visible_scanline() {
 			}
 
 			// Load shift registers at the end of tile fetch (cycles 8, 16, 24...)
-			// This must happen BEFORE the shift for the next pixel
+			// This happens AFTER rendering and shifting
 			if ((current_cycle_ & 7) == 0) {
 				load_shift_registers();
 			}
-		}
-
-		// Render the pixel using shift registers
-		render_pixel();
-
-		// Shift background registers after rendering to prepare for next pixel
-		if (is_background_enabled()) {
-			shift_background_registers();
 		}
 	}
 
@@ -409,23 +422,30 @@ void PPU::process_visible_scanline() {
 			}
 		}
 
-		// At cycle 320: Copy sprite count for rendering on next scanline
+		// At cycle 320: Copy sprite count and prepare shift registers for next scanline
 		// This happens after sprite preparation (cycles 257-320) completes
-		// and before rendering begins on the next scanline
+		// CRITICAL: Clear shift registers to prevent garbage from previous scanline
+		// appearing as artifacts (single pixel vertical lines) at the start of next scanline
 		if (current_cycle_ == 320) {
-			sprite_count_current_scanline_ = sprite_count_next_scanline_;
-			sprite_0_on_scanline_ = sprite_0_on_next_scanline_;
+			clear_shift_registers();
 		}
 
 		// Continue background tile fetching for next scanline (cycles 320-337)
 		// These are the first two tiles that will be rendered on the next scanline
 		// Cycles 321-328: Fetch tile 0
-		// Cycle 328: Increment coarse_x, Load tile 0
-		// Cycles 329-336: Fetch tile 1
-		// Cycle 336: Increment coarse_x, Load tile 1
+		// Cycle 328: Load tile 0 into LOW byte, Increment coarse_x
+		// Cycles 329-336: Fetch tile 1, SHIFT 8 times to move tile 0 to HIGH byte
+		// Cycle 336: Load tile 1 into LOW byte (after shifts), Increment coarse_x
 		if (current_cycle_ >= 320 && current_cycle_ <= 337 && is_background_enabled()) {
 			if (current_cycle_ <= 336) {
 				perform_tile_fetch_cycle();
+			}
+
+			// CRITICAL: Shift BEFORE loading at cycle 336!
+			// Cycles 329-336: Shift 8 times to move tile 0 from LOW to HIGH byte
+			// This must happen BEFORE we load tile 1 at cycle 336
+			if (current_cycle_ >= 329 && current_cycle_ <= 336) {
+				shift_background_registers();
 			}
 
 			// Increment coarse X at end of each tile (cycles 328, 336)
@@ -434,7 +454,8 @@ void PPU::process_visible_scanline() {
 			}
 
 			// Load shift registers at end of tile fetch (cycles 328, 336)
-			// This must happen BEFORE the shift for the next pixel
+			// At cycle 328: Load tile 0 into LOW byte (shift registers are at 0x0000 initially)
+			// At cycle 336: Load tile 1 into LOW byte (after 8 shifts, tile 0 is now in HIGH byte)
 			if ((current_cycle_ & 7) == 0 && current_cycle_ > 320) {
 				load_shift_registers();
 			}
@@ -451,6 +472,7 @@ void PPU::process_visible_scanline() {
 		}
 	}
 }
+
 void PPU::process_post_render_scanline() {
 	// Post-render scanline - no rendering, just idle
 }
@@ -500,6 +522,8 @@ void PPU::process_pre_render_scanline() {
 		}
 
 		// Background tile fetching simulation during pre-render (dummy fetches)
+		// These are timing-only fetches - we don't load the data into shift registers
+		// The real tile data for scanline 0 is loaded during cycles 320-337
 		if (current_cycle_ < 256 && is_background_enabled()) {
 			perform_tile_fetch_cycle();
 
@@ -508,28 +532,39 @@ void PPU::process_pre_render_scanline() {
 				increment_coarse_x();
 			}
 
-			// Load freshly fetched tile data at the end of each tile fetch
-			// This must happen BEFORE the shift for the next pixel
-			if ((current_cycle_ & 7) == 0 && current_cycle_ > 0) {
-				load_shift_registers();
-			}
-
-			// Shift registers at the end of the cycle to keep pipeline advancing
-			shift_background_registers();
+			// NOTE: We do NOT load shift registers during pre-render scanline cycles 1-255
+			// These are dummy fetches for timing purposes only
+			// Real tiles are loaded during cycles 320-337
 		}
 
-		// At cycle 320: Copy sprite count for rendering on scanline 0
+		// At cycle 320: Copy sprite count and prepare for rendering scanline 0
 		// This happens after sprite preparation (cycles 257-320) completes
-		// and before rendering begins on scanline 0
+		// CRITICAL: Clear shift registers to prevent garbage artifacts
 		if (current_cycle_ == 320) {
-			sprite_count_current_scanline_ = sprite_count_next_scanline_;
-			sprite_0_on_scanline_ = sprite_0_on_next_scanline_;
+			clear_shift_registers(); // CRITICAL FIX: On the very first frame (frame 0), ensure fine Y is 0
+			// Games don't expect scroll offset on the initial frame before any writes to PPUSCROLL
+			// This fixes the 1-2 pixel vertical offset on the leftmost tiles at power-on
+			if (frame_counter_ == 0) {
+				vram_address_ &= ~0x7000; // Clear fine Y bits (12-14)
+				fine_x_scroll_ = 0;		  // Clear fine X scroll to fix horizontal alignment
+			}
 		}
-
 		// Continue fetching during HBLANK (cycles 320-337) to prepare first two tiles
+		// These tiles will be in the shift registers ready for scanline 0
+		// Cycles 321-328: Fetch tile 0
+		// Cycle 328: Load tile 0 into LOW byte, Increment coarse_x
+		// Cycles 329-336: Fetch tile 1, SHIFT 8 times to move tile 0 to HIGH byte
+		// Cycle 336: Load tile 1 into LOW byte (after shifts), Increment coarse_x
 		if (current_cycle_ >= 320 && current_cycle_ <= 337 && is_background_enabled()) {
 			if (current_cycle_ <= 336) {
 				perform_tile_fetch_cycle();
+			}
+
+			// CRITICAL: Shift BEFORE loading at cycle 336!
+			// Cycles 329-336: Shift 8 times to move tile 0 from LOW to HIGH byte
+			// This must happen BEFORE we load tile 1 at cycle 336
+			if (current_cycle_ >= 329 && current_cycle_ <= 336) {
+				shift_background_registers();
 			}
 
 			// Increment coarse X at end of each tile (cycles 328, 336)
@@ -538,45 +573,34 @@ void PPU::process_pre_render_scanline() {
 			}
 
 			// Load shift registers at end of tile fetch (cycles 328, 336)
-			// This must happen BEFORE the shift for the next pixel
+			// At cycle 328: Load tile 0 into LOW byte (shift registers cleared at cycle 320)
+			// At cycle 336: Load tile 1 into LOW byte (after 8 shifts, tile 0 is now in HIGH byte)
 			if ((current_cycle_ & 7) == 0 && current_cycle_ > 320) {
 				load_shift_registers();
 			}
-
-			// Shift 8 times after loading first tile to move it to high byte before loading second tile
-			if (current_cycle_ > 329 && current_cycle_ <= 337) {
-				shift_background_registers();
-			}
-		}
-
-		if (current_cycle_ == 256) {
-			increment_fine_y();
 		}
 	}
-} // Register read handlers
+}
+
+// ============================================================================
+// PPU Register Read Functions
+// ============================================================================
+
 uint8_t PPU::read_ppustatus() {
 	// Handle race condition first
-	handle_ppustatus_race_condition();
+	handle_ppustatus_race_condition(); // Hardware-accurate PPUSTATUS read:
+	// - Bits 7-5: Status flags (VBlank, Sprite 0 Hit, Sprite Overflow)
+	// - Bits 4-0: Open bus (return last value on PPU data bus)
+	uint8_t result = (status_register_ & 0xE0) | (ppu_data_bus_ & 0x1F);
 
-	uint8_t result = status_register_;
+	// CRITICAL: Only VBlank flag (bit 7) is cleared by reading PPUSTATUS
+	// Sprite 0 hit and sprite overflow flags remain set until pre-render scanline clears them
+	status_register_ &= ~PPUConstants::PPUSTATUS_VBLANK_MASK;
 
-	// Clear flags according to hardware behavior:
-	// - VBlank flag (bit 7) is cleared by read
-	// - Sprite 0 hit flag (bit 6) is cleared by read
-	// - Sprite overflow flag (bit 5) is cleared by read
-	status_register_ &= ~(PPUConstants::PPUSTATUS_VBLANK_MASK | PPUConstants::PPUSTATUS_SPRITE0_MASK |
-						  PPUConstants::PPUSTATUS_OVERFLOW_MASK);
-
-	// Reset sprite 0 hit detection when flag is cleared
-	if (result & PPUConstants::PPUSTATUS_SPRITE0_MASK) {
-		sprite_0_hit_detected_ = false;
-		sprite_0_hit_delay_ = 0;
-	}
-
-	// Reset write toggle
+	// Reset write toggle (this is correct hardware behavior)
 	write_toggle_ = false;
 
-	// Update I/O bus
+	// Update I/O bus with the returned value
 	update_io_bus(result);
 
 	return result;
@@ -990,6 +1014,14 @@ uint8_t PPU::get_background_palette_index(uint16_t pattern_data, uint8_t attribu
 }
 
 uint32_t PPU::get_palette_color(uint8_t palette_index) {
+	// Apply grayscale mode BEFORE reading palette
+	// When PPUMASK bit 0 is set, force palette index to grayscale entries
+	if (mask_register_ & 0x01) {
+		// Grayscale mode: mask off color bits (bits 4-5), keeping only luminance (bits 0-3) and emphasis (bits
+		// 6-7) This forces all palette lookups to entries $x0, $x1, $x2, ... (grayscale column)
+		palette_index &= 0x30;
+	}
+
 	// Read from palette memory
 	uint8_t color_index = memory_.read_palette(palette_index);
 
@@ -1029,54 +1061,51 @@ uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority, bool &s
 	// Check all sprites on current scanline (front to back priority)
 	// NES hardware scans sprites 0-7 in order, with lower indices having higher priority
 	for (int i = 0; i < sprite_count_current_scanline_; i++) {
-		const ScanlineSprite &sprite = scanline_sprites_[i];
+		const ScanlineSprite &sprite = scanline_sprites_current_[i]; // Read from CURRENT buffer
 
 		// Check if current pixel is within sprite bounds
-		// Handle wraparound: sprite X can be 0-255, and sprite extends 8 pixels
+		// Sprites are clipped at screen edges (no wraparound)
 		uint8_t sprite_x_start = sprite.sprite_data.x_position;
-		uint8_t sprite_x_end = sprite_x_start + 8; // May wrap past 255
 
-		bool pixel_in_sprite = false;
-		if (sprite_x_end > sprite_x_start) {
-			// Normal case: no wraparound (e.g., X=100, end=108)
-			pixel_in_sprite = (current_x >= sprite_x_start && current_x < sprite_x_end);
-		} else {
-			// Wraparound case: sprite extends past X=255 (e.g., X=250, end wraps to 2)
-			pixel_in_sprite = (current_x >= sprite_x_start || current_x < sprite_x_end);
+		// Check if current pixel is at or after sprite X position
+		if (current_x < sprite_x_start) {
+			continue; // Pixel is before sprite starts
 		}
 
-		if (pixel_in_sprite) {
+		// Calculate sprite-relative X position
+		uint8_t sprite_x = current_x - sprite.sprite_data.x_position;
 
-			// Calculate sprite-relative X position
-			uint8_t sprite_x = current_x - sprite.sprite_data.x_position;
-
-			// Handle horizontal flip
-			if (sprite.sprite_data.attributes.flip_horizontal) {
-				sprite_x = 7 - sprite_x;
-			}
-
-			// Get pixel from sprite pattern data
-			uint8_t bit_shift = 7 - sprite_x;
-			uint8_t low_bit = (sprite.pattern_data_low >> bit_shift) & 0x01;
-			uint8_t high_bit = (sprite.pattern_data_high >> bit_shift) & 0x01;
-			uint8_t pixel_value = (high_bit << 1) | low_bit;
-
-			// If pixel is transparent, continue to next sprite
-			if (pixel_value == 0) {
-				continue;
-			}
-
-			// Get sprite priority and palette
-			sprite_priority = sprite.sprite_data.attributes.priority;
-			uint8_t palette_index = 0x10 + (sprite.sprite_data.attributes.palette * 4) + pixel_value;
-
-			// Check for sprite 0 hit
-			if (sprite.is_sprite_0 && pixel_value != 0) {
-				sprite0_candidate = true;
-			}
-
-			return palette_index;
+		// Clip at 8 pixels wide (pixel-level clipping)
+		if (sprite_x >= 8) {
+			continue; // Pixel is beyond sprite width
 		}
+
+		// Handle horizontal flip
+		if (sprite.sprite_data.attributes.flip_horizontal) {
+			sprite_x = 7 - sprite_x;
+		}
+
+		// Get pixel from sprite pattern data
+		uint8_t bit_shift = 7 - sprite_x;
+		uint8_t low_bit = (sprite.pattern_data_low >> bit_shift) & 0x01;
+		uint8_t high_bit = (sprite.pattern_data_high >> bit_shift) & 0x01;
+		uint8_t pixel_value = (high_bit << 1) | low_bit;
+
+		// If pixel is transparent, continue to next sprite
+		if (pixel_value == 0) {
+			continue;
+		}
+
+		// Get sprite priority and palette
+		sprite_priority = sprite.sprite_data.attributes.priority;
+		uint8_t palette_index = 0x10 + (sprite.sprite_data.attributes.palette * 4) + pixel_value;
+
+		// Check for sprite 0 hit
+		if (sprite.is_sprite_0 && pixel_value != 0) {
+			sprite0_candidate = true;
+		}
+
+		return palette_index;
 	}
 
 	return 0; // No sprite pixel (transparent)
@@ -1132,6 +1161,12 @@ bool PPU::check_sprite_0_hit(uint8_t bg_pixel, uint8_t sprite_pixel, uint8_t x_p
 
 void PPU::render_combined_pixel(uint8_t bg_pixel, uint8_t sprite_pixel, bool sprite_priority, uint8_t x_pos,
 								uint8_t y_pos) {
+	// Bounds check - y_pos should never be >= 240, but this prevents potential bugs
+	// x_pos is uint8_t so it's already limited to 0-255 (within our 256-pixel width)
+	if (y_pos >= 240) {
+		return;
+	}
+
 	// Use the new pixel multiplexer for hardware-accurate priority resolution
 	uint8_t final_pixel = multiplex_background_sprite_pixels(bg_pixel, sprite_pixel, sprite_priority);
 
@@ -1507,7 +1542,7 @@ void PPU::prepare_scanline_sprites() {
 		sprite.x_position = secondary_oam_[base_addr + 3];
 
 		// Store sprite data and index
-		ScanlineSprite &scanline_sprite = scanline_sprites_[i];
+		ScanlineSprite &scanline_sprite = scanline_sprites_next_[i]; // Write to NEXT buffer
 		scanline_sprite.sprite_data = sprite;
 		scanline_sprite.sprite_index = i;									  // Index in secondary OAM (0-7)
 		scanline_sprite.is_sprite_0 = (i == 0 && sprite_0_on_next_scanline_); // True if sprite 0 on next scanline
@@ -1745,6 +1780,7 @@ uint8_t PPU::multiplex_background_sprite_pixels(uint8_t bg_pixel, uint8_t sprite
 
 uint32_t PPU::apply_color_emphasis(uint32_t color) {
 	// Apply color emphasis based on PPUMASK bits 5-7
+	// Bit 5 = Emphasize Red, Bit 6 = Emphasize Green, Bit 7 = Emphasize Blue
 	uint8_t emphasis = (mask_register_ >> 5) & 0x07;
 
 	if (emphasis == 0) {
@@ -1757,13 +1793,41 @@ uint32_t PPU::apply_color_emphasis(uint32_t color) {
 	uint8_t b = color & 0xFF;
 	uint8_t a = (color >> 24) & 0xFF;
 
-	// Apply emphasis (simplified implementation)
-	if (emphasis & 0x01)
-		r = (r * 3) / 4; // Emphasize red (darken others)
-	if (emphasis & 0x02)
-		g = (g * 3) / 4; // Emphasize green
-	if (emphasis & 0x04)
-		b = (b * 3) / 4; // Emphasize blue
+	// Hardware-accurate emphasis implementation:
+	// Emphasis bits affect the analog video signal by attenuating non-emphasized colors
+	// Each color channel is multiplied by different factors based on which emphasis bits are set
+	//
+	// Approximate multipliers based on hardware measurements:
+	// - Emphasized channel: ~100% (stays bright)
+	// - Non-emphasized channels: ~75% (darkened)
+	// - Multiple emphasis bits: compound darkening effect
+
+	// Start with full brightness multipliers (1.0 = 256/256)
+	int r_mult = 256;
+	int g_mult = 256;
+	int b_mult = 256;
+
+	// Apply darkening to non-emphasized channels
+	if (emphasis & 0x01) {
+		// Red emphasized: darken green and blue
+		g_mult = (g_mult * 192) / 256; // ~75% brightness
+		b_mult = (b_mult * 192) / 256;
+	}
+	if (emphasis & 0x02) {
+		// Green emphasized: darken red and blue
+		r_mult = (r_mult * 192) / 256;
+		b_mult = (b_mult * 192) / 256;
+	}
+	if (emphasis & 0x04) {
+		// Blue emphasized: darken red and green
+		r_mult = (r_mult * 192) / 256;
+		g_mult = (g_mult * 192) / 256;
+	}
+
+	// Apply multipliers and clamp to 0-255
+	r = static_cast<uint8_t>(std::min(255, (r * r_mult) / 256));
+	g = static_cast<uint8_t>(std::min(255, (g * g_mult) / 256));
+	b = static_cast<uint8_t>(std::min(255, (b * b_mult) / 256));
 
 	return (a << 24) | (r << 16) | (g << 8) | b;
 }
@@ -1821,7 +1885,8 @@ void PPU::handle_ppustatus_race_condition() {
 	// TODO: Implement more precise race condition timing if needed for specific edge cases
 
 	// Commenting out the suppression for now:
-	// if (current_scanline_ == PPUTiming::VBLANK_START_SCANLINE && current_cycle_ == PPUTiming::VBLANK_SET_CYCLE) {
+	// if (current_scanline_ == PPUTiming::VBLANK_START_SCANLINE && current_cycle_ ==
+	// PPUTiming::VBLANK_SET_CYCLE) {
 	//     suppress_vbl_ = true;
 	// }
 }

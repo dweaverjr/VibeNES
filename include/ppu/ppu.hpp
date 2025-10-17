@@ -221,13 +221,14 @@ class PPU : public Component {
 		uint8_t pattern_data_high; // High bit plane for current row
 		bool is_sprite_0;		   // True if this is sprite 0
 	};
-	std::array<ScanlineSprite, 8> scanline_sprites_; // Max 8 sprites per scanline
-	uint8_t sprite_count_current_scanline_;			 // Number of sprites rendering on current scanline
-	uint8_t sprite_count_next_scanline_;			 // Number of sprites evaluated for next scanline
-	bool sprite_0_on_scanline_;						 // True if sprite 0 is on current scanline (rendering)
-	bool sprite_0_on_next_scanline_;				 // True if sprite 0 is on next scanline (evaluation)
-	bool sprite_0_hit_detected_;					 // Prevents multiple sprite 0 hits per frame
-	uint8_t sprite_0_hit_delay_;					 // Delay counter before latching sprite 0 flag
+	std::array<ScanlineSprite, 8> scanline_sprites_current_; // Sprites rendering on current scanline
+	std::array<ScanlineSprite, 8> scanline_sprites_next_;	 // Sprites prepared for next scanline
+	uint8_t sprite_count_current_scanline_;					 // Number of sprites rendering on current scanline
+	uint8_t sprite_count_next_scanline_;					 // Number of sprites evaluated for next scanline
+	bool sprite_0_on_scanline_;								 // True if sprite 0 is on current scanline (rendering)
+	bool sprite_0_on_next_scanline_;						 // True if sprite 0 is on next scanline (evaluation)
+	bool sprite_0_hit_detected_;							 // Prevents multiple sprite 0 hits per frame
+	uint8_t sprite_0_hit_delay_;							 // Delay counter before latching sprite 0 flag
 
 	// Hardware-accurate sprite evaluation state machine
 	enum class SpriteEvalState : uint8_t {
