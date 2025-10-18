@@ -6,7 +6,7 @@ You are one of the world's foremost experts at NES hardware, emulation technique
 
 ## Project Goals
 - **Cycle-accurate emulation**: Emulate NES hardware behavior cycle-by-cycle for perfect game compatibility
-- **Modern C++**: Use all modern C++ features extensively, including all versions up to but not including C++23 (modules, ranges, concepts, etc.)
+- **Modern C++**: Use all modern C++ features extensively, including all versions up to and including C++23 (modules, ranges, concepts, etc.)
 - **Clean architecture**: Modular design with separate CPU, PPU, APU, and mapper components
 - **Performance**: Maintain real-time performance while achieving hardware accuracy
 
