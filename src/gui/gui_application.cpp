@@ -73,9 +73,9 @@ bool GuiApplication::initialize_sdl() {
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-	// Create window - Fixed layout for 1440p monitors
+	// Create window - Optimized for 1080p displays
 	window_ = SDL_CreateWindow("VibeNES - Cycle-Accurate NES Emulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-							   1600, 1200, SDL_WINDOW_OPENGL);
+							   WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL);
 
 	if (!window_) {
 		std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
@@ -239,8 +239,7 @@ void GuiApplication::render_frame() {
 
 	// Create a full-screen dockspace for the fixed layout
 	ImGui::SetNextWindowPos(ImVec2(0, HEADER_HEIGHT));
-	ImGui::SetNextWindowSize(
-		ImVec2(static_cast<float>(WINDOW_WIDTH), static_cast<float>(WINDOW_HEIGHT) - HEADER_HEIGHT));
+	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(WINDOW_WIDTH), static_cast<float>(WINDOW_HEIGHT) - HEADER_HEIGHT));
 
 	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
 									ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
@@ -251,20 +250,21 @@ void GuiApplication::render_frame() {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
 	if (ImGui::Begin("VibeNES Main Layout", nullptr, window_flags)) {
-		// Calculate positions for the three-column layout
+		// Calculate positions for full-height three-column layout
+		const float content_height = static_cast<float>(WINDOW_HEIGHT) - HEADER_HEIGHT;
+
+		// Column starts
 		const float left_start = 0.0f;
 		const float center_start = LEFT_WIDTH;
 		const float right_start = LEFT_WIDTH + CENTER_WIDTH;
-		const float content_height = static_cast<float>(WINDOW_HEIGHT) - HEADER_HEIGHT;
 
-		// LEFT COLUMN - ROM Loader, CPU State, and PPU Registers
+		// LEFT COLUMN - full content height (no additional bottom row scrolling)
 		ImGui::SetCursorPos(ImVec2(left_start, 0));
 		if (ImGui::BeginChild("LeftColumn", ImVec2(LEFT_WIDTH, content_height), true)) {
-			// ROM Loader Section (top 40%)
-			if (ImGui::BeginChild("ROMLoaderSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.40f), true)) {
+			// ROM Loader Section (top 45% of full height)
+			if (ImGui::BeginChild("ROMLoaderSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.45f), true)) {
 				ImGui::Text("ROM LOADER");
 				ImGui::Separator();
-				// Render ROM loader content directly (no longer a popup)
 				if (rom_loader_panel_) {
 					rom_loader_panel_->render(cartridge_.get());
 				}
@@ -273,12 +273,11 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// CPU State Section (middle 25% - reduced since flags are now beside registers)
-			if (ImGui::BeginChild("CPUStateSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.25f), true)) {
+			// CPU State Section (reduced to 20% to give more space to Disassembler)
+			if (ImGui::BeginChild("CPUStateSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.20f), true)) {
 				ImGui::Text("CPU STATE");
 				ImGui::Separator();
 				if (cpu_panel_) {
-					// Pass step_emulation and reset_system as callbacks for proper coordination
 					cpu_panel_->render(
 						cpu_.get(), [this]() { step_emulation(); }, [this]() { reset_system(); },
 						[this]() { toggle_run_pause(); }, is_emulation_active(), can_run_emulation());
@@ -288,71 +287,39 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// PPU Registers Section (bottom 35% - increased by 2% to remove scrollbar)
-			if (ImGui::BeginChild("PPURegistersSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.35f - 20), true)) {
-				ImGui::Text("PPU REGISTERS & STATUS");
+			// Disassembler Section (moved from right column, gets 35% - 10% more than old PPU section)
+			if (ImGui::BeginChild("DisassemblerSection", ImVec2(LEFT_WIDTH - 10, content_height * 0.35f - 20), true)) {
+				ImGui::Text("DISASSEMBLER");
 				ImGui::Separator();
-				if (ppu_viewer_panel_) {
-					ppu_viewer_panel_->render_registers_only(ppu_.get());
+				if (disassembler_panel_) {
+					disassembler_panel_->render(cpu_.get(), bus_.get());
 				}
 			}
 			ImGui::EndChild();
 		}
 		ImGui::EndChild();
 
-		// CENTER COLUMN - NES Display and PPU Registers
+		// CENTER COLUMN - NES Display (use full height)
 		ImGui::SetCursorPos(ImVec2(center_start, 0));
 		if (ImGui::BeginChild("CenterColumn", ImVec2(CENTER_WIDTH, content_height), true)) {
-			// NES Display Section (top 50%)
-			if (ImGui::BeginChild("NESDisplaySection", ImVec2(CENTER_WIDTH - 10, content_height * 0.5f), true)) {
-				ImGui::Text("NES DISPLAY");
-				ImGui::Separator();
-				// Render the actual NES display
-				if (ppu_viewer_panel_) {
-					ppu_viewer_panel_->render_main_display(ppu_.get());
-				}
+			ImGui::Text("NES DISPLAY");
+			ImGui::Separator();
+			if (ppu_viewer_panel_) {
+				ppu_viewer_panel_->render_main_display(ppu_.get());
 			}
-			ImGui::EndChild();
-
-			ImGui::Spacing();
-
-			// Memory/Disassembly Section (top 50%)
-			if (ImGui::BeginChild("MemoryDisassemblySection", ImVec2(CENTER_WIDTH - 10, content_height * 0.50f),
-								  true)) {
-				// Split this section in half
-				float section_width = (CENTER_WIDTH - 20) / 2.0f;
-
-				// Left half: Memory viewer
-				if (ImGui::BeginChild("MemoryViewer", ImVec2(section_width, 0), true)) {
-					ImGui::Text("MEMORY VIEWER");
-					ImGui::Separator();
-					if (memory_panel_) {
-						memory_panel_->render(bus_.get());
-					}
-				}
-				ImGui::EndChild();
-
-				ImGui::SameLine();
-
-				// Right half: Disassembler
-				if (ImGui::BeginChild("Disassembler", ImVec2(section_width, 0), true)) {
-					ImGui::Text("DISASSEMBLER");
-					ImGui::Separator();
-					if (disassembler_panel_) {
-						disassembler_panel_->render(cpu_.get(), bus_.get());
-					}
-				}
-				ImGui::EndChild();
-			}
-			ImGui::EndChild();
 		}
 		ImGui::EndChild();
 
-		// RIGHT COLUMN - PPU Pattern Tables and Palettes
+		// RIGHT COLUMN - Split into two independent side-by-side panels
+		const float ppu_panel_width = RIGHT_WIDTH * 0.42f; // Left panel: PPU stuff
+		const float memory_panel_width = RIGHT_WIDTH * 0.58f - 10; // Right panel: RAM/Disasm
+
+		// LEFT PANEL: Pattern Tables + Palettes + Audio (stacked, full height)
 		ImGui::SetCursorPos(ImVec2(right_start, 0));
-		if (ImGui::BeginChild("RightColumn", ImVec2(RIGHT_WIDTH, content_height), true)) {
-			// Pattern Tables Section (top 45% - increased from 40%)
-			if (ImGui::BeginChild("PatternTablesSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.45f), true)) {
+		if (ImGui::BeginChild("PPUPanel", ImVec2(ppu_panel_width, content_height), true)) {
+			// Pattern Tables (top 50%, +2% more from audio)
+			const float pattern_h = content_height * 0.50f;
+			if (ImGui::BeginChild("PatternTables", ImVec2(ppu_panel_width - 10, pattern_h), true)) {
 				ImGui::Text("PATTERN TABLES");
 				ImGui::Separator();
 				if (ppu_viewer_panel_) {
@@ -363,8 +330,9 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// Palette Section (30% - decreased from 35%)
-			if (ImGui::BeginChild("PaletteSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.30f), true)) {
+			// Palettes (middle 38%)
+			const float palette_h = content_height * 0.38f;
+			if (ImGui::BeginChild("Palettes", ImVec2(ppu_panel_width - 10, palette_h), true)) {
 				ImGui::Text("PPU PALETTES");
 				ImGui::Separator();
 				if (ppu_viewer_panel_) {
@@ -375,12 +343,42 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// Audio Control Section (bottom 25%)
-			if (ImGui::BeginChild("AudioSection", ImVec2(RIGHT_WIDTH - 10, content_height * 0.25f - 20), true)) {
+			// Audio Panel (bottom 12%, -2% given to pattern tables)
+			const float audio_h = content_height * 0.12f - 25;
+			if (ImGui::BeginChild("AudioPanel", ImVec2(ppu_panel_width - 10, audio_h), true)) {
 				ImGui::Text("AUDIO CONTROL");
 				ImGui::Separator();
 				if (audio_panel_) {
 					audio_panel_->render(bus_.get());
+				}
+			}
+			ImGui::EndChild();
+		}
+		ImGui::EndChild();
+
+		// RIGHT PANEL: RAM Viewer + PPU Registers (swapped from Disassembler)
+		ImGui::SetCursorPos(ImVec2(right_start + ppu_panel_width + 5, 0));
+		if (ImGui::BeginChild("MemoryPanel", ImVec2(memory_panel_width, content_height), true)) {
+			// RAM Viewer (top 50%)
+			const float ram_h = content_height * 0.50f;
+			if (ImGui::BeginChild("RAMViewer", ImVec2(memory_panel_width - 10, ram_h), true)) {
+				ImGui::Text("RAM VIEWER");
+				ImGui::Separator();
+				if (memory_panel_) {
+					memory_panel_->render(bus_.get());
+				}
+			}
+			ImGui::EndChild();
+
+			ImGui::Spacing();
+
+			// PPU Registers (moved from left column, bottom 50%)
+			const float ppu_regs_h = content_height * 0.50f - 15;
+			if (ImGui::BeginChild("PPURegisters", ImVec2(memory_panel_width - 10, ppu_regs_h), true)) {
+				ImGui::Text("PPU REGISTERS & STATUS");
+				ImGui::Separator();
+				if (ppu_viewer_panel_) {
+					ppu_viewer_panel_->render_registers_only(ppu_.get());
 				}
 			}
 			ImGui::EndChild();

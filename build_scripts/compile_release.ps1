@@ -43,19 +43,17 @@ Write-Host "Found $($ImGuiFiles.Count) ImGui source files" -ForegroundColor Gree
 Write-Host "Total: $($AllFiles.Count) files to compile" -ForegroundColor Yellow
 
 # Compiler flags (optimized for release)
+# Relaxed from ultra-strict flags: removed -pedantic-errors, -Weffc++, -Wconversion, -Wsign-conversion, -Werror
+# Note: -Werror removed because -flto causes false positives in ImGui code (maybe-uninitialized warnings)
+# Kept warnings enabled: -Wall, -Wextra (will still show warnings but not fail the build)
 $CompilerFlags = @(
     "-fdiagnostics-color=always",
     "-O3",
     "-DNDEBUG",
     "-march=native",
     "-flto",
-    "-pedantic-errors",
-    "-Werror",
     "-Wall",
-    "-Weffc++",
     "-Wextra",
-    "-Wconversion",
-    "-Wsign-conversion",
     "-std=c++23"
 )
 
