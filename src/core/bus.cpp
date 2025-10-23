@@ -374,7 +374,21 @@ bool SystemBus::initialize_audio(int sample_rate, int buffer_size) {
 	if (!audio_backend_) {
 		return false;
 	}
-	return audio_backend_->initialize(sample_rate, buffer_size);
+
+	bool success = audio_backend_->initialize(sample_rate, buffer_size);
+
+	// Update APU's sample rate converter with actual SDL sample rate
+	// (SDL may change it due to SDL_AUDIO_ALLOW_FREQUENCY_CHANGE)
+	if (success && apu_) {
+		int actual_sample_rate = audio_backend_->get_sample_rate();
+		std::cout << "SystemBus: Configuring APU for " << actual_sample_rate << " Hz output" << std::endl;
+		std::cout << "  APU input rate: " << CPU_CLOCK_NTSC << " Hz (CPU clock)" << std::endl;
+		std::cout << "  Sample rate conversion ratio: " << (static_cast<float>(CPU_CLOCK_NTSC) / actual_sample_rate)
+				  << ":1" << std::endl;
+		apu_->set_output_sample_rate(static_cast<float>(actual_sample_rate));
+	}
+
+	return success;
 }
 
 void SystemBus::start_audio() {

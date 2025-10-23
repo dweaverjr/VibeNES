@@ -82,6 +82,11 @@ class APU : public Component {
 		return audio_enabled_;
 	}
 
+	// Update sample rate converter output rate (called when audio backend initializes)
+	void set_output_sample_rate(float sample_rate) {
+		sample_rate_converter_ = SampleRateConverter(static_cast<float>(CPU_CLOCK_NTSC), sample_rate);
+	}
+
   private:
 	// Frame Counter - CRITICAL for timing
 	struct FrameCounter {
@@ -231,6 +236,12 @@ class APU : public Component {
 	// Audio output
 	SampleRateConverter sample_rate_converter_;
 	bool audio_enabled_;
+
+	// High-pass filter for DC blocking (removes DC bias from APU output)
+	// This simulates the AC coupling that occurs in real hardware
+	float hp_filter_prev_input_;					   // Previous input sample
+	float hp_filter_prev_output_;					   // Previous output sample
+	static constexpr float HP_FILTER_POLE = 0.999835f; // Pole position (~90Hz cutoff at 44.1kHz)
 
 	// Internal methods
 	void clock_frame_counter();

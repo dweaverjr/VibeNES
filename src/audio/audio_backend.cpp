@@ -23,7 +23,6 @@ bool AudioBackend::initialize(int sample_rate, int buffer_size) {
 		return false;
 	}
 
-	sample_rate_ = sample_rate;
 	buffer_size_ = buffer_size;
 
 	// Configure desired audio specification
@@ -45,6 +44,9 @@ bool AudioBackend::initialize(int sample_rate, int buffer_size) {
 		std::cerr << "AudioBackend: Failed to open audio device: " << SDL_GetError() << std::endl;
 		return false;
 	}
+
+	// Store the ACTUAL sample rate SDL is using, not the requested one
+	sample_rate_ = audio_spec_.freq;
 
 	// Check if we got what we requested
 	if (audio_spec_.format != AUDIO_F32SYS) {

@@ -31,9 +31,11 @@ using SignedByte = std::int8_t;
 /// NES CPU master clock frequency (NTSC): 21.477272 MHz
 /// CPU clock: 21.477272 MHz / 12 = 1.789773 MHz
 /// PPU clock: 21.477272 MHz / 4 = 5.369318 MHz (3x CPU clock)
+/// APU clock: CPU clock / 2 = 894886.5 Hz (channels clocked at half CPU rate)
 constexpr std::uint64_t MASTER_CLOCK_NTSC = 21'477'272;
 constexpr std::uint64_t CPU_CLOCK_NTSC = MASTER_CLOCK_NTSC / 12;
 constexpr std::uint64_t PPU_CLOCK_NTSC = MASTER_CLOCK_NTSC / 4;
+constexpr double APU_CLOCK_NTSC = static_cast<double>(CPU_CLOCK_NTSC) / 2.0; // 894886.5 Hz
 
 /// Strong type for CPU cycles using std::chrono for precision
 using CpuCycle = std::chrono::duration<std::int64_t, std::ratio<1, CPU_CLOCK_NTSC>>;
