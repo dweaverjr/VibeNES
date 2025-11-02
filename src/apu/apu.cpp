@@ -325,9 +325,6 @@ void APU::write(uint16_t address, uint8_t value) {
 		noise_.enabled = (value & 0x08) != 0;
 		dmc_.enabled = (value & 0x10) != 0;
 
-		std::cerr << std::format("[NOISE DEBUG] Write $4015 = 0x{:02X} (noise_enabled={})\n", value,
-								 noise_.enabled ? 1 : 0);
-
 		// Clear length counters if disabled
 		if (!pulse1_.enabled)
 			pulse1_.length_counter = 0;
@@ -337,7 +334,6 @@ void APU::write(uint16_t address, uint8_t value) {
 			triangle_.length_counter = 0;
 		if (!noise_.enabled) {
 			noise_.length_counter = 0;
-			std::cerr << "[NOISE DEBUG] Noise disabled, length_counter cleared\n";
 		}
 		if (!dmc_.enabled) {
 			dmc_.bytes_remaining = 0;
