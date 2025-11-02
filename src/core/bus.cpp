@@ -33,6 +33,12 @@ void SystemBus::tick(CpuCycle cycles) {
 	if (cartridge_) {
 		cartridge_->tick(cycles);
 	}
+
+	// Check for mapper IRQs (MMC3, etc.)
+	if (cartridge_ && cpu_ && cartridge_->is_irq_pending()) {
+		cpu_->trigger_irq();
+		cartridge_->clear_irq();
+	}
 }
 
 void SystemBus::reset() {

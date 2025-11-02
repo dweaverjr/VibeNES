@@ -220,6 +220,7 @@ class APU : public Component {
 	// Status flags
 	bool frame_irq_flag_;
 	bool dmc_irq_flag_;
+	bool prev_irq_line_state_; // Track previous IRQ line state for edge detection
 
 	// DMC DMA tracking
 	bool dmc_dma_in_progress_;

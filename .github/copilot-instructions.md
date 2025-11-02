@@ -51,7 +51,7 @@ You are one of the world's foremost experts at NES hardware, emulation technique
 - **GUI Framework**: ✅ SDL2 + ImGui integration with 6 debugging panels and ROM loading interface
 - **Testing Framework**: ✅ Comprehensive test suite with Catch2 including 12 PPU test files
 - **Build System**: ✅ VS Code tasks for debug/release builds with proper ImGui/SDL2 integration
-- **Mapper Foundation**: ⚠️ Mapper 0 (NROM) complete, infrastructure ready for Mappers 1-4 (stub files created)
+- **Mapper Foundation**: ✅ Mapper 0 (NROM) and Mapper 1 (MMC1) complete, infrastructure ready for Mappers 2-4 (stub files created)
 
 ## CPU State GUI Development Plan
 **Current Phase**: Phase 3 - Advanced Debugging Features Complete
@@ -120,7 +120,7 @@ $3F20-$3FFF: Palette RAM mirrors
 - **CPU (6502)**: ✅ Complete implementation with all 256 opcodes and hardware-accurate startup
 - **PPU (Picture Processing Unit)**: ✅ Complete Phase 1-4 implementation with cycle-accurate rendering
 - **APU (Audio Processing Unit)**: ⚠️ Stub implementation (functional for register access)
-- **Mappers**: ✅ Mapper 0 (NROM) complete implementation, ⚠️ Mappers 1-4 stub files created but not implemented
+- **Mappers**: ✅ Mapper 0 (NROM) and Mapper 1 (MMC1) complete implementations, ⚠️ Mappers 2-4 stub files created but not implemented
 - **Bus**: ✅ Complete memory mapping with dual-purpose register handling
 - **Cartridge System**: ✅ Complete iNES ROM loading with GUI integration, mapper factory pattern with runtime mapper selection
 - **Disassembler**: ✅ Complete 6502 disassembler covering all opcodes
@@ -194,11 +194,16 @@ When tests fail with unexpected behavior (wrong values, "unknown opcode" errors)
    ```
 
 ### Mapper System Architecture
-- **Current Implementation**: Only Mapper 0 (NROM) is fully implemented
-- **Infrastructure Ready**: Stub files exist for Mappers 1-4 (MMC1, UxROM, CNROM, MMC3)
-- **Factory Pattern**: `Cartridge::create_mapper()` handles runtime mapper selection
-- **Base Class**: `Mapper` interface defines CPU/PPU memory access and mirroring
-- **Empty Files**: `mapper_factory.cpp`, `mapper.cpp`, and `mapper_00[1-4].cpp` exist but are empty - ready for implementation
+- **Current Implementation**:
+  - ✅ **Mapper 0 (NROM)**: Complete implementation with 16KB/32KB PRG ROM support
+  - ✅ **Mapper 1 (MMC1)**: Complete implementation with shift register interface, PRG/CHR banking, mirroring control, and PRG RAM support
+- **Infrastructure Ready**: Stub files exist for Mappers 2-4 (UxROM, CNROM, MMC3)
+- **Factory Pattern**: `MapperFactory::create_mapper()` handles runtime mapper selection with proper mirroring detection
+- **Base Class**: `Mapper` interface defines CPU/PPU memory access, mirroring control, and reset functionality
+- **Supported Games**:
+  - Mapper 0: Super Mario Bros, Donkey Kong, Ice Climber, etc.
+  - Mapper 1: The Legend of Zelda, Metroid, Mega Man 2, Faxanadu, etc.
+- **Empty Files**: `mapper_00[2-4].cpp` exist but are empty - ready for UxROM, CNROM, and MMC3 implementation
 
 ### Memory System Patterns
 - **Address space partitioning**: RAM (0x0000-0x1FFF), PPU (0x2000-0x3FFF), APU (0x4000-0x401F), Open bus elsewhere

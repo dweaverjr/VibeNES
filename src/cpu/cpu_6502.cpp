@@ -87,13 +87,26 @@ const char *CPU6502::get_name() const noexcept {
 // ============================================================================
 
 void CPU6502::trigger_nmi() noexcept {
-	interrupt_state_.nmi_pending = true;
+	// NMI is edge-triggered: only trigger on rising edge (0 -> 1 transition)
+	if (!nmi_line_) {
+		interrupt_state_.nmi_pending = true;
+		nmi_line_ = true;
+	}
+}
+
+void CPU6502::clear_nmi_line() noexcept {
+	nmi_line_ = false;
 }
 
 void CPU6502::trigger_irq() noexcept {
+	// IRQ line is now asserted
+	irq_line_ = true;
 	interrupt_state_.irq_pending = true;
-	// Track whether interrupts were enabled when IRQ was triggered
-	interrupt_state_.irq_enabled_when_triggered = !get_interrupt_flag();
+}
+
+void CPU6502::clear_irq_line() noexcept {
+	irq_line_ = false;
+	interrupt_state_.irq_pending = false;
 }
 
 void CPU6502::trigger_reset() noexcept {
@@ -123,10 +136,12 @@ void CPU6502::process_interrupts() {
 		break;
 
 	case InterruptType::IRQ:
-		// Process IRQ if interrupts are currently enabled OR if it was triggered while enabled
-		if (!get_interrupt_flag() || interrupt_state_.irq_enabled_when_triggered) {
+		// Process IRQ only if interrupts are currently enabled (I flag is clear)
+		if (!get_interrupt_flag()) {
 			handle_irq();
-			interrupt_state_.clear_interrupt(InterruptType::IRQ);
+			// NOTE: Do NOT clear irq_pending here - IRQ is level-triggered
+			// The IRQ line stays asserted until software clears the source
+			// (e.g., reading $4015 for APU frame IRQ)
 		}
 		break;
 
@@ -212,14 +227,13 @@ int CPU6502::execute_instruction() {
 			should_process = true; // Always processed
 			break;
 		case InterruptType::IRQ:
-			// Process IRQ if interrupts are currently enabled OR if it was triggered while enabled
-			should_process = !get_interrupt_flag() || interrupt_state_.irq_enabled_when_triggered;
+			// Process IRQ only if interrupts are currently enabled (I flag is clear)
+			should_process = !get_interrupt_flag();
 			break;
 		case InterruptType::NONE:
 			should_process = false;
 			break;
 		}
-
 		if (should_process) {
 			process_interrupts();
 			// Return cycles consumed by interrupt processing

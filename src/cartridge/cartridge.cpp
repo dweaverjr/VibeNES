@@ -131,4 +131,17 @@ void Cartridge::ppu_a12_toggle() const {
 	}
 }
 
+bool Cartridge::is_irq_pending() const {
+	if (!mapper_) {
+		return false;
+	}
+	return mapper_->is_irq_pending();
+}
+
+void Cartridge::clear_irq() const {
+	if (mapper_) {
+		mapper_->clear_irq();
+	}
+}
+
 } // namespace nes

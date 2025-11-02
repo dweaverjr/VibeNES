@@ -38,6 +38,16 @@ class Mapper {
 		// Override in mappers that need A12 monitoring (like MMC3)
 	}
 
+	// IRQ line status (for MMC3, MMC5, etc.)
+	virtual bool is_irq_pending() const {
+		return false; // Default: no IRQ support
+	}
+
+	// Clear mapper IRQ (called when CPU acknowledges the interrupt)
+	virtual void clear_irq() {
+		// Default implementation does nothing
+	}
+
   protected:
 	// Helper to check if address is in PRG ROM range
 	static constexpr bool is_prg_rom_address(Address address) noexcept {

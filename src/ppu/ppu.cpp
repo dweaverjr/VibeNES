@@ -1228,6 +1228,10 @@ void PPU::set_vblank_flag() {
 void PPU::clear_vblank_flag() {
 	// Consolidated VBlank flag clearing
 	status_register_ &= ~PPUConstants::PPUSTATUS_VBLANK_MASK;
+	// Clear CPU NMI line (edge-triggered - needs to go low before next NMI can trigger)
+	if (cpu_) {
+		cpu_->clear_nmi_line();
+	}
 }
 
 void PPU::copy_horizontal_scroll() {

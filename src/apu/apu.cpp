@@ -3,7 +3,7 @@
 #include "cpu/cpu_6502.hpp"
 #include <algorithm>
 #include <cstring>
-#include <iomanip>
+#include <format>
 #include <iostream>
 
 namespace nes {
@@ -33,9 +33,10 @@ const uint16_t APU::DMC_RATE_TABLE[16] = {428, 380, 340, 320, 286, 254, 226, 214
 
 APU::APU()
 	: frame_counter_{}, pulse1_{}, pulse2_{}, triangle_{}, noise_{}, dmc_{}, frame_irq_flag_(false),
-	  dmc_irq_flag_(false), dmc_dma_in_progress_(false), dmc_stall_cycles_(0), cycle_count_(0), cpu_(nullptr),
-	  bus_(nullptr), audio_backend_(nullptr), sample_rate_converter_(static_cast<float>(CPU_CLOCK_NTSC), 44100.0f),
-	  audio_enabled_(false), hp_filter_prev_input_(0.0f), hp_filter_prev_output_(0.0f) {
+	  dmc_irq_flag_(false), prev_irq_line_state_(false), dmc_dma_in_progress_(false), dmc_stall_cycles_(0),
+	  cycle_count_(0), cpu_(nullptr), bus_(nullptr), audio_backend_(nullptr),
+	  sample_rate_converter_(static_cast<float>(CPU_CLOCK_NTSC), 44100.0f), audio_enabled_(false),
+	  hp_filter_prev_input_(0.0f), hp_filter_prev_output_(0.0f) {
 }
 
 void APU::power_on() {
@@ -60,6 +61,7 @@ void APU::reset() {
 	// Clear flags
 	frame_irq_flag_ = false;
 	dmc_irq_flag_ = false;
+	prev_irq_line_state_ = false;
 	cycle_count_ = 0;
 
 	// Reset high-pass filter state
@@ -77,22 +79,18 @@ void APU::tick(CpuCycle cycles) {
 			clock_frame_counter();
 		}
 
-		// Clock triangle at CPU rate when active
-		if (triangle_.enabled && triangle_.length_counter > 0 && triangle_.linear_counter > 0) {
-			triangle_.clock_timer();
-		}
+		// Clock triangle timer at CPU rate ALWAYS (not gated by counters)
+		// The timer runs continuously, but the sequencer only advances when both counters are active
+		triangle_.clock_timer();
 
-		// Clock other channels at half CPU rate (APU rate) when active
+		// Clock other channels at half CPU rate (APU rate)
+		// NOTE: Timers ALWAYS run, regardless of enabled/length counter state
+		// Only the OUTPUT is affected by these conditions (checked in get_output())
 		if (cycle_count_ & 1) {
-			if (pulse1_.enabled && pulse1_.length_counter > 0) {
-				pulse1_.clock_timer();
-			}
-			if (pulse2_.enabled && pulse2_.length_counter > 0) {
-				pulse2_.clock_timer();
-			}
-			if (noise_.enabled && noise_.length_counter > 0) {
-				noise_.clock_timer();
-			}
+			pulse1_.clock_timer();
+			pulse2_.clock_timer();
+			noise_.clock_timer();
+			// DMC only clocks when enabled (this is correct per spec)
 			if (dmc_.enabled) {
 				dmc_.clock_timer(bus_);
 			}
@@ -103,9 +101,9 @@ void APU::tick(CpuCycle cycles) {
 			float sample = get_audio_sample();
 			sample_rate_converter_.input_sample(sample);
 
-			// Check if we have an output sample ready (downsampled to 44.1kHz)
 			if (sample_rate_converter_.has_output()) {
-				audio_backend_->queue_sample(sample_rate_converter_.get_output());
+				float output_sample = sample_rate_converter_.get_output();
+				audio_backend_->queue_sample(output_sample);
 			}
 		}
 
@@ -198,31 +196,32 @@ void APU::clock_half_frame() {
 }
 
 void APU::update_irq_line() {
-	if (cpu_ && (frame_irq_flag_ || dmc_irq_flag_)) {
-		cpu_->trigger_irq();
+	if (cpu_) {
+		// Determine current IRQ line state
+		bool current_irq_line = (frame_irq_flag_ || dmc_irq_flag_);
+
+		// Edge detection: only trigger on rising edge (0 -> 1 transition)
+		if (current_irq_line && !prev_irq_line_state_) {
+			cpu_->trigger_irq();
+		}
+		// Falling edge: clear IRQ line when both flags are clear
+		else if (!current_irq_line && prev_irq_line_state_) {
+			cpu_->clear_irq_line();
+		}
+
+		prev_irq_line_state_ = current_irq_line;
 	}
 }
 
 // Register access implementation
 void APU::write(uint16_t address, uint8_t value) {
-	// Debug: Log ALL APU register writes with detailed breakdown
-	static bool enable_apu_write_logging = true; // ENABLED for comprehensive debugging
-	if (enable_apu_write_logging) {
-		std::cout << "APU Write: $" << std::hex << std::uppercase << address << " = $" << std::setw(2)
-				  << std::setfill('0') << (int)value << std::dec << std::nouppercase;
-	}
-
 	switch (address) {
 	// Pulse 1
 	case 0x4000:
 		pulse1_.duty = (value >> 6) & 3;
 		pulse1_.length_enabled = !(value & 0x20);
-		pulse1_.constant_volume = !(value & 0x10);
+		pulse1_.constant_volume = (value & 0x10) != 0;
 		pulse1_.envelope_volume = value & 0x0F;
-		if (enable_apu_write_logging) {
-			std::cout << " -> P1 $4000: duty=" << (int)pulse1_.duty << " halt=" << !pulse1_.length_enabled
-					  << " const=" << pulse1_.constant_volume << " vol=" << (int)pulse1_.envelope_volume << std::endl;
-		}
 		break;
 	case 0x4001:
 		pulse1_.sweep_enabled = (value & 0x80) != 0;
@@ -230,16 +229,9 @@ void APU::write(uint16_t address, uint8_t value) {
 		pulse1_.sweep_negate = (value & 0x08) != 0;
 		pulse1_.sweep_shift = value & 7;
 		pulse1_.sweep_reload = true;
-		if (enable_apu_write_logging) {
-			std::cout << " -> P1 $4001: sweep_en=" << pulse1_.sweep_enabled << " period=" << (int)pulse1_.sweep_period
-					  << " neg=" << pulse1_.sweep_negate << " shift=" << (int)pulse1_.sweep_shift << std::endl;
-		}
 		break;
 	case 0x4002:
 		pulse1_.timer_period = (pulse1_.timer_period & 0xFF00) | value;
-		if (enable_apu_write_logging) {
-			std::cout << " -> P1 $4002: period_low=$" << std::hex << (int)value << std::dec << std::endl;
-		}
 		break;
 	case 0x4003:
 		pulse1_.timer_period = (pulse1_.timer_period & 0x00FF) | ((value & 7) << 8);
@@ -248,28 +240,14 @@ void APU::write(uint16_t address, uint8_t value) {
 		}
 		pulse1_.envelope_start = true;
 		pulse1_.duty_sequence_pos = 0;
-
-		if (enable_apu_write_logging) {
-			float frequency = pulse1_.timer_period > 0
-								  ? static_cast<float>(CPU_CLOCK_NTSC) / (16.0f * (pulse1_.timer_period + 1))
-								  : 0.0f;
-			std::cout << " -> P1 $4003: period=" << pulse1_.timer_period << " freq=" << std::fixed
-					  << std::setprecision(1) << frequency << "Hz"
-					  << " len_load=" << (value >> 3) << "(" << (int)pulse1_.length_counter << ")"
-					  << " env_start=1" << std::endl;
-		}
 		break;
 
 	// Pulse 2
 	case 0x4004:
 		pulse2_.duty = (value >> 6) & 3;
 		pulse2_.length_enabled = !(value & 0x20);
-		pulse2_.constant_volume = !(value & 0x10);
+		pulse2_.constant_volume = (value & 0x10) != 0;
 		pulse2_.envelope_volume = value & 0x0F;
-		if (enable_apu_write_logging) {
-			std::cout << " -> P2 $4004: duty=" << (int)pulse2_.duty << " halt=" << !pulse2_.length_enabled
-					  << " const=" << pulse2_.constant_volume << " vol=" << (int)pulse2_.envelope_volume << std::endl;
-		}
 		break;
 	case 0x4005:
 		pulse2_.sweep_enabled = (value & 0x80) != 0;
@@ -277,16 +255,9 @@ void APU::write(uint16_t address, uint8_t value) {
 		pulse2_.sweep_negate = (value & 0x08) != 0;
 		pulse2_.sweep_shift = value & 7;
 		pulse2_.sweep_reload = true;
-		if (enable_apu_write_logging) {
-			std::cout << " -> P2 $4005: sweep_en=" << pulse2_.sweep_enabled << " period=" << (int)pulse2_.sweep_period
-					  << " neg=" << pulse2_.sweep_negate << " shift=" << (int)pulse2_.sweep_shift << std::endl;
-		}
 		break;
 	case 0x4006:
 		pulse2_.timer_period = (pulse2_.timer_period & 0xFF00) | value;
-		if (enable_apu_write_logging) {
-			std::cout << " -> P2 $4006: period_low=$" << std::hex << (int)value << std::dec << std::endl;
-		}
 		break;
 	case 0x4007:
 		pulse2_.timer_period = (pulse2_.timer_period & 0x00FF) | ((value & 7) << 8);
@@ -295,32 +266,15 @@ void APU::write(uint16_t address, uint8_t value) {
 		}
 		pulse2_.envelope_start = true;
 		pulse2_.duty_sequence_pos = 0;
-
-		if (enable_apu_write_logging) {
-			float frequency = pulse2_.timer_period > 0
-								  ? static_cast<float>(CPU_CLOCK_NTSC) / (16.0f * (pulse2_.timer_period + 1))
-								  : 0.0f;
-			std::cout << " -> P2 $4007: period=" << pulse2_.timer_period << " freq=" << std::fixed
-					  << std::setprecision(1) << frequency << "Hz"
-					  << " len_load=" << (value >> 3) << "(" << (int)pulse2_.length_counter << ")"
-					  << " env_start=1" << std::endl;
-		}
 		break;
 
 	// Triangle
 	case 0x4008:
 		triangle_.control_flag = (value & 0x80) != 0;
 		triangle_.linear_counter_period = value & 0x7F;
-		if (enable_apu_write_logging) {
-			std::cout << " -> TRI $4008: control=" << triangle_.control_flag
-					  << " lin_period=" << (int)triangle_.linear_counter_period << std::endl;
-		}
 		break;
 	case 0x400A:
 		triangle_.timer_period = (triangle_.timer_period & 0xFF00) | value;
-		if (enable_apu_write_logging) {
-			std::cout << " -> TRI $400A: period_low=$" << std::hex << (int)value << std::dec << std::endl;
-		}
 		break;
 	case 0x400B:
 		triangle_.timer_period = (triangle_.timer_period & 0x00FF) | ((value & 7) << 8);
@@ -328,63 +282,24 @@ void APU::write(uint16_t address, uint8_t value) {
 			triangle_.length_counter = LENGTH_TABLE[value >> 3];
 		}
 		triangle_.linear_counter_reload = true;
-
-		if (enable_apu_write_logging) {
-			float frequency = triangle_.timer_period > 0
-								  ? static_cast<float>(CPU_CLOCK_NTSC) / (32.0f * (triangle_.timer_period + 1))
-								  : 0.0f;
-			std::cout << " -> TRI $400B: period=" << triangle_.timer_period << " freq=" << std::fixed
-					  << std::setprecision(1) << frequency << "Hz"
-					  << " len_load=" << (value >> 3) << "(" << (int)triangle_.length_counter << ")"
-					  << " lin_reload=1" << std::endl;
-		}
 		break;
 
 	// Noise
 	case 0x400C:
 		noise_.length_enabled = !(value & 0x20);
-		noise_.constant_volume = !(value & 0x10);
+		noise_.constant_volume = (value & 0x10) != 0;
 		noise_.envelope_volume = value & 0x0F;
-		if (enable_apu_write_logging) {
-			std::cout << " -> NOISE $400C: halt=" << !noise_.length_enabled << " const=" << noise_.constant_volume
-					  << " vol=" << (int)noise_.envelope_volume << std::endl;
-		}
 		break;
 	case 0x400E:
 		noise_.mode = (value & 0x80) != 0;
 		noise_.timer_period = NOISE_PERIOD_TABLE[value & 0x0F];
-		if (enable_apu_write_logging) {
-			std::cout << " -> NOISE $400E: mode=" << noise_.mode << " period_idx=" << (value & 0x0F)
-					  << " period=" << noise_.timer_period << std::endl;
-		}
 		break;
-	case 0x400F: {
+	case 0x400F:
 		if (noise_.enabled) {
 			noise_.length_counter = LENGTH_TABLE[value >> 3];
 		}
 		noise_.envelope_start = true;
-
-		if (enable_apu_write_logging) {
-			std::cout << " -> NOISE $400F: len_load=" << (value >> 3) << "(" << (int)noise_.length_counter << ")"
-					  << " env_start=1" << std::endl;
-		}
-
-		static bool enable_400f_debug = false; // Disabled for now, can re-enable if needed
-		static uint64_t last_write_cycle = 0;
-		static int write_count = 0;
-
-		if (enable_400f_debug && noise_.length_counter > 0) {
-			uint64_t cycles_since_last = cycle_count_ - last_write_cycle;
-			write_count++;
-			if (write_count > 10 && cycles_since_last < 10000) { // If writes happening very rapidly
-				std::cout << "APU $400F: Rapid write #" << write_count << " (only " << cycles_since_last
-						  << " cycles since last) value=$" << std::hex << (int)value << std::dec
-						  << " len_counter_was=" << (int)noise_.length_counter << std::endl;
-			}
-			last_write_cycle = cycle_count_;
-		}
 		break;
-	}
 
 	// DMC
 	case 0x4010:
@@ -403,19 +318,15 @@ void APU::write(uint16_t address, uint8_t value) {
 		break;
 
 	// Status register
-	case 0x4015: {
-		static bool enable_4015_debug = false; // Enable to debug channel enable/disable
-
+	case 0x4015:
 		pulse1_.enabled = (value & 0x01) != 0;
 		pulse2_.enabled = (value & 0x02) != 0;
 		triangle_.enabled = (value & 0x04) != 0;
-		bool noise_was_enabled = noise_.enabled;
 		noise_.enabled = (value & 0x08) != 0;
 		dmc_.enabled = (value & 0x10) != 0;
 
-		if (enable_4015_debug && noise_was_enabled && !noise_.enabled) {
-			std::cout << "APU: Noise channel DISABLED via $4015" << std::endl;
-		}
+		std::cerr << std::format("[NOISE DEBUG] Write $4015 = 0x{:02X} (noise_enabled={})\n", value,
+								 noise_.enabled ? 1 : 0);
 
 		// Clear length counters if disabled
 		if (!pulse1_.enabled)
@@ -426,15 +337,12 @@ void APU::write(uint16_t address, uint8_t value) {
 			triangle_.length_counter = 0;
 		if (!noise_.enabled) {
 			noise_.length_counter = 0;
-			if (enable_4015_debug) {
-				std::cout << "APU: Noise length counter cleared" << std::endl;
-			}
+			std::cerr << "[NOISE DEBUG] Noise disabled, length_counter cleared\n";
 		}
 		if (!dmc_.enabled) {
 			dmc_.bytes_remaining = 0;
 		} else if (dmc_.bytes_remaining == 0) {
 			dmc_.start_sample();
-			// Load first sample byte immediately
 			if (bus_) {
 				dmc_.load_sample_byte(bus_);
 			}
@@ -442,9 +350,7 @@ void APU::write(uint16_t address, uint8_t value) {
 
 		// Clear DMC IRQ
 		dmc_irq_flag_ = false;
-
 		break;
-	}
 
 	// Frame counter
 	case 0x4017:
@@ -489,51 +395,24 @@ uint8_t APU::read(uint16_t address) {
 }
 
 float APU::get_audio_sample() {
-	// Get raw output from each channel (0-15 range for most channels)
+	// Get raw output from each channel
 	uint8_t pulse1_out = pulse1_.get_output();
 	uint8_t pulse2_out = pulse2_.get_output();
 	uint8_t triangle_out = triangle_.get_output();
 	uint8_t noise_out = noise_.get_output();
 	uint8_t dmc_out = dmc_.get_output();
 
-	// Debug: Print when channels are active (once every 60 frames)
-	static uint64_t debug_counter = 0;
-	static bool enable_detailed_state = true; // Set to true for full state dump
-
-	if (++debug_counter % (60 * 29780) == 0) { // ~60 frames
-		if (pulse1_out > 0 || pulse2_out > 0 || triangle_out > 0 || noise_out > 0 || dmc_out > 0) {
-			std::cout << "APU Channels: P1=" << (int)pulse1_out << " P2=" << (int)pulse2_out
-					  << " TRI=" << (int)triangle_out << " NOISE=" << (int)noise_out << " DMC=" << (int)dmc_out
-					  << std::endl;
-
-			if (enable_detailed_state) {
-				std::cout << "  P1 State: period=" << pulse1_.timer_period << " timer=" << pulse1_.timer
-						  << " duty=" << (int)pulse1_.duty << " duty_pos=" << (int)pulse1_.duty_sequence_pos
-						  << " len=" << (int)pulse1_.length_counter << " env=" << (int)pulse1_.envelope_decay_level
-						  << " env_vol=" << (int)pulse1_.envelope_volume << " const_vol=" << pulse1_.constant_volume
-						  << " halt=" << !pulse1_.length_enabled << " enabled=" << pulse1_.enabled << std::endl;
-				std::cout << "  P2 State: period=" << pulse2_.timer_period << " timer=" << pulse2_.timer
-						  << " duty=" << (int)pulse2_.duty << " duty_pos=" << (int)pulse2_.duty_sequence_pos
-						  << " len=" << (int)pulse2_.length_counter << " env=" << (int)pulse2_.envelope_decay_level
-						  << " env_vol=" << (int)pulse2_.envelope_volume << " const_vol=" << pulse2_.constant_volume
-						  << " halt=" << !pulse2_.length_enabled << " enabled=" << pulse2_.enabled << std::endl;
-				std::cout << "  TRI State: period=" << triangle_.timer_period << " timer=" << triangle_.timer
-						  << " seq_pos=" << (int)triangle_.sequence_pos << " len=" << (int)triangle_.length_counter
-						  << " lin=" << (int)triangle_.linear_counter << " ctrl=" << triangle_.control_flag
-						  << " enabled=" << triangle_.enabled << std::endl;
-				std::cout << "  NOISE State: period=" << noise_.timer_period << " timer=" << noise_.timer
-						  << " shift=" << noise_.shift_register << " len=" << (int)noise_.length_counter
-						  << " env=" << (int)noise_.envelope_decay_level << " env_vol=" << (int)noise_.envelope_volume
-						  << " const_vol=" << noise_.constant_volume << " halt=" << !noise_.length_enabled
-						  << " enabled=" << noise_.enabled << std::endl;
-			}
-		}
-	}
-
 	// NES APU uses non-linear mixing to prevent overflow
 	// Formula from NESDev wiki: https://www.nesdev.org/wiki/APU_Mixer
+	//
+	// Output ranges:
+	//   Pulse 1/2: 0-15 (4-bit volume from envelope)
+	//   Triangle:  0-15 (4-bit from 32-step sequence, but 16 unique levels)
+	//   Noise:     0-15 (4-bit volume from envelope)
+	//   DMC:       0-127 (7-bit PCM sample)
 
 	// Pulse channel mixing
+	// pulse_out = 95.88 / ((8128 / (pulse1 + pulse2)) + 100)
 	float pulse_output = 0.0f;
 	float pulse_sum = static_cast<float>(pulse1_out + pulse2_out);
 	if (pulse_sum > 0.0f) {
@@ -541,6 +420,7 @@ float APU::get_audio_sample() {
 	}
 
 	// TND channel mixing (Triangle + Noise + DMC)
+	// tnd_out = 159.79 / ((1 / (triangle/8227 + noise/12241 + dmc/22638)) + 100)
 	float tnd_output = 0.0f;
 	float tnd_sum = (static_cast<float>(triangle_out) / 8227.0f) + (static_cast<float>(noise_out) / 12241.0f) +
 					(static_cast<float>(dmc_out) / 22638.0f);
@@ -559,9 +439,9 @@ float APU::get_audio_sample() {
 		return 0.0f;
 	}
 
-	// Just return the mixed value scaled to reasonable range
-	// No DC removal, no centering - keep it simple
-	return mixed * 0.5f; // Scale down to prevent clipping
+	// Scale to reasonable range to prevent clipping
+	// The 0.5 factor reduces the maximum amplitude to ~1.27 which is safe
+	return mixed * 0.5f;
 }
 
 // Pulse Channel methods
@@ -619,86 +499,63 @@ void APU::PulseChannel::clock_sweep(bool is_pulse1) {
 	// 2. Target period >= 0x800 (would overflow 11-bit timer)
 	bool muted = (timer_period < 8) || (target_period >= 0x800);
 
-	// Sweep divider logic
+	// Update period when divider reaches 0
 	if (sweep_divider == 0 && sweep_enabled && sweep_shift > 0 && !muted) {
-		// Update timer period when divider reaches 0
 		timer_period = target_period;
 	}
 
-	if (sweep_divider == 0 || sweep_reload) {
+	// Sweep divider logic (correct NESDev order):
+	// 1. If reload flag is set, reload divider and clear flag
+	// 2. Else if divider is zero, reload divider
+	// 3. Else decrement divider
+	if (sweep_reload) {
 		sweep_divider = sweep_period;
 		sweep_reload = false;
+	} else if (sweep_divider == 0) {
+		sweep_divider = sweep_period;
 	} else {
 		sweep_divider--;
 	}
 }
 
 uint8_t APU::PulseChannel::get_output() {
-	static bool enable_mute_debug = true; // Debug why channels are muted
-
-	// Muting conditions:
+	// Muting conditions (silence the channel):
 	// 1. Channel disabled
-	// 2. Length counter reached zero
-	// 3. Timer period too high (>= 0x800) - sweep overflow
-	// NOTE: Do NOT mute on timer_period < 8! The sweep unit prevents updating to < 8,
-	// but if a period < 8 is manually written, it should still produce output.
-	// Muting periods < 8 incorrectly silences high-frequency sounds!
-
-	// Debug: Log muting reasons for high-frequency notes
-	if (enable_mute_debug && timer_period < 150) {
-		static int high_freq_mute_count = 0;
-		high_freq_mute_count++;
-		if (high_freq_mute_count < 50) {
-			if (!enabled) {
-				std::cout << "HIGH-FREQ MUTED: period=" << timer_period << " reason=DISABLED" << std::endl;
-				return 0;
-			}
-			if (length_counter == 0) {
-				std::cout << "HIGH-FREQ MUTED: period=" << timer_period << " reason=LENGTH_ZERO" << std::endl;
-				return 0;
-			}
-			if (timer_period >= 0x800) {
-				std::cout << "HIGH-FREQ MUTED: period=" << timer_period << " reason=PERIOD_OVERFLOW" << std::endl;
-				return 0;
-			}
-		}
-	}
-
 	if (!enabled) {
 		return 0;
 	}
 
+	// 2. Length counter reached zero
 	if (length_counter == 0) {
 		return 0;
 	}
 
+	// 3. Timer period too high (>= 0x800) - sweep overflow
 	if (timer_period >= 0x800) {
 		return 0;
 	}
 
-	// Debug: Log ALL high-frequency channel calls (BEFORE duty cycle check)
-	if (enable_mute_debug && timer_period < 150) {
-		static int high_freq_call_count = 0;
-		high_freq_call_count++;
-		if (high_freq_call_count < 100) { // Log first 100 calls
-			uint8_t duty_output = APU::DUTY_TABLE[duty][duty_sequence_pos];
-			uint8_t volume = constant_volume ? envelope_volume : envelope_decay_level;
-			std::cout << "HIGH-FREQ get_output() called: period=" << timer_period << " len=" << (int)length_counter
-					  << " vol=" << (int)volume << " duty_out=" << (int)duty_output << " duty=" << (int)duty << "/"
-					  << (int)duty_sequence_pos << " env_decay=" << (int)envelope_decay_level << " timer=" << timer
-					  << std::endl;
-		}
-	}
-
-	// Check duty cycle output
-	uint8_t duty_output = APU::DUTY_TABLE[duty][duty_sequence_pos];
-	if (duty_output == 0) {
-		// Duty cycle is low, this is normal - don't log
+	// 4. Timer period too low (< 8) - ultrasonic garbage/screeching
+	// The sweep unit prevents updating to < 8, but register writes can still set it.
+	// Period < 8 produces frequencies above 111kHz (way beyond audible range).
+	// These create the "dial-up modem" screeching/bleeping artifacts.
+	if (timer_period < 8) {
 		return 0;
 	}
 
-	// Return volume (either constant or from envelope)
+	// 5. Check duty cycle output (wave position)
+	uint8_t duty_output = APU::DUTY_TABLE[duty][duty_sequence_pos];
+	if (duty_output == 0) {
+		return 0; // Duty cycle is low (silent part of waveform)
+	}
+
+	// 6. Calculate volume (either constant or from envelope)
 	uint8_t volume = constant_volume ? envelope_volume : envelope_decay_level;
+
+	// 7. Silence if volume is zero (envelope decayed or explicitly set to 0)
+	if (volume == 0) {
+		return 0;
+	}
 
 	return volume;
 }
@@ -707,7 +564,11 @@ uint8_t APU::PulseChannel::get_output() {
 void APU::TriangleChannel::clock_timer() {
 	if (timer == 0) {
 		timer = timer_period;
-		sequence_pos = (sequence_pos + 1) & 31;
+		// Sequencer only advances when both length_counter AND linear_counter are non-zero
+		// This is critical: timer runs always, but sequencer is gated by the counters
+		if (length_counter > 0 && linear_counter > 0) {
+			sequence_pos = (sequence_pos + 1) & 31;
+		}
 	} else {
 		timer--;
 	}
@@ -732,9 +593,33 @@ void APU::TriangleChannel::clock_linear() {
 }
 
 uint8_t APU::TriangleChannel::get_output() {
-	if (!enabled || length_counter == 0 || linear_counter == 0) {
+	// Silence conditions:
+	// 1. Channel disabled
+	if (!enabled) {
 		return 0;
 	}
+
+	// 2. Length counter is zero
+	if (length_counter == 0) {
+		return 0;
+	}
+
+	// 3. Linear counter is zero (specific to triangle channel)
+	if (linear_counter == 0) {
+		return 0;
+	}
+
+	// 4. Timer period too low - creates ultrasonic artifacts and aliasing
+	// Triangle is clocked at CPU rate, so it can produce much higher frequencies than pulse
+	// Period < 2 creates artifacts. Additionally, very low periods create aliasing/harsh sounds.
+	// NESDev recommends muting for periods that would produce frequencies above ~12kHz
+	// to avoid aliasing artifacts in the output.
+	// At CPU rate 1.789773 MHz: freq = 1789773 / (32 * (period + 1))
+	// For 12kHz: period ~= 4.7, so we use period < 5 as the threshold
+	if (timer_period < 5) {
+		return 0;
+	}
+
 	return APU::TRIANGLE_SEQUENCE[sequence_pos];
 }
 
@@ -764,12 +649,7 @@ void APU::NoiseChannel::clock_length() {
 }
 
 void APU::NoiseChannel::clock_envelope() {
-	static bool enable_env_debug = false; // Set to true to debug envelope issues
-
 	if (envelope_start) {
-		if (enable_env_debug && length_counter > 0) {
-			std::cout << "NOISE ENV: START -> decay=15, divider=" << (int)envelope_volume << std::endl;
-		}
 		envelope_start = false;
 		envelope_decay_level = 15;
 		envelope_divider = envelope_volume;
@@ -778,15 +658,8 @@ void APU::NoiseChannel::clock_envelope() {
 			envelope_divider = envelope_volume;
 			if (envelope_decay_level > 0) {
 				envelope_decay_level--;
-				if (enable_env_debug && length_counter > 0) {
-					std::cout << "NOISE ENV: decay=" << (int)envelope_decay_level << " (len_en=" << length_enabled
-							  << ")" << std::endl;
-				}
 			} else if (!length_enabled) {
 				envelope_decay_level = 15;
-				if (enable_env_debug && length_counter > 0) {
-					std::cout << "NOISE ENV: LOOP -> decay=15 (halt=1)" << std::endl;
-				}
 			}
 		} else {
 			envelope_divider--;
@@ -795,10 +668,30 @@ void APU::NoiseChannel::clock_envelope() {
 }
 
 uint8_t APU::NoiseChannel::get_output() {
-	if (!enabled || length_counter == 0 || (shift_register & 1)) {
+	// Silence if channel disabled
+	if (!enabled) {
 		return 0;
 	}
-	return constant_volume ? envelope_volume : envelope_decay_level;
+
+	// Silence if length counter is zero
+	if (length_counter == 0) {
+		return 0;
+	}
+
+	// Silence if shift register bit 0 is 1 (noise generator output is 0)
+	if (shift_register & 1) {
+		return 0;
+	}
+
+	// Calculate volume (either constant or from envelope)
+	uint8_t volume = constant_volume ? envelope_volume : envelope_decay_level;
+
+	// Silence if volume is zero
+	if (volume == 0) {
+		return 0;
+	}
+
+	return volume;
 }
 
 // DMC Channel methods

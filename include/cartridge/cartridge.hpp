@@ -40,6 +40,10 @@ class Cartridge final : public Component {
 	// Mapper notifications (for MMC3 scanline counter, etc.)
 	void ppu_a12_toggle() const;
 
+	// IRQ support (for MMC3, MMC5, etc.)
+	bool is_irq_pending() const;
+	void clear_irq() const;
+
 	// ROM information
 	const RomData &get_rom_data() const noexcept {
 		return rom_data_;

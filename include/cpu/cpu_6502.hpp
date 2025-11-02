@@ -34,9 +34,11 @@ class CPU6502 final : public Component {
 	[[nodiscard]] int execute_instruction(); // Returns number of cycles consumed
 
 	// Interrupt handling
-	void trigger_nmi() noexcept;   ///< Trigger Non-Maskable Interrupt (PPU VBlank, etc.)
-	void trigger_irq() noexcept;   ///< Trigger Maskable Interrupt (APU, mappers, etc.)
-	void trigger_reset() noexcept; ///< Trigger Reset (reset button, power-on)
+	void trigger_nmi() noexcept;	///< Trigger Non-Maskable Interrupt (PPU VBlank, etc.)
+	void clear_nmi_line() noexcept; ///< Clear NMI line (when VBlank flag is cleared by reading $2002)
+	void trigger_irq() noexcept;	///< Trigger Maskable Interrupt (APU, mappers, etc.)
+	void trigger_reset() noexcept;	///< Trigger Reset (reset button, power-on)
+	void clear_irq_line() noexcept; ///< Clear IRQ line (for edge detection when source is acknowledged)
 
 	[[nodiscard]] bool has_pending_interrupt() const noexcept;
 	[[nodiscard]] InterruptType get_pending_interrupt() const noexcept;
@@ -153,6 +155,8 @@ class CPU6502 final : public Component {
 
 	// Interrupt state
 	InterruptState interrupt_state_;
+	bool irq_line_ = false; // External IRQ line state (for level-triggered IRQ)
+	bool nmi_line_ = false; // External NMI line state (for edge-triggered NMI)
 
 	// Memory access methods
 	[[nodiscard]] Byte read_byte(Address address);
