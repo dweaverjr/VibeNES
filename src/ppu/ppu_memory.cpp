@@ -1,10 +1,11 @@
 #include "ppu/ppu_memory.hpp"
+#include "cartridge/cartridge.hpp"
 #include <cstdio>
 #include <cstring>
 
 namespace nes {
 
-PPUMemory::PPUMemory() : vertical_mirroring_(false) {
+PPUMemory::PPUMemory() : vertical_mirroring_(false), cartridge_(nullptr) {
 	power_on();
 }
 
@@ -80,6 +81,20 @@ void PPUMemory::set_mirroring_mode(bool vertical_mirroring) {
 	vertical_mirroring_ = vertical_mirroring;
 }
 
+void PPUMemory::connect_cartridge(std::shared_ptr<Cartridge> cartridge) {
+	cartridge_ = cartridge;
+}
+
+bool PPUMemory::get_vertical_mirroring() const {
+	// If cartridge is connected, get mirroring from it (supports dynamic mirroring)
+	if (cartridge_) {
+		auto mirroring = cartridge_->get_mirroring();
+		return (mirroring == Mapper::Mirroring::Vertical);
+	}
+	// Fallback to static mirroring mode (for tests without cartridge)
+	return vertical_mirroring_;
+}
+
 uint16_t PPUMemory::map_nametable_address(uint16_t address) {
 	// Handle $3000-$3EFF mirror of $2000-$2EFF first
 	if (address >= 0x3000 && address <= 0x3EFF) {
@@ -89,9 +104,12 @@ uint16_t PPUMemory::map_nametable_address(uint16_t address) {
 	// Remove the base nametable address to get offset
 	uint16_t offset = address - PPUMemoryMap::NAMETABLE_0_START;
 
+	// Get current mirroring mode from cartridge (supports dynamic mirroring)
+	bool vertical = get_vertical_mirroring();
+
 	// Handle mirroring based on cartridge mirroring mode
 	// NES has only 2KB VRAM which holds 2 nametables
-	if (vertical_mirroring_) {
+	if (vertical) {
 		// Vertical mirroring: nametables 0 and 2 share memory, 1 and 3 share memory
 		// NT0 ($2000-$23FF) -> VRAM $0000-$03FF
 		// NT1 ($2400-$27FF) -> VRAM $0400-$07FF

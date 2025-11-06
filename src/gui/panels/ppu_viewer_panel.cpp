@@ -204,7 +204,13 @@ void PPUViewerPanel::render_pattern_tables(nes::PPU *ppu, nes::Cartridge *cartri
 	// Palette selection for visualization - constrain slider width
 	ImGui::Text("Visualization Palette:");
 	ImGui::SetNextItemWidth(std::min(150.0f, content_width * 0.6f));
-	ImGui::SliderInt("##palette", &selected_palette_, 0, 7);
+	ImGui::SliderInt("##palette", &selected_palette_, 0, 8);
+	ImGui::SameLine();
+	if (selected_palette_ == 0) {
+		ImGui::Text("Grayscale");
+	} else {
+		ImGui::Text("Palette %d", selected_palette_ - 1);
+	}
 
 	// Generate and display pattern table visualization
 	// Static variables for ROM change detection and clearing flags
@@ -649,18 +655,37 @@ uint32_t PPUViewerPanel::get_pattern_pixel_color(uint8_t pixel_value, uint8_t pa
 		return 0xFF202020;
 	}
 
-	// Use the actual PPU palette if available
+	// Grayscale mode (palette_index == 0)
+	if (palette_index == 0) {
+		// Use fixed grayscale palette for visualization
+		static const uint32_t visualization_palette[4] = {
+			0xFF202020, // 0: Dark gray (transparent)
+			0xFF808080, // 1: Medium gray
+			0xFFB0B0B0, // 2: Light gray
+			0xFFFFFFFF	// 3: White
+		};
+
+		if (pixel_value >= 4) {
+			pixel_value = 3; // Clamp to valid range
+		}
+
+		return visualization_palette[pixel_value];
+	}
+
+	// Color palette mode (palette_index 1-8 maps to NES palettes 0-7)
 	if (ppu) {
-		// Background palettes are at $3F00-$3F0F (4 palettes of 4 colors each)
-		// Sprite palettes are at $3F10-$3F1F (4 palettes of 4 colors each)
-		// palette_index is 0-7 (0-3 = background, 4-7 = sprite palettes)
+		// Adjust palette index: slider values 1-8 map to NES palettes 0-7
+		uint8_t nes_palette_index = palette_index - 1;
+
+		// Background palettes are at indices 0-15 (4 palettes of 4 colors each)
+		// Sprite palettes are at indices 16-31 (4 palettes of 4 colors each)
 		uint8_t palette_base;
-		if (palette_index < 4) {
+		if (nes_palette_index < 4) {
 			// Background palette
-			palette_base = (palette_index * 4);
+			palette_base = (nes_palette_index * 4);
 		} else {
 			// Sprite palette (4-7 map to indices 16-31)
-			palette_base = 16 + ((palette_index - 4) * 4);
+			palette_base = 16 + ((nes_palette_index - 4) * 4);
 		}
 
 		// Read the actual palette entry from palette RAM
@@ -671,8 +696,8 @@ uint32_t PPUViewerPanel::get_pattern_pixel_color(uint8_t pixel_value, uint8_t pa
 		return nes::NESPalette::get_rgba_color(nes_color_index);
 	}
 
-	// Fallback: Use a fixed grayscale palette if PPU not available
-	static const uint32_t visualization_palette[4] = {
+	// Fallback to grayscale if PPU not available
+	static const uint32_t fallback_palette[4] = {
 		0xFF202020, // 0: Dark gray (transparent)
 		0xFF808080, // 1: Medium gray
 		0xFFB0B0B0, // 2: Light gray
@@ -680,10 +705,10 @@ uint32_t PPUViewerPanel::get_pattern_pixel_color(uint8_t pixel_value, uint8_t pa
 	};
 
 	if (pixel_value >= 4) {
-		pixel_value = 3; // Clamp to valid range
+		pixel_value = 3;
 	}
 
-	return visualization_palette[pixel_value];
+	return fallback_palette[pixel_value];
 }
 
 void PPUViewerPanel::update_display_texture_only(nes::PPU *ppu) {

@@ -42,7 +42,10 @@ PPU::PPU()
 void PPU::connect_cartridge(std::shared_ptr<Cartridge> cartridge) {
 	cartridge_ = cartridge;
 
-	// Update nametable mirroring mode based on cartridge
+	// Connect cartridge to PPU memory for dynamic mirroring support
+	memory_.connect_cartridge(cartridge);
+
+	// Update nametable mirroring mode based on cartridge (initial setup)
 	if (cartridge_) {
 		auto mirroring = cartridge_->get_mirroring();
 		bool vertical = (mirroring == Mapper::Mirroring::Vertical);
@@ -1595,9 +1598,10 @@ void PPU::prepare_scanline_sprites() {
 			// 8x16 sprites - bit 0 of tile_index selects pattern table
 			sprite_table = (sprite.tile_index & 0x01) != 0;
 			uint8_t base_tile = sprite.tile_index & 0xFE;
-			// Use UNFLIPPED sprite_row to determine which tile (top or bottom)
-			// This prevents the tiles from swapping when vertically flipped
-			bool top_tile = sprite_row < 8;
+
+			// For vertical flip: tiles must swap (top becomes bottom, bottom becomes top)
+			// Use FLIPPED fetch_row to determine which tile to use
+			bool top_tile = fetch_row < 8;
 			uint8_t tile_number = base_tile + (top_tile ? 0 : 1);
 			uint8_t fine_y = row_in_tile;
 

@@ -3,8 +3,12 @@
 #include "core/types.hpp"
 #include "ppu/ppu_registers.hpp"
 #include <array>
+#include <memory>
 
 namespace nes {
+
+// Forward declaration
+class Cartridge;
 
 /// PPU Memory management - handles VRAM and palette memory
 /// Note: OAM (Object Attribute Memory) is handled directly by the PPU class
@@ -36,8 +40,11 @@ class PPUMemory {
 	uint8_t read_pattern_table(uint16_t address) const;
 	void write_pattern_table(uint16_t address, uint8_t value);
 
-	// Nametable mirroring support
+	// Nametable mirroring support (deprecated - mirroring now read from cartridge)
 	void set_mirroring_mode(bool vertical_mirroring);
+
+	// Connect to cartridge for dynamic mirroring
+	void connect_cartridge(std::shared_ptr<Cartridge> cartridge);
 
 	// Save state serialization
 	void serialize_state(std::vector<uint8_t> &buffer) const;
@@ -49,12 +56,18 @@ class PPUMemory {
 	std::array<uint8_t, 32> palette_ram_;		   // 32 bytes palette RAM
 	std::array<uint8_t, 8192> chr_ram_fallback_{}; // 8KB CHR RAM for tests/no-mapper
 
-	// Mirroring state
+	// Mirroring state (fallback for when no cartridge is connected)
 	bool vertical_mirroring_;
+
+	// Cartridge connection for dynamic mirroring
+	std::shared_ptr<Cartridge> cartridge_;
 
 	// Address mapping helpers
 	uint16_t map_nametable_address(uint16_t address);
 	uint8_t map_palette_address(uint8_t address);
+
+	// Get current mirroring mode from cartridge (or fallback)
+	bool get_vertical_mirroring() const;
 };
 
 /// PPU Address space constants
