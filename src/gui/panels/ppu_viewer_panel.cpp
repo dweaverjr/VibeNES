@@ -4,6 +4,12 @@
 #include "ppu/nes_palette.hpp"
 #include "ppu/ppu.hpp"
 #include <GL/gl.h>
+
+// GL_CLAMP_TO_EDGE is part of OpenGL 1.2+, define if not available
+#ifndef GL_CLAMP_TO_EDGE
+#define GL_CLAMP_TO_EDGE 0x812F
+#endif
+
 #include <cstring>
 #include <imgui.h>
 
@@ -115,12 +121,8 @@ void PPUViewerPanel::render_display_controls() {
 }
 
 void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
-	ImGui::Text("NES Video Output (256x240)");
-
-	// Debug frame status
-	ImGui::Text("Frame ready: %s", ppu->is_frame_ready() ? "YES" : "NO");
+	// Frame count and display mode
 	ImGui::Text("Frame count: %llu", ppu->get_frame_count());
-	ImGui::Text("Frame buffer valid: %s", ppu->get_frame_buffer() ? "YES" : "NO");
 
 	// Display current mode
 	const char *mode_names[] = {"FRAME_COMPLETE", "REAL_TIME", "SCANLINE_STEP"};
@@ -141,8 +143,6 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 		break;
 	}
 
-	ImGui::Text("Should update: %s", should_update ? "YES" : "NO");
-
 	// Add mode switching buttons
 	if (ImGui::Button("Frame Complete Mode")) {
 		display_mode_ = PPUDisplayMode::FRAME_COMPLETE;
@@ -150,6 +150,11 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 	ImGui::SameLine();
 	if (ImGui::Button("Real Time Mode")) {
 		display_mode_ = PPUDisplayMode::REAL_TIME;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Force Update Display") && ppu->get_frame_buffer()) {
+		printf("FORCE: Updating display texture...\n");
+		update_main_display_texture(ppu->get_frame_buffer());
 	}
 
 	if (should_update && ppu->get_frame_buffer()) {
@@ -174,12 +179,6 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 		if (ImGui::Button("Force Initialize Textures")) {
 			initialize_textures();
 		}
-	}
-
-	// Test button to force frame buffer update
-	if (ImGui::Button("Force Update Display") && ppu->get_frame_buffer()) {
-		printf("FORCE: Updating display texture...\n");
-		update_main_display_texture(ppu->get_frame_buffer());
 	}
 }
 
@@ -517,6 +516,8 @@ void PPUViewerPanel::initialize_textures() {
 	glBindTexture(GL_TEXTURE_2D, main_display_texture_);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 240, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
 	// Check for OpenGL errors
