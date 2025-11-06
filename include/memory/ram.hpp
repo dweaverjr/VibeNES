@@ -111,6 +111,16 @@ class Ram final : public Component {
 		std::cout << std::dec << "\n"; // Reset to decimal
 	}
 
+	// Save state serialization
+	void serialize_state(std::vector<uint8_t> &buffer) const {
+		buffer.insert(buffer.end(), memory_.begin(), memory_.end());
+	}
+
+	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+		std::copy(buffer.begin() + offset, buffer.begin() + offset + RAM_SIZE, memory_.begin());
+		offset += RAM_SIZE;
+	}
+
   private:
 	/// 2KB of work RAM
 	std::array<Byte, RAM_SIZE> memory_{};

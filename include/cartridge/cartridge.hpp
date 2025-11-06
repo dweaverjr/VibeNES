@@ -52,6 +52,18 @@ class Cartridge final : public Component {
 	const char *get_mapper_name() const noexcept;
 	Mapper::Mirroring get_mirroring() const noexcept;
 
+	// Save state serialization
+	void serialize_state(std::vector<uint8_t> &buffer) const;
+	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset);
+
+	// Additional getters needed for save state
+	const std::vector<uint8_t> &get_prg_rom() const {
+		return rom_data_.prg_rom;
+	}
+	const std::string &get_rom_filename() const {
+		return rom_data_.filename;
+	}
+
   private:
 	std::unique_ptr<Mapper> mapper_;
 	RomData rom_data_;

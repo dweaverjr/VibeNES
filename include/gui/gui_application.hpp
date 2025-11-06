@@ -16,6 +16,7 @@ class PPU;
 class AudioPanel;
 class GamepadManager;
 class Controller;
+class SaveStateManager;
 } // namespace nes
 
 namespace nes::gui {
@@ -88,6 +89,11 @@ class GuiApplication {
 	std::unique_ptr<TimingPanel> timing_panel_;
 	std::unique_ptr<nes::AudioPanel> audio_panel_;
 
+	// Save state manager
+	std::unique_ptr<nes::SaveStateManager> save_state_manager_;
+	std::string save_state_status_message_;
+	float save_state_status_timer_;
+
 	// Layout constants
 	static constexpr int WINDOW_WIDTH = 1600;
 	static constexpr int WINDOW_HEIGHT = 1200;
@@ -117,6 +123,13 @@ class GuiApplication {
 
 	// System reset
 	void reset_system();
+
+	// Save state operations
+	void save_state_to_slot(int slot);
+	void load_state_from_slot(int slot);
+	void quick_save();
+	void quick_load();
+	void show_save_state_status(const std::string &message, bool success);
 };
 
 } // namespace nes::gui

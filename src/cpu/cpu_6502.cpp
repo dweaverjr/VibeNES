@@ -5165,4 +5165,62 @@ void CPU6502::CRASH() {
 	// that depend on analog effects and manufacturing variations
 }
 
+// Save state serialization
+void CPU6502::serialize_state(std::vector<uint8_t> &buffer) const {
+	// Serialize all registers
+	buffer.push_back(accumulator_);
+	buffer.push_back(x_register_);
+	buffer.push_back(y_register_);
+	buffer.push_back(stack_pointer_);
+
+	// Program counter (16-bit, little-endian)
+	buffer.push_back(static_cast<uint8_t>(program_counter_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((program_counter_ >> 8) & 0xFF));
+
+	// Status register
+	buffer.push_back(status_.status_register_);
+
+	// Cycle count (64-bit, little-endian)
+	uint64_t cycle_count = cycles_remaining_.count();
+	for (int i = 0; i < 8; ++i) {
+		buffer.push_back(static_cast<uint8_t>((cycle_count >> (i * 8)) & 0xFF));
+	}
+
+	// Interrupt state (struct with 3 bool flags)
+	buffer.push_back(interrupt_state_.nmi_pending ? 1 : 0);
+	buffer.push_back(interrupt_state_.irq_pending ? 1 : 0);
+	buffer.push_back(interrupt_state_.reset_pending ? 1 : 0);
+	buffer.push_back(irq_line_ ? 1 : 0);
+	buffer.push_back(nmi_line_ ? 1 : 0);
+}
+
+void CPU6502::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Deserialize all registers
+	accumulator_ = buffer[offset++];
+	x_register_ = buffer[offset++];
+	y_register_ = buffer[offset++];
+	stack_pointer_ = buffer[offset++];
+
+	// Program counter (16-bit, little-endian)
+	program_counter_ = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+
+	// Status register
+	status_.status_register_ = buffer[offset++];
+
+	// Cycle count (64-bit, little-endian)
+	uint64_t cycle_count = 0;
+	for (int i = 0; i < 8; ++i) {
+		cycle_count |= static_cast<uint64_t>(buffer[offset++]) << (i * 8);
+	}
+	cycles_remaining_ = CpuCycle(cycle_count);
+
+	// Interrupt state (struct with 3 bool flags)
+	interrupt_state_.nmi_pending = buffer[offset++] != 0;
+	interrupt_state_.irq_pending = buffer[offset++] != 0;
+	interrupt_state_.reset_pending = buffer[offset++] != 0;
+	irq_line_ = buffer[offset++] != 0;
+	nmi_line_ = buffer[offset++] != 0;
+}
+
 } // namespace nes

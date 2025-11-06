@@ -437,4 +437,19 @@ bool SystemBus::is_audio_playing() const {
 	return audio_backend_ ? audio_backend_->is_playing() : false;
 }
 
+// Save state serialization
+void SystemBus::serialize_state(std::vector<uint8_t> &buffer) const {
+	// Serialize RAM (2KB)
+	if (ram_) {
+		ram_->serialize_state(buffer);
+	}
+}
+
+void SystemBus::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Deserialize RAM (2KB)
+	if (ram_) {
+		ram_->deserialize_state(buffer, offset);
+	}
+}
+
 } // namespace nes

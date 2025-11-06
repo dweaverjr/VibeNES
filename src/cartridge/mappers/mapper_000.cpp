@@ -58,4 +58,19 @@ void Mapper000::reset() {
 	// NROM has no state to reset
 }
 
+// Save state serialization
+void Mapper000::serialize_state(std::vector<uint8_t> &buffer) const {
+	// NROM has no mapper state (no registers, no RAM)
+	// CHR ROM is read-only, so we don't need to save it
+	// Nothing to serialize!
+	(void)buffer;
+}
+
+void Mapper000::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// NROM has no mapper state to restore
+	// Nothing to deserialize!
+	(void)buffer;
+	(void)offset;
+}
+
 } // namespace nes

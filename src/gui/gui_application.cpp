@@ -8,6 +8,7 @@
 #include "input/gamepad_manager.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
+#include "system/save_state.hpp"
 
 // Panel includes
 #include "gui/panels/audio_panel.hpp"
@@ -36,7 +37,8 @@ GuiApplication::GuiApplication()
 	  ppu_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
 	  disassembler_panel_(std::make_unique<DisassemblerPanel>()), memory_panel_(std::make_unique<MemoryViewerPanel>()),
 	  rom_loader_panel_(std::make_unique<RomLoaderPanel>()), ppu_viewer_panel_(std::make_unique<PPUViewerPanel>()),
-	  timing_panel_(std::make_unique<TimingPanel>()), audio_panel_(std::make_unique<nes::AudioPanel>()) {
+	  timing_panel_(std::make_unique<TimingPanel>()), audio_panel_(std::make_unique<nes::AudioPanel>()),
+	  save_state_manager_(nullptr), save_state_status_message_(""), save_state_status_timer_(0.0f) {
 }
 
 GuiApplication::~GuiApplication() {
@@ -179,6 +181,10 @@ void GuiApplication::initialize_emulation_components() {
 	// Trigger a reset now that we have a proper reset vector
 	cpu_->trigger_reset();
 
+	// Create save state manager
+	save_state_manager_ =
+		std::make_unique<nes::SaveStateManager>(cpu_.get(), ppu_.get(), apu.get(), bus_.get(), cartridge_.get());
+
 	printf("Emulation components initialized and connected\n");
 }
 
@@ -224,12 +230,45 @@ void GuiApplication::handle_events() {
 		// Let ImGui process the event
 		ImGui_ImplSDL2_ProcessEvent(&event);
 
-		if (event.type == SDL_QUIT) {
+		// Handle hotkeys (only when ImGui is not capturing keyboard)
+		if (event.type == SDL_KEYDOWN && !ImGui::GetIO().WantCaptureKeyboard) {
+			bool shift_pressed = (SDL_GetModState() & KMOD_SHIFT) != 0;
+			bool ctrl_pressed = (SDL_GetModState() & KMOD_CTRL) != 0;
+
+			// Save state hotkeys (F1-F9)
+			if (!shift_pressed && !ctrl_pressed && event.key.keysym.sym >= SDLK_F1 && event.key.keysym.sym <= SDLK_F9) {
+				int slot = event.key.keysym.sym - SDLK_F1 + 1;
+				save_state_to_slot(slot);
+			}
+			// Load state hotkeys (Shift+F1-F9)
+			else if (shift_pressed && !ctrl_pressed && event.key.keysym.sym >= SDLK_F1 &&
+					 event.key.keysym.sym <= SDLK_F9) {
+				int slot = event.key.keysym.sym - SDLK_F1 + 1;
+				load_state_from_slot(slot);
+			}
+		}
+	}
+
+	// Handle quick save/load through ImGui  (F5 and F8 conflict with emulation controls, so handle carefully)
+	// Quick save (Ctrl+F5) and Quick load (Ctrl+F8) to avoid conflicts
+	if (!ImGui::GetIO().WantCaptureKeyboard) {
+		if (ImGui::IsKeyPressed(ImGuiKey_F5) && ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
+			quick_save();
+		}
+		if (ImGui::IsKeyPressed(ImGuiKey_F8) && ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
+			quick_load();
+		}
+	}
+
+	// Check SDL events for window close
+	SDL_Event quit_event;
+	while (SDL_PollEvent(&quit_event)) {
+		if (quit_event.type == SDL_QUIT) {
 			running_ = false;
 		}
 
-		if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE &&
-			event.window.windowID == SDL_GetWindowID(window_)) {
+		if (quit_event.type == SDL_WINDOWEVENT && quit_event.window.event == SDL_WINDOWEVENT_CLOSE &&
+			quit_event.window.windowID == SDL_GetWindowID(window_)) {
 			running_ = false;
 		}
 	}
@@ -402,6 +441,25 @@ void GuiApplication::render_frame() {
 		ImGui::ShowDemoWindow(&show_demo_window_);
 	}
 
+	// Display save state status message as overlay
+	if (save_state_status_timer_ > 0.0f) {
+		ImGui::SetNextWindowPos(ImVec2(WINDOW_WIDTH / 2.0f, 60.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+		ImGui::SetNextWindowBgAlpha(0.8f);
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.9f));
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.8f, 0.0f, 1.0f));
+		if (ImGui::Begin("SaveStateStatus", nullptr,
+						 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+							 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+							 ImGuiWindowFlags_NoNav)) {
+			ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "%s", save_state_status_message_.c_str());
+		}
+		ImGui::End();
+		ImGui::PopStyleColor(2);
+
+		// Decrease timer (approximate frame time at 60fps)
+		save_state_status_timer_ -= 0.016f;
+	}
+
 	// Rendering
 	ImGui::Render();
 	glViewport(0, 0, static_cast<int>(io_->DisplaySize.x), static_cast<int>(io_->DisplaySize.y));
@@ -415,6 +473,82 @@ void GuiApplication::render_frame() {
 void GuiApplication::render_main_menu_bar() {
 	if (ImGui::BeginMainMenuBar()) {
 		if (ImGui::BeginMenu("File")) {
+			// Save State submenu
+			bool rom_loaded = cartridge_ && cartridge_->is_loaded();
+			if (!rom_loaded) {
+				ImGui::BeginDisabled();
+			}
+
+			if (ImGui::BeginMenu("Save State")) {
+				for (int i = 1; i <= 9; ++i) {
+					char label[32];
+					snprintf(label, sizeof(label), "Slot %d (F%d)", i, i);
+					if (ImGui::MenuItem(label)) {
+						save_state_to_slot(i);
+					}
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem("Quick Save (F5)")) {
+					quick_save();
+				}
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu("Load State")) {
+				for (int i = 1; i <= 9; ++i) {
+					char label[64];
+					bool slot_exists = save_state_manager_ && save_state_manager_->slot_exists(i);
+
+					if (slot_exists) {
+						auto timestamp = save_state_manager_->get_slot_timestamp(i);
+						if (timestamp) {
+							auto time_t_val = std::chrono::system_clock::to_time_t(*timestamp);
+							std::tm tm_val;
+							localtime_s(&tm_val, &time_t_val);
+							snprintf(label, sizeof(label), "Slot %d (Shift+F%d) - %02d:%02d:%02d", i, i, tm_val.tm_hour,
+									 tm_val.tm_min, tm_val.tm_sec);
+						} else {
+							snprintf(label, sizeof(label), "Slot %d (Shift+F%d)", i, i);
+						}
+					} else {
+						snprintf(label, sizeof(label), "Slot %d (Shift+F%d) - Empty", i, i);
+					}
+
+					if (!slot_exists) {
+						ImGui::BeginDisabled();
+					}
+
+					if (ImGui::MenuItem(label)) {
+						load_state_from_slot(i);
+					}
+
+					if (!slot_exists) {
+						ImGui::EndDisabled();
+					}
+				}
+				ImGui::Separator();
+
+				bool quick_save_exists =
+					save_state_manager_ &&
+					std::filesystem::exists(save_state_manager_->get_save_directory() / "quicksave.vns");
+				if (!quick_save_exists) {
+					ImGui::BeginDisabled();
+				}
+				if (ImGui::MenuItem("Quick Load (F8)")) {
+					quick_load();
+				}
+				if (!quick_save_exists) {
+					ImGui::EndDisabled();
+				}
+
+				ImGui::EndMenu();
+			}
+
+			if (!rom_loaded) {
+				ImGui::EndDisabled();
+			}
+
+			ImGui::Separator();
 			if (ImGui::MenuItem("Exit")) {
 				running_ = false;
 			}
@@ -678,6 +812,137 @@ void GuiApplication::setup_callbacks() {
 			// Process the reset immediately by stepping once
 			(void)cpu_->execute_instruction(); // Discard return value for reset processing
 		});
+	}
+}
+
+// =============================================================================
+// Save State Implementation
+// =============================================================================
+
+void GuiApplication::save_state_to_slot(int slot) {
+	if (!save_state_manager_ || !cartridge_ || !cartridge_->is_loaded()) {
+		show_save_state_status("No ROM loaded!", false);
+		return;
+	}
+
+	// Pause emulation during save
+	bool was_running = emulation_running_ && !emulation_paused_;
+	if (was_running) {
+		pause_emulation();
+	}
+
+	bool success = save_state_manager_->save_to_slot(slot);
+
+	if (success) {
+		char message[64];
+		snprintf(message, sizeof(message), "Saved to slot %d", slot);
+		show_save_state_status(message, true);
+	} else {
+		const std::string &error = save_state_manager_->get_last_error();
+		show_save_state_status("Save failed: " + error, false);
+	}
+
+	// Resume if it was running
+	if (was_running) {
+		start_emulation();
+	}
+}
+
+void GuiApplication::load_state_from_slot(int slot) {
+	if (!save_state_manager_ || !cartridge_ || !cartridge_->is_loaded()) {
+		show_save_state_status("No ROM loaded!", false);
+		return;
+	}
+
+	if (!save_state_manager_->slot_exists(slot)) {
+		char message[64];
+		snprintf(message, sizeof(message), "Slot %d is empty", slot);
+		show_save_state_status(message, false);
+		return;
+	}
+
+	// Pause emulation during load
+	bool was_running = emulation_running_ && !emulation_paused_;
+	if (was_running) {
+		pause_emulation();
+	}
+
+	bool success = save_state_manager_->load_from_slot(slot);
+
+	if (success) {
+		char message[64];
+		snprintf(message, sizeof(message), "Loaded from slot %d", slot);
+		show_save_state_status(message, true);
+	} else {
+		const std::string &error = save_state_manager_->get_last_error();
+		show_save_state_status("Load failed: " + error, false);
+	}
+
+	// Resume if it was running
+	if (was_running) {
+		start_emulation();
+	}
+}
+
+void GuiApplication::quick_save() {
+	if (!save_state_manager_ || !cartridge_ || !cartridge_->is_loaded()) {
+		show_save_state_status("No ROM loaded!", false);
+		return;
+	}
+
+	bool was_running = emulation_running_ && !emulation_paused_;
+	if (was_running) {
+		pause_emulation();
+	}
+
+	bool success = save_state_manager_->quick_save();
+
+	if (success) {
+		show_save_state_status("Quick save successful", true);
+	} else {
+		const std::string &error = save_state_manager_->get_last_error();
+		show_save_state_status("Quick save failed: " + error, false);
+	}
+
+	if (was_running) {
+		start_emulation();
+	}
+}
+
+void GuiApplication::quick_load() {
+	if (!save_state_manager_ || !cartridge_ || !cartridge_->is_loaded()) {
+		show_save_state_status("No ROM loaded!", false);
+		return;
+	}
+
+	bool was_running = emulation_running_ && !emulation_paused_;
+	if (was_running) {
+		pause_emulation();
+	}
+
+	bool success = save_state_manager_->quick_load();
+
+	if (success) {
+		show_save_state_status("Quick load successful", true);
+	} else {
+		const std::string &error = save_state_manager_->get_last_error();
+		show_save_state_status("Quick load failed: " + error, false);
+	}
+
+	if (was_running) {
+		start_emulation();
+	}
+}
+
+void GuiApplication::show_save_state_status(const std::string &message, bool success) {
+	save_state_status_message_ = message;
+	save_state_status_timer_ = 3.0f; // Show for 3 seconds
+
+	// Print to console as well
+	if (success) {
+		std::cout << "[Save State] " << message << std::endl;
+	} else {
+		std::cerr << "[Save State] " << message << std::endl;
 	}
 }
 

@@ -87,6 +87,10 @@ class APU : public Component {
 		sample_rate_converter_ = SampleRateConverter(static_cast<float>(CPU_CLOCK_NTSC), sample_rate);
 	}
 
+	// Save state serialization
+	void serialize_state(std::vector<uint8_t> &buffer) const;
+	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset);
+
   private:
 	// Frame Counter - CRITICAL for timing
 	struct FrameCounter {

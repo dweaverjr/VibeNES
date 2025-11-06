@@ -788,4 +788,261 @@ uint8_t APU::DMCChannel::get_output() {
 	return output_level;
 }
 
+// =============================================================================
+// Save State Serialization
+// =============================================================================
+
+void APU::serialize_state(std::vector<uint8_t> &buffer) const {
+	// Frame counter
+	buffer.push_back(static_cast<uint8_t>(frame_counter_.divider & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((frame_counter_.divider >> 8) & 0xFF));
+	buffer.push_back(frame_counter_.step);
+	buffer.push_back(frame_counter_.mode ? 1 : 0);
+	buffer.push_back(frame_counter_.irq_inhibit ? 1 : 0);
+	buffer.push_back(frame_counter_.reset_delay);
+
+	// Pulse 1
+	buffer.push_back(static_cast<uint8_t>(pulse1_.timer & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((pulse1_.timer >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(pulse1_.timer_period & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((pulse1_.timer_period >> 8) & 0xFF));
+	buffer.push_back(pulse1_.timer_sequence_pos);
+	buffer.push_back(pulse1_.sequencer_trigger ? 1 : 0);
+	buffer.push_back(pulse1_.length_counter);
+	buffer.push_back(pulse1_.length_enabled ? 1 : 0);
+	buffer.push_back(pulse1_.envelope_volume);
+	buffer.push_back(pulse1_.envelope_divider);
+	buffer.push_back(pulse1_.envelope_decay_level);
+	buffer.push_back(pulse1_.envelope_start ? 1 : 0);
+	buffer.push_back(pulse1_.constant_volume ? 1 : 0);
+	buffer.push_back(pulse1_.sweep_enabled ? 1 : 0);
+	buffer.push_back(pulse1_.sweep_divider);
+	buffer.push_back(pulse1_.sweep_period);
+	buffer.push_back(pulse1_.sweep_negate ? 1 : 0);
+	buffer.push_back(pulse1_.sweep_shift);
+	buffer.push_back(pulse1_.sweep_reload ? 1 : 0);
+	buffer.push_back(pulse1_.duty);
+	buffer.push_back(pulse1_.duty_sequence_pos);
+	buffer.push_back(pulse1_.enabled ? 1 : 0);
+
+	// Pulse 2 (same structure)
+	buffer.push_back(static_cast<uint8_t>(pulse2_.timer & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((pulse2_.timer >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(pulse2_.timer_period & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((pulse2_.timer_period >> 8) & 0xFF));
+	buffer.push_back(pulse2_.timer_sequence_pos);
+	buffer.push_back(pulse2_.sequencer_trigger ? 1 : 0);
+	buffer.push_back(pulse2_.length_counter);
+	buffer.push_back(pulse2_.length_enabled ? 1 : 0);
+	buffer.push_back(pulse2_.envelope_volume);
+	buffer.push_back(pulse2_.envelope_divider);
+	buffer.push_back(pulse2_.envelope_decay_level);
+	buffer.push_back(pulse2_.envelope_start ? 1 : 0);
+	buffer.push_back(pulse2_.constant_volume ? 1 : 0);
+	buffer.push_back(pulse2_.sweep_enabled ? 1 : 0);
+	buffer.push_back(pulse2_.sweep_divider);
+	buffer.push_back(pulse2_.sweep_period);
+	buffer.push_back(pulse2_.sweep_negate ? 1 : 0);
+	buffer.push_back(pulse2_.sweep_shift);
+	buffer.push_back(pulse2_.sweep_reload ? 1 : 0);
+	buffer.push_back(pulse2_.duty);
+	buffer.push_back(pulse2_.duty_sequence_pos);
+	buffer.push_back(pulse2_.enabled ? 1 : 0);
+
+	// Triangle
+	buffer.push_back(static_cast<uint8_t>(triangle_.timer & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((triangle_.timer >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(triangle_.timer_period & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((triangle_.timer_period >> 8) & 0xFF));
+	buffer.push_back(triangle_.sequence_pos);
+	buffer.push_back(triangle_.length_counter);
+	buffer.push_back(triangle_.linear_counter);
+	buffer.push_back(triangle_.linear_counter_period);
+	buffer.push_back(triangle_.linear_counter_reload ? 1 : 0);
+	buffer.push_back(triangle_.control_flag ? 1 : 0);
+	buffer.push_back(triangle_.enabled ? 1 : 0);
+
+	// Noise
+	buffer.push_back(static_cast<uint8_t>(noise_.timer & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((noise_.timer >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(noise_.timer_period & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((noise_.timer_period >> 8) & 0xFF));
+	buffer.push_back(noise_.sequencer_trigger ? 1 : 0);
+	buffer.push_back(noise_.length_counter);
+	buffer.push_back(noise_.length_enabled ? 1 : 0);
+	buffer.push_back(noise_.envelope_volume);
+	buffer.push_back(noise_.envelope_divider);
+	buffer.push_back(noise_.envelope_decay_level);
+	buffer.push_back(noise_.envelope_start ? 1 : 0);
+	buffer.push_back(noise_.constant_volume ? 1 : 0);
+	buffer.push_back(noise_.mode ? 1 : 0);
+	buffer.push_back(static_cast<uint8_t>(noise_.shift_register & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((noise_.shift_register >> 8) & 0xFF));
+	buffer.push_back(noise_.enabled ? 1 : 0);
+
+	// DMC
+	buffer.push_back(static_cast<uint8_t>(dmc_.timer & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((dmc_.timer >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(dmc_.timer_period & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((dmc_.timer_period >> 8) & 0xFF));
+	buffer.push_back(dmc_.output_level);
+	buffer.push_back(static_cast<uint8_t>(dmc_.sample_address & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((dmc_.sample_address >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(dmc_.sample_length & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((dmc_.sample_length >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(dmc_.current_address & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((dmc_.current_address >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(dmc_.bytes_remaining & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((dmc_.bytes_remaining >> 8) & 0xFF));
+	buffer.push_back(dmc_.shift_register);
+	buffer.push_back(dmc_.bits_remaining);
+	buffer.push_back(dmc_.sample_buffer);
+	buffer.push_back(dmc_.sample_buffer_empty ? 1 : 0);
+	buffer.push_back(dmc_.silence ? 1 : 0);
+	buffer.push_back(dmc_.irq_enabled ? 1 : 0);
+	buffer.push_back(dmc_.loop_flag ? 1 : 0);
+	buffer.push_back(dmc_.enabled ? 1 : 0);
+
+	// Status flags
+	buffer.push_back(frame_irq_flag_ ? 1 : 0);
+	buffer.push_back(dmc_irq_flag_ ? 1 : 0);
+	buffer.push_back(prev_irq_line_state_ ? 1 : 0);
+
+	// DMC DMA tracking
+	buffer.push_back(dmc_dma_in_progress_ ? 1 : 0);
+	buffer.push_back(dmc_stall_cycles_);
+
+	// Cycle counter (64-bit)
+	for (int i = 0; i < 8; ++i) {
+		buffer.push_back(static_cast<uint8_t>((cycle_count_ >> (i * 8)) & 0xFF));
+	}
+}
+
+void APU::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Frame counter
+	frame_counter_.divider = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	frame_counter_.step = buffer[offset++];
+	frame_counter_.mode = buffer[offset++] != 0;
+	frame_counter_.irq_inhibit = buffer[offset++] != 0;
+	frame_counter_.reset_delay = buffer[offset++];
+
+	// Pulse 1
+	pulse1_.timer = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	pulse1_.timer_period = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	pulse1_.timer_sequence_pos = buffer[offset++];
+	pulse1_.sequencer_trigger = buffer[offset++] != 0;
+	pulse1_.length_counter = buffer[offset++];
+	pulse1_.length_enabled = buffer[offset++] != 0;
+	pulse1_.envelope_volume = buffer[offset++];
+	pulse1_.envelope_divider = buffer[offset++];
+	pulse1_.envelope_decay_level = buffer[offset++];
+	pulse1_.envelope_start = buffer[offset++] != 0;
+	pulse1_.constant_volume = buffer[offset++] != 0;
+	pulse1_.sweep_enabled = buffer[offset++] != 0;
+	pulse1_.sweep_divider = buffer[offset++];
+	pulse1_.sweep_period = buffer[offset++];
+	pulse1_.sweep_negate = buffer[offset++] != 0;
+	pulse1_.sweep_shift = buffer[offset++];
+	pulse1_.sweep_reload = buffer[offset++] != 0;
+	pulse1_.duty = buffer[offset++];
+	pulse1_.duty_sequence_pos = buffer[offset++];
+	pulse1_.enabled = buffer[offset++] != 0;
+
+	// Pulse 2 (same structure)
+	pulse2_.timer = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	pulse2_.timer_period = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	pulse2_.timer_sequence_pos = buffer[offset++];
+	pulse2_.sequencer_trigger = buffer[offset++] != 0;
+	pulse2_.length_counter = buffer[offset++];
+	pulse2_.length_enabled = buffer[offset++] != 0;
+	pulse2_.envelope_volume = buffer[offset++];
+	pulse2_.envelope_divider = buffer[offset++];
+	pulse2_.envelope_decay_level = buffer[offset++];
+	pulse2_.envelope_start = buffer[offset++] != 0;
+	pulse2_.constant_volume = buffer[offset++] != 0;
+	pulse2_.sweep_enabled = buffer[offset++] != 0;
+	pulse2_.sweep_divider = buffer[offset++];
+	pulse2_.sweep_period = buffer[offset++];
+	pulse2_.sweep_negate = buffer[offset++] != 0;
+	pulse2_.sweep_shift = buffer[offset++];
+	pulse2_.sweep_reload = buffer[offset++] != 0;
+	pulse2_.duty = buffer[offset++];
+	pulse2_.duty_sequence_pos = buffer[offset++];
+	pulse2_.enabled = buffer[offset++] != 0;
+
+	// Triangle
+	triangle_.timer = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	triangle_.timer_period = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	triangle_.sequence_pos = buffer[offset++];
+	triangle_.length_counter = buffer[offset++];
+	triangle_.linear_counter = buffer[offset++];
+	triangle_.linear_counter_period = buffer[offset++];
+	triangle_.linear_counter_reload = buffer[offset++] != 0;
+	triangle_.control_flag = buffer[offset++] != 0;
+	triangle_.enabled = buffer[offset++] != 0;
+
+	// Noise
+	noise_.timer = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	noise_.timer_period = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	noise_.sequencer_trigger = buffer[offset++] != 0;
+	noise_.length_counter = buffer[offset++];
+	noise_.length_enabled = buffer[offset++] != 0;
+	noise_.envelope_volume = buffer[offset++];
+	noise_.envelope_divider = buffer[offset++];
+	noise_.envelope_decay_level = buffer[offset++];
+	noise_.envelope_start = buffer[offset++] != 0;
+	noise_.constant_volume = buffer[offset++] != 0;
+	noise_.mode = buffer[offset++] != 0;
+	noise_.shift_register = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	noise_.enabled = buffer[offset++] != 0;
+
+	// DMC
+	dmc_.timer = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	dmc_.timer_period = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	dmc_.output_level = buffer[offset++];
+	dmc_.sample_address = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	dmc_.sample_length = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	dmc_.current_address = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	dmc_.bytes_remaining = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	dmc_.shift_register = buffer[offset++];
+	dmc_.bits_remaining = buffer[offset++];
+	dmc_.sample_buffer = buffer[offset++];
+	dmc_.sample_buffer_empty = buffer[offset++] != 0;
+	dmc_.silence = buffer[offset++] != 0;
+	dmc_.irq_enabled = buffer[offset++] != 0;
+	dmc_.loop_flag = buffer[offset++] != 0;
+	dmc_.enabled = buffer[offset++] != 0;
+
+	// Status flags
+	frame_irq_flag_ = buffer[offset++] != 0;
+	dmc_irq_flag_ = buffer[offset++] != 0;
+	prev_irq_line_state_ = buffer[offset++] != 0;
+
+	// DMC DMA tracking
+	dmc_dma_in_progress_ = buffer[offset++] != 0;
+	dmc_stall_cycles_ = buffer[offset++];
+
+	// Cycle counter (64-bit)
+	cycle_count_ = 0;
+	for (int i = 0; i < 8; ++i) {
+		cycle_count_ |= static_cast<uint64_t>(buffer[offset++]) << (i * 8);
+	}
+}
+
 } // namespace nes

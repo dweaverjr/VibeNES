@@ -39,6 +39,10 @@ class PPUMemory {
 	// Nametable mirroring support
 	void set_mirroring_mode(bool vertical_mirroring);
 
+	// Save state serialization
+	void serialize_state(std::vector<uint8_t> &buffer) const;
+	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset);
+
   private:
 	// Internal memory arrays
 	std::array<uint8_t, 2048> vram_;			   // 2KB VRAM (nametables)

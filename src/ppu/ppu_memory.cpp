@@ -129,4 +129,36 @@ uint8_t PPUMemory::map_palette_address(uint8_t address) {
 	return index;
 }
 
+// Save state serialization
+void PPUMemory::serialize_state(std::vector<uint8_t> &buffer) const {
+	// Serialize VRAM (2048 bytes)
+	buffer.insert(buffer.end(), vram_.begin(), vram_.end());
+
+	// Serialize palette RAM (32 bytes)
+	buffer.insert(buffer.end(), palette_ram_.begin(), palette_ram_.end());
+
+	// Serialize CHR RAM fallback (8192 bytes) - needed for CHR-RAM games
+	buffer.insert(buffer.end(), chr_ram_fallback_.begin(), chr_ram_fallback_.end());
+
+	// Serialize mirroring mode
+	buffer.push_back(vertical_mirroring_ ? 1 : 0);
+}
+
+void PPUMemory::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Deserialize VRAM (2048 bytes)
+	std::copy(buffer.begin() + offset, buffer.begin() + offset + 2048, vram_.begin());
+	offset += 2048;
+
+	// Deserialize palette RAM (32 bytes)
+	std::copy(buffer.begin() + offset, buffer.begin() + offset + 32, palette_ram_.begin());
+	offset += 32;
+
+	// Deserialize CHR RAM fallback (8192 bytes)
+	std::copy(buffer.begin() + offset, buffer.begin() + offset + 8192, chr_ram_fallback_.begin());
+	offset += 8192;
+
+	// Deserialize mirroring mode
+	vertical_mirroring_ = buffer[offset++] != 0;
+}
+
 } // namespace nes

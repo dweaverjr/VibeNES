@@ -103,4 +103,22 @@ void Mapper002::reset() {
 	selected_bank_ = 0;
 }
 
+void Mapper002::serialize_state(std::vector<Byte> &buffer) const {
+	// Serialize CHR RAM (8KB)
+	buffer.insert(buffer.end(), chr_ram_.begin(), chr_ram_.end());
+
+	// Serialize selected bank
+	buffer.push_back(selected_bank_);
+}
+
+void Mapper002::deserialize_state(const std::vector<Byte> &buffer, size_t &offset) {
+	// Deserialize CHR RAM (8KB)
+	for (size_t i = 0; i < chr_ram_.size() && offset < buffer.size(); ++i) {
+		chr_ram_[i] = buffer[offset++];
+	}
+
+	// Deserialize selected bank
+	selected_bank_ = buffer[offset++];
+}
+
 } // namespace nes

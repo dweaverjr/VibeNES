@@ -2114,4 +2114,209 @@ void PPU::perform_tile_fetch_cycle() {
 	}
 }
 
+// =============================================================================
+// Save State Serialization
+// =============================================================================
+
+void PPU::serialize_state(std::vector<uint8_t> &buffer) const {
+	// Timing state
+	buffer.push_back(static_cast<uint8_t>(current_cycle_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((current_cycle_ >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(current_scanline_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((current_scanline_ >> 8) & 0xFF));
+
+	// Frame counter (64-bit)
+	for (int i = 0; i < 8; ++i) {
+		buffer.push_back(static_cast<uint8_t>((frame_counter_ >> (i * 8)) & 0xFF));
+	}
+
+	buffer.push_back(frame_ready_ ? 1 : 0);
+
+	// PPU registers
+	buffer.push_back(control_register_);
+	buffer.push_back(mask_register_);
+	buffer.push_back(status_register_);
+	buffer.push_back(oam_address_);
+
+	// Internal latches and state
+	buffer.push_back(static_cast<uint8_t>(vram_address_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((vram_address_ >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(temp_vram_address_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((temp_vram_address_ >> 8) & 0xFF));
+	buffer.push_back(fine_x_scroll_);
+	buffer.push_back(write_toggle_ ? 1 : 0);
+	buffer.push_back(read_buffer_);
+	buffer.push_back(vram_wrap_read_pending_ ? 1 : 0);
+	buffer.push_back(static_cast<uint8_t>(vram_wrap_target_address_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((vram_wrap_target_address_ >> 8) & 0xFF));
+	buffer.push_back(vram_wrap_latched_value_);
+
+	// OAM memory (256 bytes)
+	buffer.insert(buffer.end(), oam_memory_.begin(), oam_memory_.end());
+
+	// Secondary OAM (32 bytes)
+	buffer.insert(buffer.end(), secondary_oam_.begin(), secondary_oam_.end());
+
+	// OAM DMA state
+	buffer.push_back(oam_dma_active_ ? 1 : 0);
+	buffer.push_back(static_cast<uint8_t>(oam_dma_address_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((oam_dma_address_ >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(oam_dma_cycle_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((oam_dma_cycle_ >> 8) & 0xFF));
+	buffer.push_back(oam_dma_subcycle_);
+	buffer.push_back(oam_dma_pending_ ? 1 : 0);
+	buffer.push_back(oam_dma_data_latch_);
+
+	// Hardware timing state
+	buffer.push_back(odd_frame_ ? 1 : 0);
+	buffer.push_back(nmi_delay_);
+	buffer.push_back(suppress_vbl_ ? 1 : 0);
+	buffer.push_back(rendering_disabled_mid_scanline_ ? 1 : 0);
+
+	// Bus state
+	buffer.push_back(ppu_data_bus_);
+	buffer.push_back(io_db_);
+	buffer.push_back(vram_address_corruption_pending_ ? 1 : 0);
+
+	// Background shift registers
+	buffer.push_back(static_cast<uint8_t>(bg_shift_registers_.pattern_low_shift & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((bg_shift_registers_.pattern_low_shift >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(bg_shift_registers_.pattern_high_shift & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((bg_shift_registers_.pattern_high_shift >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(bg_shift_registers_.attribute_low_shift & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((bg_shift_registers_.attribute_low_shift >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(bg_shift_registers_.attribute_high_shift & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((bg_shift_registers_.attribute_high_shift >> 8) & 0xFF));
+	buffer.push_back(bg_shift_registers_.next_tile_id);
+	buffer.push_back(bg_shift_registers_.next_tile_attribute);
+	buffer.push_back(bg_shift_registers_.next_tile_pattern_low);
+	buffer.push_back(bg_shift_registers_.next_tile_pattern_high);
+
+	// Tile fetch state
+	buffer.push_back(tile_fetch_state_.fetch_cycle);
+	buffer.push_back(tile_fetch_state_.current_tile_id);
+	buffer.push_back(tile_fetch_state_.current_attribute);
+	buffer.push_back(tile_fetch_state_.current_pattern_low);
+	buffer.push_back(tile_fetch_state_.current_pattern_high);
+
+	// Sprite state
+	buffer.push_back(sprite_count_current_scanline_);
+	buffer.push_back(sprite_count_next_scanline_);
+	buffer.push_back(sprite_0_on_scanline_ ? 1 : 0);
+	buffer.push_back(sprite_0_on_next_scanline_ ? 1 : 0);
+	buffer.push_back(sprite_0_hit_detected_ ? 1 : 0);
+	buffer.push_back(sprite_0_hit_delay_);
+	buffer.push_back(static_cast<uint8_t>(sprite_eval_state_));
+	buffer.push_back(sprite_eval_n_);
+	buffer.push_back(sprite_eval_m_);
+	buffer.push_back(sprite_eval_buffer_);
+	buffer.push_back(secondary_oam_index_);
+	buffer.push_back(sprite_overflow_detected_ ? 1 : 0);
+
+	// PPU Memory (VRAM, palette RAM)
+	memory_.serialize_state(buffer);
+}
+
+void PPU::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Timing state
+	current_cycle_ = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	current_scanline_ = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+
+	// Frame counter (64-bit)
+	frame_counter_ = 0;
+	for (int i = 0; i < 8; ++i) {
+		frame_counter_ |= static_cast<uint64_t>(buffer[offset++]) << (i * 8);
+	}
+
+	frame_ready_ = buffer[offset++] != 0;
+
+	// PPU registers
+	control_register_ = buffer[offset++];
+	mask_register_ = buffer[offset++];
+	status_register_ = buffer[offset++];
+	oam_address_ = buffer[offset++];
+
+	// Internal latches and state
+	vram_address_ = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	temp_vram_address_ = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	fine_x_scroll_ = buffer[offset++];
+	write_toggle_ = buffer[offset++] != 0;
+	read_buffer_ = buffer[offset++];
+	vram_wrap_read_pending_ = buffer[offset++] != 0;
+	vram_wrap_target_address_ = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	vram_wrap_latched_value_ = buffer[offset++];
+
+	// OAM memory (256 bytes)
+	std::copy(buffer.begin() + offset, buffer.begin() + offset + 256, oam_memory_.begin());
+	offset += 256;
+
+	// Secondary OAM (32 bytes)
+	std::copy(buffer.begin() + offset, buffer.begin() + offset + 32, secondary_oam_.begin());
+	offset += 32;
+
+	// OAM DMA state
+	oam_dma_active_ = buffer[offset++] != 0;
+	oam_dma_address_ = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	oam_dma_cycle_ = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	oam_dma_subcycle_ = buffer[offset++];
+	oam_dma_pending_ = buffer[offset++] != 0;
+	oam_dma_data_latch_ = buffer[offset++];
+
+	// Hardware timing state
+	odd_frame_ = buffer[offset++] != 0;
+	nmi_delay_ = buffer[offset++];
+	suppress_vbl_ = buffer[offset++] != 0;
+	rendering_disabled_mid_scanline_ = buffer[offset++] != 0;
+
+	// Bus state
+	ppu_data_bus_ = buffer[offset++];
+	io_db_ = buffer[offset++];
+	vram_address_corruption_pending_ = buffer[offset++] != 0;
+
+	// Background shift registers
+	bg_shift_registers_.pattern_low_shift = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	bg_shift_registers_.pattern_high_shift = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	bg_shift_registers_.attribute_low_shift = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	bg_shift_registers_.attribute_high_shift = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+	offset += 2;
+	bg_shift_registers_.next_tile_id = buffer[offset++];
+	bg_shift_registers_.next_tile_attribute = buffer[offset++];
+	bg_shift_registers_.next_tile_pattern_low = buffer[offset++];
+	bg_shift_registers_.next_tile_pattern_high = buffer[offset++];
+
+	// Tile fetch state
+	tile_fetch_state_.fetch_cycle = buffer[offset++];
+	tile_fetch_state_.current_tile_id = buffer[offset++];
+	tile_fetch_state_.current_attribute = buffer[offset++];
+	tile_fetch_state_.current_pattern_low = buffer[offset++];
+	tile_fetch_state_.current_pattern_high = buffer[offset++];
+
+	// Sprite state
+	sprite_count_current_scanline_ = buffer[offset++];
+	sprite_count_next_scanline_ = buffer[offset++];
+	sprite_0_on_scanline_ = buffer[offset++] != 0;
+	sprite_0_on_next_scanline_ = buffer[offset++] != 0;
+	sprite_0_hit_detected_ = buffer[offset++] != 0;
+	sprite_0_hit_delay_ = buffer[offset++];
+	sprite_eval_state_ = static_cast<SpriteEvalState>(buffer[offset++]);
+	sprite_eval_n_ = buffer[offset++];
+	sprite_eval_m_ = buffer[offset++];
+	sprite_eval_buffer_ = buffer[offset++];
+	secondary_oam_index_ = buffer[offset++];
+	sprite_overflow_detected_ = buffer[offset++] != 0;
+
+	// PPU Memory (VRAM, palette RAM)
+	memory_.deserialize_state(buffer, offset);
+}
+
 } // namespace nes
