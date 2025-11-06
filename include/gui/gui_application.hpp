@@ -64,6 +64,12 @@ class GuiApplication {
 	bool running_;
 	bool show_demo_window_;
 
+	// Fullscreen state
+	bool fullscreen_mode_;
+	int fullscreen_scale_;	  // Integer scaling multiplier (calculated automatically)
+	int fullscreen_offset_x_; // X offset for centering
+	int fullscreen_offset_y_; // Y offset for centering
+
 	// Emulation state
 	bool emulation_running_;
 	bool emulation_paused_;
@@ -110,6 +116,11 @@ class GuiApplication {
 	void render_frame();
 	void render_main_menu_bar();
 	void cleanup();
+
+	// Fullscreen mode
+	void toggle_fullscreen();
+	void calculate_fullscreen_layout();
+	void render_fullscreen_display();
 
 	// Emulation control
 	void step_emulation();

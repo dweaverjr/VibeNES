@@ -32,6 +32,7 @@ namespace nes::gui {
 
 GuiApplication::GuiApplication()
 	: window_(nullptr), gl_context_(nullptr), io_(nullptr), running_(false), show_demo_window_(false),
+	  fullscreen_mode_(false), fullscreen_scale_(0), fullscreen_offset_x_(0), fullscreen_offset_y_(0),
 	  emulation_running_(false), emulation_paused_(true), emulation_speed_(1.0f), cycle_accumulator_(0.0),
 	  last_frame_counter_(0), frame_timer_initialized_(false), cpu_(nullptr), bus_(nullptr), cartridge_(nullptr),
 	  ppu_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
@@ -222,7 +223,19 @@ void GuiApplication::run() {
 void GuiApplication::handle_events() {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
-		// Let gamepad manager handle controller events first
+		// Check for window close events FIRST (before any other processing)
+		if (event.type == SDL_QUIT) {
+			running_ = false;
+			continue;
+		}
+
+		if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE &&
+			event.window.windowID == SDL_GetWindowID(window_)) {
+			running_ = false;
+			continue;
+		}
+
+		// Let gamepad manager handle controller events
 		if (gamepad_manager_ && gamepad_manager_->handle_sdl_event(event)) {
 			continue; // Event was handled, skip to next
 		}
@@ -230,56 +243,83 @@ void GuiApplication::handle_events() {
 		// Let ImGui process the event
 		ImGui_ImplSDL2_ProcessEvent(&event);
 
-		// Handle hotkeys (only when ImGui is not capturing keyboard)
-		if (event.type == SDL_KEYDOWN && !ImGui::GetIO().WantCaptureKeyboard) {
+		// Handle hotkeys
+		if (event.type == SDL_KEYDOWN) {
+			// Debug: Print key press info
+			std::cout << "[KeyPress] Key: " << SDL_GetKeyName(event.key.keysym.sym);
+			if (io_) {
+				std::cout << " | ImGui WantCapture: " << (io_->WantCaptureKeyboard ? "YES" : "NO");
+			}
+			std::cout << std::endl;
+
+			// Process hotkeys even if ImGui wants keyboard (for critical functions like fullscreen/exit)
 			bool shift_pressed = (SDL_GetModState() & KMOD_SHIFT) != 0;
 			bool ctrl_pressed = (SDL_GetModState() & KMOD_CTRL) != 0;
+			bool alt_pressed = (SDL_GetModState() & KMOD_ALT) != 0;
 
-			// Save state hotkeys (F1-F9)
-			if (!shift_pressed && !ctrl_pressed && event.key.keysym.sym >= SDLK_F1 && event.key.keysym.sym <= SDLK_F9) {
-				int slot = event.key.keysym.sym - SDLK_F1 + 1;
-				save_state_to_slot(slot);
+			// Fullscreen toggle hotkeys (always process these)
+			if (event.key.keysym.sym == SDLK_F11 && !shift_pressed && !ctrl_pressed && !alt_pressed) {
+				std::cout << "[Fullscreen] F11 pressed - toggling" << std::endl;
+				toggle_fullscreen();
 			}
-			// Load state hotkeys (Shift+F1-F9)
-			else if (shift_pressed && !ctrl_pressed && event.key.keysym.sym >= SDLK_F1 &&
-					 event.key.keysym.sym <= SDLK_F9) {
-				int slot = event.key.keysym.sym - SDLK_F1 + 1;
-				load_state_from_slot(slot);
+			// Alt+Enter for fullscreen (alternate)
+			else if (event.key.keysym.sym == SDLK_RETURN && alt_pressed && !shift_pressed && !ctrl_pressed) {
+				std::cout << "[Fullscreen] Alt+Enter pressed - toggling" << std::endl;
+				toggle_fullscreen();
 			}
-		}
-	}
-
-	// Handle quick save/load through ImGui  (F5 and F8 conflict with emulation controls, so handle carefully)
-	// Quick save (Ctrl+F5) and Quick load (Ctrl+F8) to avoid conflicts
-	if (!ImGui::GetIO().WantCaptureKeyboard) {
-		if (ImGui::IsKeyPressed(ImGuiKey_F5) && ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
-			quick_save();
-		}
-		if (ImGui::IsKeyPressed(ImGuiKey_F8) && ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
-			quick_load();
-		}
-	}
-
-	// Check SDL events for window close
-	SDL_Event quit_event;
-	while (SDL_PollEvent(&quit_event)) {
-		if (quit_event.type == SDL_QUIT) {
-			running_ = false;
-		}
-
-		if (quit_event.type == SDL_WINDOWEVENT && quit_event.window.event == SDL_WINDOWEVENT_CLOSE &&
-			quit_event.window.windowID == SDL_GetWindowID(window_)) {
-			running_ = false;
+			// Escape to exit fullscreen
+			else if (event.key.keysym.sym == SDLK_ESCAPE && fullscreen_mode_) {
+				std::cout << "[Fullscreen] Escape pressed - exiting fullscreen" << std::endl;
+				toggle_fullscreen();
+			}
+			// Only process save state hotkeys if ImGui doesn't want keyboard
+			else if (!io_ || !io_->WantCaptureKeyboard) {
+				// Save state hotkeys (F1-F9)
+				if (!shift_pressed && !ctrl_pressed && event.key.keysym.sym >= SDLK_F1 &&
+					event.key.keysym.sym <= SDLK_F9) {
+					int slot = event.key.keysym.sym - SDLK_F1 + 1;
+					std::cout << "[SaveState] Saving to slot " << slot << std::endl;
+					save_state_to_slot(slot);
+				}
+				// Load state hotkeys (Shift+F1-F9)
+				else if (shift_pressed && !ctrl_pressed && event.key.keysym.sym >= SDLK_F1 &&
+						 event.key.keysym.sym <= SDLK_F9) {
+					int slot = event.key.keysym.sym - SDLK_F1 + 1;
+					std::cout << "[SaveState] Loading from slot " << slot << std::endl;
+					load_state_from_slot(slot);
+				}
+				// Quick save (Ctrl+F5)
+				else if (ctrl_pressed && !shift_pressed && event.key.keysym.sym == SDLK_F5) {
+					std::cout << "[SaveState] Quick save" << std::endl;
+					quick_save();
+				}
+				// Quick load (Ctrl+F8)
+				else if (ctrl_pressed && !shift_pressed && event.key.keysym.sym == SDLK_F8) {
+					std::cout << "[SaveState] Quick load" << std::endl;
+					quick_load();
+				}
+			}
 		}
 	}
 }
-
 void GuiApplication::render_frame() {
 	// Start the Dear ImGui frame
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplSDL2_NewFrame();
 	ImGui::NewFrame();
 
+	// Fullscreen mode: render only the NES display
+	if (fullscreen_mode_) {
+		render_fullscreen_display();
+
+		// Render ImGui
+		ImGui::Render();
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+		SDL_GL_SwapWindow(window_);
+		return;
+	}
+
+	// Normal mode: render menu bar and all panels
 	render_main_menu_bar();
 
 	// Create a full-screen dockspace for the fixed layout
@@ -551,6 +591,13 @@ void GuiApplication::render_main_menu_bar() {
 			ImGui::Separator();
 			if (ImGui::MenuItem("Exit")) {
 				running_ = false;
+			}
+			ImGui::EndMenu();
+		}
+
+		if (ImGui::BeginMenu("View")) {
+			if (ImGui::MenuItem("Fullscreen", "F11", fullscreen_mode_)) {
+				toggle_fullscreen();
 			}
 			ImGui::EndMenu();
 		}
@@ -944,6 +991,96 @@ void GuiApplication::show_save_state_status(const std::string &message, bool suc
 	} else {
 		std::cerr << "[Save State] " << message << std::endl;
 	}
+}
+
+void GuiApplication::toggle_fullscreen() {
+	fullscreen_mode_ = !fullscreen_mode_;
+
+	if (fullscreen_mode_) {
+		// Enter borderless fullscreen
+		SDL_SetWindowFullscreen(window_, SDL_WINDOW_FULLSCREEN_DESKTOP);
+		calculate_fullscreen_layout();
+		std::cout << "[Fullscreen] Enabled - Scale: " << fullscreen_scale_ << "x (" << (256 * fullscreen_scale_) << "x"
+				  << (240 * fullscreen_scale_) << ")" << std::endl;
+	} else {
+		// Exit fullscreen - return to windowed mode
+		SDL_SetWindowFullscreen(window_, 0);
+		std::cout << "[Fullscreen] Disabled" << std::endl;
+	}
+}
+
+void GuiApplication::calculate_fullscreen_layout() {
+	// Get current display dimensions
+	SDL_DisplayMode display_mode;
+	SDL_GetCurrentDisplayMode(0, &display_mode);
+
+	const int screen_width = display_mode.w;
+	const int screen_height = display_mode.h;
+
+	// NES native resolution
+	const int nes_width = 256;
+	const int nes_height = 240;
+
+	// Calculate maximum integer scale that fits
+	const int max_scale_x = screen_width / nes_width;
+	const int max_scale_y = screen_height / nes_height;
+	fullscreen_scale_ = std::min(max_scale_x, max_scale_y);
+
+	// Ensure at least 1x scale
+	if (fullscreen_scale_ < 1) {
+		fullscreen_scale_ = 1;
+	}
+
+	// Calculate actual display size
+	const int display_width = nes_width * fullscreen_scale_;
+	const int display_height = nes_height * fullscreen_scale_;
+
+	// Center the display
+	fullscreen_offset_x_ = (screen_width - display_width) / 2;
+	fullscreen_offset_y_ = (screen_height - display_height) / 2;
+}
+
+void GuiApplication::render_fullscreen_display() {
+	if (!ppu_ || !ppu_viewer_panel_) {
+		return;
+	}
+
+	// Update the PPU display texture WITHOUT rendering any UI windows
+	ppu_viewer_panel_->update_display_texture_only(ppu_.get());
+
+	// Clear to black for letterboxing
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	// Create a fullscreen ImGui window with no decorations
+	ImGui::SetNextWindowPos(ImVec2(0, 0));
+	ImGui::SetNextWindowSize(
+		ImVec2(static_cast<float>(ImGui::GetIO().DisplaySize.x), static_cast<float>(ImGui::GetIO().DisplaySize.y)));
+
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+									ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+									ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
+									ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+									ImGuiWindowFlags_NoDecoration;
+
+	if (ImGui::Begin("FullscreenDisplay", nullptr, window_flags)) {
+		// Get the NES display texture from PPU viewer panel
+		unsigned int texture_id = ppu_viewer_panel_->get_main_display_texture();
+
+		if (texture_id != 0) {
+			// Calculate display size and position
+			ImVec2 display_size(static_cast<float>(256 * fullscreen_scale_),
+								static_cast<float>(240 * fullscreen_scale_));
+			ImVec2 display_pos(static_cast<float>(fullscreen_offset_x_), static_cast<float>(fullscreen_offset_y_));
+
+			// Set cursor position for centering
+			ImGui::SetCursorPos(display_pos);
+
+			// Render the texture with integer scaling
+			ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(texture_id)), display_size);
+		}
+	}
+	ImGui::End();
 }
 
 } // namespace nes::gui

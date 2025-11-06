@@ -67,6 +67,14 @@ class PPUViewerPanel {
 		pattern_table_dirty_ = true;
 	}
 
+	// Get texture ID for external rendering (fullscreen mode)
+	GLuint get_main_display_texture() const {
+		return main_display_texture_;
+	}
+
+	// Update texture without rendering UI (for fullscreen mode)
+	void update_display_texture_only(nes::PPU *ppu);
+
   private:
 	bool visible_;
 	PPUDisplayMode display_mode_;

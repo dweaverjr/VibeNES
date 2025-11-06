@@ -10,9 +10,9 @@
 namespace nes::gui {
 
 PPUViewerPanel::PPUViewerPanel()
-	: visible_(true), display_mode_(PPUDisplayMode::REAL_TIME), main_display_texture_(0), pattern_table_texture_(0),
-	  nametable_texture_(0), selected_pattern_table_(0), selected_nametable_(0), selected_palette_(0),
-	  display_scale_(2.0f), pattern_table_dirty_(true), textures_initialized_(false) {
+	: visible_(true), display_mode_(PPUDisplayMode::FRAME_COMPLETE), main_display_texture_(0),
+	  pattern_table_texture_(0), nametable_texture_(0), selected_pattern_table_(0), selected_nametable_(0),
+	  selected_palette_(0), display_scale_(2.0f), pattern_table_dirty_(true), textures_initialized_(false) {
 
 	// Allocate buffers for texture data
 	pattern_table_buffer_ = std::make_unique<uint32_t[]>(256 * 128); // 2 pattern tables side by side
@@ -667,6 +667,39 @@ uint32_t PPUViewerPanel::get_pattern_pixel_color(uint8_t pixel_value, uint8_t pa
 	}
 
 	return visualization_palette[pixel_value];
+}
+
+void PPUViewerPanel::update_display_texture_only(nes::PPU *ppu) {
+	if (!ppu || !ppu->get_frame_buffer()) {
+		return;
+	}
+
+	// Initialize textures if needed
+	if (!textures_initialized_) {
+		initialize_textures();
+	}
+
+	// Check if we should update based on display mode
+	bool should_update = false;
+	switch (display_mode_) {
+	case PPUDisplayMode::FRAME_COMPLETE:
+		should_update = ppu->is_frame_ready();
+		break;
+	case PPUDisplayMode::REAL_TIME:
+		should_update = true;
+		break;
+	case PPUDisplayMode::SCANLINE_STEP:
+		should_update = true;
+		break;
+	}
+
+	if (should_update) {
+		update_main_display_texture(ppu->get_frame_buffer());
+		// Clear the frame ready flag after processing
+		if (display_mode_ == PPUDisplayMode::FRAME_COMPLETE && ppu->is_frame_ready()) {
+			ppu->clear_frame_ready();
+		}
+	}
 }
 
 } // namespace nes::gui
