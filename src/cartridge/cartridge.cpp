@@ -144,4 +144,19 @@ void Cartridge::clear_irq() const {
 	}
 }
 
+// Save state serialization
+void Cartridge::serialize_state(std::vector<uint8_t> &buffer) const {
+	// Serialize mapper state (includes PRG RAM, CHR RAM, and mapper registers)
+	if (mapper_) {
+		mapper_->serialize_state(buffer);
+	}
+}
+
+void Cartridge::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Deserialize mapper state
+	if (mapper_) {
+		mapper_->deserialize_state(buffer, offset);
+	}
+}
+
 } // namespace nes

@@ -58,6 +58,10 @@ class SystemBus final : public Component {
 	[[nodiscard]] float get_audio_volume() const;
 	[[nodiscard]] bool is_audio_playing() const;
 
+	// Save state serialization
+	void serialize_state(std::vector<uint8_t> &buffer) const;
+	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset);
+
   private:
 	// Connected components
 	std::shared_ptr<Ram> ram_;

@@ -124,6 +124,10 @@ class CPU6502 final : public Component {
 		status_.flags.negative_flag_ = value;
 	}
 
+	// Save state serialization
+	void serialize_state(std::vector<uint8_t> &buffer) const;
+	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset);
+
   private:
 	// 6502 Registers
 	Byte accumulator_;		  // A register

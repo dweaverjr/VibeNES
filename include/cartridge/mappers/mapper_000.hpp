@@ -39,6 +39,10 @@ class Mapper000 final : public Mapper {
 		return mirroring_;
 	}
 
+	// Save state serialization
+	void serialize_state(std::vector<uint8_t> &buffer) const override;
+	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) override;
+
   private:
 	std::vector<Byte> prg_rom_; // Program ROM (16KB or 32KB)
 	std::vector<Byte> chr_rom_; // Character ROM (8KB)

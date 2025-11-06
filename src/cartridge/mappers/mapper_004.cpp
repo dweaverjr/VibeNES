@@ -300,4 +300,70 @@ void Mapper004::update_irq_line() {
 	}
 }
 
+void Mapper004::serialize_state(std::vector<Byte> &buffer) const {
+	// Serialize PRG RAM if present (8KB)
+	if (has_prg_ram_) {
+		buffer.insert(buffer.end(), prg_ram_.begin(), prg_ram_.end());
+	}
+
+	// Serialize CHR memory if it's RAM
+	if (chr_is_ram_) {
+		buffer.insert(buffer.end(), chr_mem_.begin(), chr_mem_.end());
+	}
+
+	// Serialize MMC3 registers
+	buffer.push_back(bank_select_);
+
+	// Serialize all 8 bank registers
+	for (Byte bank : banks_) {
+		buffer.push_back(bank);
+	}
+
+	buffer.push_back(mirroring_ ? 1 : 0);
+	buffer.push_back(prg_ram_protect_);
+
+	// Serialize IRQ system state
+	buffer.push_back(irq_latch_);
+	buffer.push_back(irq_counter_);
+	buffer.push_back(irq_reload_ ? 1 : 0);
+	buffer.push_back(irq_enabled_ ? 1 : 0);
+	buffer.push_back(irq_pending_ ? 1 : 0);
+	buffer.push_back(a12_low_count_);
+}
+
+void Mapper004::deserialize_state(const std::vector<Byte> &buffer, size_t &offset) {
+	// Deserialize PRG RAM if present (8KB)
+	if (has_prg_ram_) {
+		for (size_t i = 0; i < prg_ram_.size() && offset < buffer.size(); ++i) {
+			prg_ram_[i] = buffer[offset++];
+		}
+	}
+
+	// Deserialize CHR memory if it's RAM
+	if (chr_is_ram_) {
+		for (size_t i = 0; i < chr_mem_.size() && offset < buffer.size(); ++i) {
+			chr_mem_[i] = buffer[offset++];
+		}
+	}
+
+	// Deserialize MMC3 registers
+	bank_select_ = buffer[offset++];
+
+	// Deserialize all 8 bank registers
+	for (size_t i = 0; i < 8 && offset < buffer.size(); ++i) {
+		banks_[i] = buffer[offset++];
+	}
+
+	mirroring_ = buffer[offset++] != 0;
+	prg_ram_protect_ = buffer[offset++];
+
+	// Deserialize IRQ system state
+	irq_latch_ = buffer[offset++];
+	irq_counter_ = buffer[offset++];
+	irq_reload_ = buffer[offset++] != 0;
+	irq_enabled_ = buffer[offset++] != 0;
+	irq_pending_ = buffer[offset++] != 0;
+	a12_low_count_ = buffer[offset++];
+}
+
 } // namespace nes

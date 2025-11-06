@@ -81,6 +81,10 @@ class Mapper004 final : public Mapper {
 		irq_pending_ = false;
 	}
 
+	// Save state support
+	void serialize_state(std::vector<Byte> &buffer) const override;
+	void deserialize_state(const std::vector<Byte> &buffer, size_t &offset) override;
+
   private:
 	std::vector<Byte> prg_rom_;	  // Program ROM (up to 512KB)
 	std::vector<Byte> prg_ram_;	  // Program RAM (8KB at $6000-$7FFF)

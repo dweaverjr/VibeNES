@@ -44,6 +44,10 @@ class Mapper001 final : public Mapper {
 	void reset() override;
 	Mirroring get_mirroring() const noexcept override;
 
+	// Save state serialization
+	void serialize_state(std::vector<uint8_t> &buffer) const override;
+	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) override;
+
   private:
 	std::vector<Byte> prg_rom_;	  // Program ROM (up to 512KB)
 	std::vector<Byte> prg_ram_;	  // Program RAM (8KB at $6000-$7FFF)

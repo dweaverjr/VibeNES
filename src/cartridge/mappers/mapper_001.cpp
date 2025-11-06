@@ -210,4 +210,49 @@ Mapper::Mirroring Mapper001::get_mirroring() const noexcept {
 	}
 }
 
+// Save state serialization
+void Mapper001::serialize_state(std::vector<uint8_t> &buffer) const {
+	// PRG RAM (8KB if present)
+	if (has_prg_ram_) {
+		buffer.insert(buffer.end(), prg_ram_.begin(), prg_ram_.end());
+	}
+
+	// CHR RAM (if CHR is RAM, not ROM)
+	if (chr_is_ram_) {
+		buffer.insert(buffer.end(), chr_mem_.begin(), chr_mem_.end());
+	}
+
+	// MMC1 registers
+	buffer.push_back(shift_register_);
+	buffer.push_back(shift_count_);
+	buffer.push_back(control_register_);
+	buffer.push_back(chr_bank_0_);
+	buffer.push_back(chr_bank_1_);
+	buffer.push_back(prg_bank_);
+	buffer.push_back(prg_ram_enabled_ ? 1 : 0);
+}
+
+void Mapper001::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// PRG RAM (8KB if present)
+	if (has_prg_ram_) {
+		std::copy(buffer.begin() + offset, buffer.begin() + offset + prg_ram_.size(), prg_ram_.begin());
+		offset += prg_ram_.size();
+	}
+
+	// CHR RAM (if CHR is RAM, not ROM)
+	if (chr_is_ram_) {
+		std::copy(buffer.begin() + offset, buffer.begin() + offset + chr_mem_.size(), chr_mem_.begin());
+		offset += chr_mem_.size();
+	}
+
+	// MMC1 registers
+	shift_register_ = buffer[offset++];
+	shift_count_ = buffer[offset++];
+	control_register_ = buffer[offset++];
+	chr_bank_0_ = buffer[offset++];
+	chr_bank_1_ = buffer[offset++];
+	prg_bank_ = buffer[offset++];
+	prg_ram_enabled_ = buffer[offset++] != 0;
+}
+
 } // namespace nes

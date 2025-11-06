@@ -48,6 +48,10 @@ class Mapper {
 		// Default implementation does nothing
 	}
 
+	// Save state serialization
+	virtual void serialize_state(std::vector<uint8_t> &buffer) const = 0;
+	virtual void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) = 0;
+
   protected:
 	// Helper to check if address is in PRG ROM range
 	static constexpr bool is_prg_rom_address(Address address) noexcept {

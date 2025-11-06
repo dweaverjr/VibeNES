@@ -140,6 +140,10 @@ class PPU : public Component {
 	};
 	[[nodiscard]] DebugState get_debug_state() const;
 
+	// Save state serialization
+	void serialize_state(std::vector<uint8_t> &buffer) const;
+	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset);
+
   private:
 	// Timing state
 	uint16_t current_cycle_;	// Current PPU cycle (0-340)
