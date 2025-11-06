@@ -47,7 +47,8 @@ static uint8_t get_instruction_size(uint8_t opcode) {
 }
 
 DisassemblerPanel::DisassemblerPanel()
-	: visible_(true), follow_pc_(true), start_address_(0x0000), last_pc_(0xFFFF), alignment_valid_(false) {
+	: visible_(true), follow_pc_(true), start_address_(0x0000), last_pc_(0xFFFF), last_pc_index_(0),
+	  alignment_valid_(false) {
 }
 
 void DisassemblerPanel::render(const nes::CPU6502 *cpu, const nes::SystemBus *bus) {
@@ -80,12 +81,14 @@ void DisassemblerPanel::render_instruction_list(const nes::CPU6502 *cpu, const n
 	// Update our instruction stream cache if needed
 	update_instruction_stream(current_pc, bus);
 
-	// Find the current PC in our cached stream
-	auto pc_it = std::find(cached_instruction_stream_.begin(), cached_instruction_stream_.end(), current_pc);
+	// Use cached PC index instead of std::find() for O(1) lookup
+	// Verify the cached index is valid (should always be true after update_instruction_stream)
+	bool pc_found = (last_pc_index_ < cached_instruction_stream_.size() &&
+					 cached_instruction_stream_[last_pc_index_] == current_pc);
 
-	if (pc_it != cached_instruction_stream_.end()) {
-		// PC found in our cached stream - use the cached alignment
-		size_t pc_index = std::distance(cached_instruction_stream_.begin(), pc_it);
+	if (pc_found) {
+		// PC found in our cached stream - use the cached index (already computed)
+		size_t pc_index = last_pc_index_;
 
 		// Show 8 instructions before PC, PC, then 10 after
 		size_t start_index = pc_index >= 8 ? pc_index - 8 : 0;
@@ -108,19 +111,51 @@ void DisassemblerPanel::render_instruction_list(const nes::CPU6502 *cpu, const n
 }
 
 void DisassemblerPanel::update_instruction_stream(uint16_t pc, const nes::SystemBus *bus) {
-	// Check if we need to extend or rebuild the cache
-	auto pc_it = std::find(cached_instruction_stream_.begin(), cached_instruction_stream_.end(), pc);
+	// Fast path: PC hasn't changed since last update
+	if (alignment_valid_ && pc == last_pc_) {
+		return; // No work needed
+	}
 
-	bool need_rebuild = !alignment_valid_ || pc_it == cached_instruction_stream_.end();
+	// Check if we need to extend or rebuild the cache
+	// OPTIMIZATION: Instead of std::find() every frame, use cached index and check nearby
+	bool pc_found_in_cache = false;
+	size_t pc_index = 0;
+
+	if (alignment_valid_ && !cached_instruction_stream_.empty()) {
+		// Check if PC is at the cached index (common case - PC advanced to next instruction)
+		if (last_pc_index_ < cached_instruction_stream_.size() && cached_instruction_stream_[last_pc_index_] == pc) {
+			pc_found_in_cache = true;
+			pc_index = last_pc_index_;
+		}
+		// Check if PC is just after the last cached position (very common)
+		else if (last_pc_index_ + 1 < cached_instruction_stream_.size() &&
+				 cached_instruction_stream_[last_pc_index_ + 1] == pc) {
+			pc_found_in_cache = true;
+			pc_index = last_pc_index_ + 1;
+		}
+		// Check a few instructions ahead (for small jumps/branches)
+		else {
+			for (size_t i = last_pc_index_; i < std::min(last_pc_index_ + 5, cached_instruction_stream_.size()); ++i) {
+				if (cached_instruction_stream_[i] == pc) {
+					pc_found_in_cache = true;
+					pc_index = i;
+					break;
+				}
+			}
+		}
+	}
+
+	bool need_rebuild = !alignment_valid_ || !pc_found_in_cache;
 	bool need_extend = false;
 
-	if (!need_rebuild && pc_it != cached_instruction_stream_.end()) {
+	if (!need_rebuild && pc_found_in_cache) {
 		// Check if we're getting close to the end of our cached stream
-		size_t pc_index = std::distance(cached_instruction_stream_.begin(), pc_it);
 		size_t remaining = cached_instruction_stream_.size() - pc_index;
 		if (remaining < 15) { // Less than 15 instructions ahead
 			need_extend = true;
 		}
+		// Update cached index
+		last_pc_index_ = pc_index;
 	}
 
 	if (need_rebuild) {
@@ -139,6 +174,7 @@ void DisassemblerPanel::update_instruction_stream(uint16_t pc, const nes::System
 
 			std::vector<uint16_t> test_stream;
 			uint16_t scan_addr = try_start;
+			bool found_pc_in_stream = false;
 
 			// Build a long instruction stream - extend much further ahead
 			for (int steps = 0; steps < 300; ++steps) { // Increased from 150 to 300
@@ -146,6 +182,11 @@ void DisassemblerPanel::update_instruction_stream(uint16_t pc, const nes::System
 					break; // Extend 200 bytes past PC instead of 50
 
 				test_stream.push_back(scan_addr);
+
+				// Check if we just added the PC (more efficient than std::find every iteration)
+				if (scan_addr == pc) {
+					found_pc_in_stream = true;
+				}
 
 				uint8_t opcode = bus->read(scan_addr);
 				uint8_t size = get_instruction_size(opcode);
@@ -155,19 +196,37 @@ void DisassemblerPanel::update_instruction_stream(uint16_t pc, const nes::System
 
 				scan_addr += size;
 
-				// Check if this alignment includes our target PC
-				if (std::find(test_stream.begin(), test_stream.end(), pc) != test_stream.end()) {
-					cached_instruction_stream_ = test_stream;
-					found_alignment = true;
-					break;
+				// If we hit PC exactly after advancing, also mark as found
+				if (scan_addr == pc) {
+					found_pc_in_stream = true;
 				}
+			}
+
+			// After building the stream, check if we found PC
+			if (found_pc_in_stream) {
+				cached_instruction_stream_ = test_stream;
+				found_alignment = true;
+				break;
 			}
 		}
 
 		// If no good alignment found, create a simple fallback stream
 		if (!found_alignment) {
-			for (uint16_t addr = (pc >= 100 ? pc - 100 : 0); addr <= pc + 100; addr += 2) {
+			uint16_t fallback_start = (pc >= 100 ? pc - 100 : 0);
+			uint16_t fallback_end = (pc <= 0xFF9B ? pc + 100 : 0xFFFF); // Prevent wraparound
+			for (uint16_t addr = fallback_start; addr <= fallback_end && addr >= fallback_start; addr += 2) {
 				cached_instruction_stream_.push_back(addr);
+				if (addr >= fallback_end)
+					break; // Extra safety to prevent infinite loop
+			}
+		}
+
+		// Cache the PC index for next time (simple linear search after rebuild)
+		last_pc_index_ = 0;
+		for (size_t i = 0; i < cached_instruction_stream_.size(); ++i) {
+			if (cached_instruction_stream_[i] == pc) {
+				last_pc_index_ = i;
+				break;
 			}
 		}
 

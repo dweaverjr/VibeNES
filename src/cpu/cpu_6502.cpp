@@ -444,6 +444,7 @@ int CPU6502::execute_instruction() {
 
 	// SBC - Subtract with Carry
 	case 0xE9:
+	case 0xEB: // Undocumented duplicate of SBC immediate
 		SBC_immediate();
 		break;
 	case 0xE5:

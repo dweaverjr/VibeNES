@@ -75,25 +75,27 @@ void APU::tick(CpuCycle cycles) {
 		cycle_count_++;
 
 		// Clock frame counter at APU rate (every other CPU cycle)
-		if (cycle_count_ & 1) {
+		// Clock on ODD cycles (1, 3, 5, 7, ...)
+		if ((cycle_count_ & 1) == 1) {
 			clock_frame_counter();
 		}
 
-		// Clock triangle timer at CPU rate ALWAYS (not gated by counters)
-		// The timer runs continuously, but the sequencer only advances when both counters are active
+		// Triangle timer runs at CPU rate (ultrasonic range)
+		// Output freq = CPU / (32 * (t + 1))
 		triangle_.clock_timer();
 
-		// Clock other channels at half CPU rate (APU rate)
-		// NOTE: Timers ALWAYS run, regardless of enabled/length counter state
-		// Only the OUTPUT is affected by these conditions (checked in get_output())
-		if (cycle_count_ & 1) {
+		// Pulse and noise timers run at APU rate (every other CPU cycle)
+		// Output freq = fCPU / (16 * (t + 1)) for pulse
+		// Clock on ODD cycles (1, 3, 5, 7, ...)
+		if ((cycle_count_ & 1) == 1) {
 			pulse1_.clock_timer();
 			pulse2_.clock_timer();
 			noise_.clock_timer();
-			// DMC only clocks when enabled (this is correct per spec)
-			if (dmc_.enabled) {
-				dmc_.clock_timer(bus_);
-			}
+		}
+
+		// DMC clocks at CPU rate when enabled
+		if (dmc_.enabled) {
+			dmc_.clock_timer(bus_);
 		}
 
 		// Generate audio sample every CPU cycle
@@ -450,6 +452,10 @@ void APU::PulseChannel::clock_timer() {
 	}
 }
 
+void APU::PulseChannel::clock_sequencer() {
+	// Unused - kept for compatibility
+}
+
 void APU::PulseChannel::clock_length() {
 	if (length_enabled && length_counter > 0) {
 		length_counter--;
@@ -636,6 +642,10 @@ void APU::NoiseChannel::clock_timer() {
 	} else {
 		timer--;
 	}
+}
+
+void APU::NoiseChannel::clock_sequencer() {
+	// Unused - kept for compatibility
 }
 
 void APU::NoiseChannel::clock_length() {

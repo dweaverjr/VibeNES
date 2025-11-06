@@ -299,6 +299,14 @@ void SystemBus::connect_apu(std::shared_ptr<APU> apu) {
 	// Connect audio backend to APU
 	if (apu_ && audio_backend_) {
 		apu_->connect_audio_backend(audio_backend_.get());
+
+		// Configure APU sample rate from audio backend
+		int actual_sample_rate = audio_backend_->get_sample_rate();
+		std::cout << "SystemBus: Configuring APU for " << actual_sample_rate << " Hz output" << std::endl;
+		std::cout << "  APU input rate: " << CPU_CLOCK_NTSC << " Hz (CPU clock)" << std::endl;
+		std::cout << "  Sample rate conversion ratio: " << (static_cast<float>(CPU_CLOCK_NTSC) / actual_sample_rate)
+				  << ":1" << std::endl;
+		apu_->set_output_sample_rate(static_cast<float>(actual_sample_rate));
 	}
 	// Connect bus to APU for DMC memory access
 	if (apu_) {

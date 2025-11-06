@@ -60,15 +60,7 @@ Byte Mapper002::cpu_read(Address address) const {
 		return 0xFF; // Beyond ROM bounds
 	}
 
-	Byte value = prg_rom_[rom_address];
-
-	// Debug reset vector reads
-	if (address == 0xFFFC || address == 0xFFFD) {
-		std::cout << "[Mapper002] Reset vector read: $" << std::hex << address << " -> $" << static_cast<int>(value)
-				  << " (rom_address=$" << rom_address << ")" << std::dec << std::endl;
-	}
-
-	return value;
+	return prg_rom_[rom_address];
 }
 
 void Mapper002::cpu_write(Address address, Byte value) {
@@ -78,14 +70,7 @@ void Mapper002::cpu_write(Address address, Byte value) {
 
 	// Any write to $8000-$FFFF selects PRG bank
 	// Use mask to handle different ROM sizes (typically 3-4 bits)
-	std::uint8_t old_bank = selected_bank_;
 	selected_bank_ = value & get_bank_mask();
-
-	if (old_bank != selected_bank_) {
-		std::cout << "[Mapper002] Bank switch: " << static_cast<int>(old_bank) << " -> "
-				  << static_cast<int>(selected_bank_) << " (value=0x" << std::hex << static_cast<int>(value) << std::dec
-				  << ")" << std::endl;
-	}
 }
 
 Byte Mapper002::ppu_read(Address address) const {

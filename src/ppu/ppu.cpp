@@ -154,6 +154,16 @@ void PPU::tick(CpuCycle cycles) {
 	// Advance the PPU by the provided number of "cycles" where tests
 	// treat each unit as exactly one PPU dot. Do not scale by 3 here.
 	auto ppu_dot_count = cycles.count();
+
+	// Safety check: Prevent excessive PPU ticking that could freeze the emulator
+	// Normal frame = 89342 dots, so 300000 is ~3.3 frames worth (safe upper bound)
+	constexpr std::int64_t MAX_DOTS_PER_TICK = 300000;
+	if (ppu_dot_count > MAX_DOTS_PER_TICK) {
+		std::cerr << "[PPU WARNING] Excessive dot count: " << ppu_dot_count << ". Capping to " << MAX_DOTS_PER_TICK
+				  << " to prevent freeze." << std::endl;
+		ppu_dot_count = MAX_DOTS_PER_TICK;
+	}
+
 	for (std::int64_t i = 0; i < ppu_dot_count; ++i) {
 		tick_internal();
 	}

@@ -37,6 +37,7 @@ class DisassemblerPanel {
 
 	// Instruction alignment tracking to maintain consistency
 	uint16_t last_pc_;								  // Last PC we computed alignment for
+	size_t last_pc_index_;							  // Index of last_pc_ in cached_instruction_stream_
 	std::vector<uint16_t> cached_instruction_stream_; // Cached instruction addresses
 	bool alignment_valid_;							  // Whether our cached alignment is still valid
 

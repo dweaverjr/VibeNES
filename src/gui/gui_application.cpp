@@ -187,7 +187,13 @@ void GuiApplication::run() {
 	last_frame_counter_ = SDL_GetPerformanceCounter();
 	frame_timer_initialized_ = true;
 
+	std::cout << "[DEBUG] Entering main loop" << std::endl;
+	std::cout.flush();
+	int frame_count = 0;
+
 	while (running_) {
+		frame_count++;
+
 		uint64_t current_counter = SDL_GetPerformanceCounter();
 		double delta_seconds = 0.0;
 		if (frame_timer_initialized_) {
@@ -556,16 +562,80 @@ void GuiApplication::process_continuous_emulation(double delta_seconds) {
 		return;
 	}
 
+	// Safety check: Prevent infinite loops from excessive delta_seconds
+	const std::int64_t MAX_CYCLES_PER_FRAME = 100000; // ~56ms worth of CPU cycles (safe upper bound)
+	if (target_cycles > MAX_CYCLES_PER_FRAME) {
+		std::cerr << "[WARNING] Excessive target_cycles: " << target_cycles << " (delta_seconds=" << delta_seconds
+				  << "). Capping to prevent hang." << std::endl;
+		cycle_accumulator_ = static_cast<double>(MAX_CYCLES_PER_FRAME);
+		const auto capped_target = MAX_CYCLES_PER_FRAME;
+
+		std::int64_t executed_cycles = 0;
+		std::int64_t instruction_count = 0;
+		while (executed_cycles < capped_target) {
+			int consumed = cpu_->execute_instruction();
+			if (consumed <= 0) {
+				std::cerr << "[ERROR] CPU execute_instruction returned " << consumed << " cycles. Breaking loop."
+						  << std::endl;
+				break;
+			}
+			bus_->tick(cpu_cycles(consumed));
+			executed_cycles += consumed;
+			instruction_count++;
+
+			// Safety timeout: prevent true infinite loops
+			if (instruction_count > 50000) {
+				std::cerr << "[CRITICAL] Executed 50000 instructions without reaching target. Possible infinite loop "
+							 "detected!"
+						  << std::endl;
+				pause_emulation();
+				break;
+			}
+		}
+		cycle_accumulator_ = 0.0;
+		return;
+	}
+
 	cycle_accumulator_ -= static_cast<double>(target_cycles);
 
 	std::int64_t executed_cycles = 0;
+	std::int64_t instruction_count = 0;
+
+	// Debug: Periodic hang detection
+	auto loop_start_time = std::chrono::steady_clock::now();
+
 	while (executed_cycles < target_cycles) {
+		// Every 5000 instructions, check if we're taking too long
+		if (instruction_count > 0 && instruction_count % 5000 == 0) {
+			auto now = std::chrono::steady_clock::now();
+			auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - loop_start_time).count();
+			if (elapsed_ms > 500) { // More than 500ms stuck
+				std::cerr << "[HANG] Emulation loop stuck for " << elapsed_ms << "ms after " << instruction_count
+						  << " instructions (" << executed_cycles << "/" << target_cycles << " cycles). PC=0x"
+						  << std::hex << cpu_->get_program_counter() << std::dec << std::endl;
+				pause_emulation();
+				break;
+			}
+		}
+
 		int consumed = cpu_->execute_instruction();
 		if (consumed <= 0) {
+			std::cerr << "[ERROR] CPU execute_instruction returned " << consumed << " cycles. Breaking loop."
+					  << std::endl;
 			break;
 		}
 		bus_->tick(cpu_cycles(consumed));
 		executed_cycles += consumed;
+		instruction_count++;
+
+		// Safety timeout: prevent true infinite loops (50000 instructions = ~250K cycles = ~140ms)
+		if (instruction_count > 50000) {
+			std::cerr << "[CRITICAL] Executed 50000 instructions (" << executed_cycles << "/" << target_cycles
+					  << " cycles) without reaching target. Possible infinite loop detected!" << std::endl;
+			std::cerr << "[DEBUG] Last PC: 0x" << std::hex << cpu_->get_program_counter() << std::dec << std::endl;
+			pause_emulation();
+			break;
+		}
 	}
 
 	cycle_accumulator_ += static_cast<double>(executed_cycles - target_cycles);

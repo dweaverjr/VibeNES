@@ -122,16 +122,18 @@ void AudioBackend::queue_sample_stereo(float left, float right) {
 
 	// Add to buffer (thread-safe)
 	std::lock_guard<std::mutex> lock(buffer_mutex_);
+
+	// CRITICAL: Prevent buffer from growing uncontrollably
+	// If buffer is already too large, skip this sample to prevent memory issues
+	const std::size_t max_buffer_size = 8192; // ~93ms at 44.1kHz stereo (reduced from 16384)
+	if (sample_buffer_.size() >= max_buffer_size) {
+		// Buffer full - drop this sample to prevent memory leak
+		// This prevents unbounded growth when APU generates samples faster than consumption
+		return;
+	}
+
 	sample_buffer_.push_back(left);
 	sample_buffer_.push_back(right);
-
-	// Prevent buffer from growing too large (drop old samples if needed)
-	const std::size_t max_buffer_size = 16384; // ~185ms at 44.1kHz stereo
-	if (sample_buffer_.size() > max_buffer_size) {
-		// Keep only the most recent samples
-		sample_buffer_.erase(sample_buffer_.begin(),
-							 sample_buffer_.begin() + (sample_buffer_.size() - max_buffer_size));
-	}
 }
 
 void AudioBackend::set_volume(float volume) {

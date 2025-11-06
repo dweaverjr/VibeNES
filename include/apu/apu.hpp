@@ -107,6 +107,7 @@ class APU : public Component {
 		uint16_t timer;
 		uint16_t timer_period;
 		uint8_t timer_sequence_pos;
+		bool sequencer_trigger; // Flag set when timer reaches 0
 
 		// Length counter
 		uint8_t length_counter;
@@ -135,6 +136,7 @@ class APU : public Component {
 		bool enabled;
 
 		void clock_timer();
+		void clock_sequencer();
 		void clock_length();
 		void clock_sweep(bool is_pulse1);
 		void clock_envelope();
@@ -164,6 +166,7 @@ class APU : public Component {
 	struct NoiseChannel {
 		uint16_t timer;
 		uint16_t timer_period;
+		bool sequencer_trigger; // Flag set when timer reaches 0
 
 		uint8_t length_counter;
 		bool length_enabled;
@@ -178,6 +181,7 @@ class APU : public Component {
 		bool enabled;
 
 		void clock_timer();
+		void clock_sequencer();
 		void clock_length();
 		void clock_envelope();
 		uint8_t get_output();
