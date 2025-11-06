@@ -644,17 +644,34 @@ void PPUViewerPanel::generate_nametable_visualization(nes::PPU *ppu) {
 }
 
 uint32_t PPUViewerPanel::get_pattern_pixel_color(uint8_t pixel_value, uint8_t palette_index, nes::PPU *ppu) {
-	// Suppress unused parameter warnings (using fixed palette for now)
-	(void)palette_index;
-	(void)ppu;
-
 	if (pixel_value == 0) {
 		// Transparent pixels show as dark gray for visibility
 		return 0xFF202020;
 	}
 
-	// For pattern table visualization, use a fixed palette to ensure visibility
-	// This is independent of the actual PPU palette RAM
+	// Use the actual PPU palette if available
+	if (ppu) {
+		// Background palettes are at $3F00-$3F0F (4 palettes of 4 colors each)
+		// Sprite palettes are at $3F10-$3F1F (4 palettes of 4 colors each)
+		// palette_index is 0-7 (0-3 = background, 4-7 = sprite palettes)
+		uint8_t palette_base;
+		if (palette_index < 4) {
+			// Background palette
+			palette_base = (palette_index * 4);
+		} else {
+			// Sprite palette (4-7 map to indices 16-31)
+			palette_base = 16 + ((palette_index - 4) * 4);
+		}
+
+		// Read the actual palette entry from palette RAM
+		const auto &palette_ram = ppu->get_memory().get_palette_ram();
+		uint8_t nes_color_index = palette_ram[palette_base + pixel_value];
+
+		// Convert NES palette index to RGBA color
+		return nes::NESPalette::get_rgba_color(nes_color_index);
+	}
+
+	// Fallback: Use a fixed grayscale palette if PPU not available
 	static const uint32_t visualization_palette[4] = {
 		0xFF202020, // 0: Dark gray (transparent)
 		0xFF808080, // 1: Medium gray
