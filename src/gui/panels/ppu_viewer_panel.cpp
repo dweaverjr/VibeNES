@@ -10,9 +10,9 @@
 namespace nes::gui {
 
 PPUViewerPanel::PPUViewerPanel()
-	: visible_(true), display_mode_(PPUDisplayMode::FRAME_COMPLETE), main_display_texture_(0),
-	  pattern_table_texture_(0), nametable_texture_(0), selected_pattern_table_(0), selected_nametable_(0),
-	  selected_palette_(0), display_scale_(2.0f), pattern_table_dirty_(true), textures_initialized_(false) {
+	: visible_(true), display_mode_(PPUDisplayMode::REAL_TIME), main_display_texture_(0), pattern_table_texture_(0),
+	  nametable_texture_(0), selected_pattern_table_(0), selected_nametable_(0), selected_palette_(0),
+	  display_scale_(2.0f), pattern_table_dirty_(true), textures_initialized_(false) {
 
 	// Allocate buffers for texture data
 	pattern_table_buffer_ = std::make_unique<uint32_t[]>(256 * 128); // 2 pattern tables side by side

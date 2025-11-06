@@ -92,8 +92,17 @@ bool GuiApplication::initialize_sdl() {
 		return false;
 	}
 
-	// Enable VSync
-	SDL_GL_SetSwapInterval(1);
+	// Enable VSync (1 = sync to refresh rate for consistent frame pacing)
+	// Standard VSync prevents the "compress/decompress" effect during scrolling
+	if (SDL_GL_SetSwapInterval(1) < 0) {
+		std::cerr << "Warning: Failed to enable VSync: " << SDL_GetError() << std::endl;
+	} else {
+		std::cout << "VSync enabled (standard mode for consistent frame pacing)\n";
+	}
+
+	// Verify VSync setting
+	int swap_interval = SDL_GL_GetSwapInterval();
+	std::cout << "Current swap interval: " << swap_interval << " (0=off, 1=vsync, -1=adaptive)\n";
 
 	return true;
 }
