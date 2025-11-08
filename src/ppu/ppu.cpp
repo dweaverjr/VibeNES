@@ -6,6 +6,7 @@
 #include "ppu/nes_palette.hpp"
 #include <algorithm>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 
 namespace nes {
@@ -98,6 +99,8 @@ void PPU::power_on() {
 	ppu_data_bus_ = 0;
 	io_db_ = 0;
 	vram_address_corruption_pending_ = false;
+	last_a12_state_ = false;			// Initialize A12 tracking for MMC3
+	a12_clocked_this_scanline_ = false; // Initialize scanline clock flag
 
 	// Initialize sprite evaluation state
 	sprite_eval_state_ = SpriteEvalState::ReadY;
@@ -140,6 +143,8 @@ void PPU::reset() {
 	vram_wrap_latched_value_ = 0;
 	sprite_0_hit_detected_ = false;
 	sprite_0_hit_delay_ = 0;
+	last_a12_state_ = false;			// Reset A12 tracking for MMC3
+	a12_clocked_this_scanline_ = false; // Reset scanline clock flag
 
 	// Memory state is preserved
 	memory_.reset();
@@ -235,6 +240,7 @@ void PPU::tick_internal() {
 
 		current_cycle_ = 0;
 		current_scanline_++;
+		a12_clocked_this_scanline_ = false; // Reset A12 clock flag for new scanline
 
 		// Check for end of frame
 		if (current_scanline_ >= PPUTiming::TOTAL_SCANLINES) {
@@ -395,14 +401,14 @@ void PPU::process_visible_scanline() {
 			perform_tile_fetch_cycle();
 		}
 
-		// CRITICAL: Shift BEFORE rendering!
-		// Real hardware shifts every cycle, then samples from the shifted position
+		// Render the pixel using shift registers BEFORE shifting
+		// Real hardware outputs pixel, THEN shifts for next cycle
+		render_pixel();
+
+		// Shift registers after rendering (real hardware order)
 		if (is_background_enabled()) {
 			shift_background_registers();
 		}
-
-		// Render the pixel using shift registers (after shifting)
-		render_pixel();
 
 		if (is_background_enabled()) {
 			// VRAM address increments happen at the end of each tile fetch (cycles 8, 16, ...)
@@ -423,6 +429,16 @@ void PPU::process_visible_scanline() {
 		// At cycle 256: Increment fine Y (move to next row)
 		if (current_cycle_ == 256) {
 			increment_fine_y();
+		}
+
+		// At cycle 260: Clock MMC3 IRQ counter (once per scanline)
+		// This is when the PPU typically switches from background to sprite fetches
+		// Standard setup has BG at $0000 and sprites at $1000, creating A12 toggle
+		// Only clock when rendering is enabled
+		if (current_cycle_ == 260 && is_rendering_enabled()) {
+			if (cartridge_ && cartridge_->is_loaded()) {
+				cartridge_->ppu_a12_toggle();
+			}
 		}
 
 		// At cycle 257: Copy horizontal scroll from temp to current
@@ -528,7 +544,12 @@ void PPU::process_pre_render_scanline() {
 			}
 		}
 
-		// Copy vertical scroll during cycles 280-304
+		// At cycle 260: Clock MMC3 IRQ counter (once per scanline)
+		if (current_cycle_ == 260 && is_rendering_enabled()) {
+			if (cartridge_ && cartridge_->is_loaded()) {
+				cartridge_->ppu_a12_toggle();
+			}
+		} // Copy vertical scroll during cycles 280-304
 		// This is CRITICAL - it copies the nametable selection from PPUCTRL!
 		if (current_cycle_ >= 280 && current_cycle_ <= 304) {
 			copy_vertical_scroll();
@@ -697,7 +718,7 @@ void PPU::write_ppuscroll(uint8_t value) {
 	} else {
 		// Second write: Y scroll
 		// Mask 0x73E0 clears fine Y (bits 14-12) and coarse Y (bits 9-5)
-		// Preserves both nametable select bits (11-10) which are controlled by PPUCTRL
+		// Preserves both nametable select bits (11-10)
 		temp_vram_address_ = (temp_vram_address_ & ~0x73E0) | (((static_cast<uint16_t>(value) & 0xF8) << 2) |
 															   ((static_cast<uint16_t>(value) & 0x07) << 12));
 		write_toggle_ = false;
@@ -871,8 +892,8 @@ bool PPU::is_oam_access_restricted() const {
 }
 
 void PPU::render_pixel() {
-	// Visible rendering occurs only on visible scanlines (0-239) and cycles 1-255
-	if (current_scanline_ >= 240 || current_cycle_ == 0 || current_cycle_ >= 256) {
+	// Visible rendering occurs only on visible scanlines (0-239) and cycles 1-256
+	if (current_scanline_ >= 240 || current_cycle_ == 0 || current_cycle_ > 256) {
 		return;
 	}
 
@@ -1132,14 +1153,44 @@ uint8_t PPU::fetch_sprite_pattern_data_raw(uint8_t tile_index, uint8_t fine_y, b
 	// Read from cartridge CHR ROM/RAM with support for dynamic banking
 	// This allows mappers to switch CHR banks during sprite evaluation
 	if (cartridge_) {
-		// Notify mapper of A12 toggle for MMC3 scanline counter
-		if (pattern_addr >= 0x1000) {
-			cartridge_->ppu_a12_toggle();
-		}
 		return cartridge_->ppu_read(pattern_addr);
 	}
 
 	return 0x00;
+}
+
+void PPU::track_a12_line(uint16_t address) {
+	// MMC3 IRQ counter is triggered by A12 rising edges (0→1 transitions)
+	// A12 is the 13th bit (bit 12, zero-indexed) of the PPU address
+	// Pattern table 0: $0000-$0FFF (A12=0)
+	// Pattern table 1: $1000-$1FFF (A12=1)
+	// Nametables:      $2000-$2FFF (A12=0)
+	// NT Mirrors:      $3000-$3FFF (A12=1)
+
+	// CRITICAL: Only clock the MMC3 counter ONCE per scanline!
+	// The hardware counts scanlines, not individual pattern fetches
+
+	bool current_a12 = (address & 0x1000) != 0; // Test bit 12 specifically
+
+	// Always update last_a12_state for proper edge detection
+	bool edge_detected = current_a12 && !last_a12_state_;
+	last_a12_state_ = current_a12;
+
+	// Skip if we already clocked this scanline
+	if (a12_clocked_this_scanline_) {
+		return; // Already clocked this scanline, skip
+	}
+
+	// Detect rising edge (0→1 transition)
+	if (edge_detected) {
+		// Rising edge detected - notify cartridge/mapper
+		if (cartridge_ && cartridge_->is_loaded()) {
+			std::cout << "A12 CLOCK: scanline=" << (int)current_scanline_ << " cycle=" << (int)current_cycle_
+					  << " addr=$" << std::hex << address << std::dec << std::endl;
+			cartridge_->ppu_a12_toggle();
+			a12_clocked_this_scanline_ = true; // Mark as clocked for this scanline
+		}
+	}
 }
 
 bool PPU::check_sprite_0_hit(uint8_t bg_pixel, uint8_t sprite_pixel, uint8_t x_pos) {
@@ -1490,6 +1541,7 @@ void PPU::perform_sprite_evaluation_cycle() {
 
 	case SpriteEvalState::OverflowCheck: {
 		// Check for sprite overflow (9th+ sprite on scanline)
+		// Hardware continues checking remaining sprites with buggy behavior, but doesn't stop
 		if (sprite_eval_n_ < 64) {
 			uint8_t y = oam_memory_[sprite_eval_n_ * 4 + sprite_eval_m_];
 			uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
@@ -1506,18 +1558,19 @@ void PPU::perform_sprite_evaluation_cycle() {
 			bool in_range = (line_index >= 0 && line_index < static_cast<int16_t>(sprite_height));
 
 			if (in_range) {
-				// Overflow detected
+				// Overflow detected - set flag but KEEP CHECKING remaining sprites
+				// (Hardware continues through OAM with buggy increments)
 				sprite_overflow_detected_ = true;
 				status_register_ |= PPUConstants::PPUSTATUS_OVERFLOW_MASK;
-				sprite_eval_state_ = SpriteEvalState::Done;
-			} else {
-				// Hardware bug: incorrectly increments both n and m
-				sprite_eval_n_++;
-				sprite_eval_m_ = (sprite_eval_m_ + 1) & 3; // Wrap m within 0-3
+				// Don't stop - continue with hardware bug behavior
+			}
 
-				if (sprite_eval_n_ >= 64) {
-					sprite_eval_state_ = SpriteEvalState::Done;
-				}
+			// Hardware bug: incorrectly increments both n and m
+			sprite_eval_n_++;
+			sprite_eval_m_ = (sprite_eval_m_ + 1) & 3; // Wrap m within 0-3
+
+			if (sprite_eval_n_ >= 64) {
+				sprite_eval_state_ = SpriteEvalState::Done;
 			}
 		} else {
 			sprite_eval_state_ = SpriteEvalState::Done;
@@ -2087,11 +2140,6 @@ void PPU::perform_tile_fetch_cycle() {
 		// Support for mid-frame CHR bank switching
 		// Each CHR read goes through the cartridge (if loaded) or fallback CHR RAM
 		tile_fetch_state_.current_pattern_low = read_chr_rom(pattern_addr);
-
-		// Notify mapper of A12 toggle for MMC3 scanline counter (only if cartridge is loaded)
-		if (cartridge_ && cartridge_->is_loaded() && pattern_addr >= 0x1000) {
-			cartridge_->ppu_a12_toggle();
-		}
 	} break;
 
 	case 7: // Fetch pattern table high byte and store tile data

@@ -281,32 +281,29 @@ void GuiApplication::handle_events() {
 				std::cout << "[Fullscreen] Escape pressed - exiting fullscreen" << std::endl;
 				toggle_fullscreen();
 			}
-			// Only process save state hotkeys if ImGui doesn't want keyboard
-			else if (!io_ || !io_->WantCaptureKeyboard) {
-				// Save state hotkeys (F1-F9)
-				if (!shift_pressed && !ctrl_pressed && event.key.keysym.sym >= SDLK_F1 &&
-					event.key.keysym.sym <= SDLK_F9) {
-					int slot = event.key.keysym.sym - SDLK_F1 + 1;
-					std::cout << "[SaveState] Saving to slot " << slot << std::endl;
-					save_state_to_slot(slot);
-				}
-				// Load state hotkeys (Shift+F1-F9)
-				else if (shift_pressed && !ctrl_pressed && event.key.keysym.sym >= SDLK_F1 &&
-						 event.key.keysym.sym <= SDLK_F9) {
-					int slot = event.key.keysym.sym - SDLK_F1 + 1;
-					std::cout << "[SaveState] Loading from slot " << slot << std::endl;
-					load_state_from_slot(slot);
-				}
-				// Quick save (Ctrl+F5)
-				else if (ctrl_pressed && !shift_pressed && event.key.keysym.sym == SDLK_F5) {
-					std::cout << "[SaveState] Quick save" << std::endl;
-					quick_save();
-				}
-				// Quick load (Ctrl+F8)
-				else if (ctrl_pressed && !shift_pressed && event.key.keysym.sym == SDLK_F8) {
-					std::cout << "[SaveState] Quick load" << std::endl;
-					quick_load();
-				}
+			// Save state hotkeys (F1-F9) - always process these
+			else if (!shift_pressed && !ctrl_pressed && !alt_pressed && event.key.keysym.sym >= SDLK_F1 &&
+					 event.key.keysym.sym <= SDLK_F9) {
+				int slot = event.key.keysym.sym - SDLK_F1 + 1;
+				std::cout << "[SaveState] Saving to slot " << slot << std::endl;
+				save_state_to_slot(slot);
+			}
+			// Load state hotkeys (Shift+F1-F9) - always process these
+			else if (shift_pressed && !ctrl_pressed && !alt_pressed && event.key.keysym.sym >= SDLK_F1 &&
+					 event.key.keysym.sym <= SDLK_F9) {
+				int slot = event.key.keysym.sym - SDLK_F1 + 1;
+				std::cout << "[SaveState] Loading from slot " << slot << std::endl;
+				load_state_from_slot(slot);
+			}
+			// Quick save (Ctrl+F5) - always process this
+			else if (ctrl_pressed && !shift_pressed && !alt_pressed && event.key.keysym.sym == SDLK_F5) {
+				std::cout << "[SaveState] Quick save" << std::endl;
+				quick_save();
+			}
+			// Quick load (Ctrl+F8) - always process this
+			else if (ctrl_pressed && !shift_pressed && !alt_pressed && event.key.keysym.sym == SDLK_F8) {
+				std::cout << "[SaveState] Quick load" << std::endl;
+				quick_load();
 			}
 		}
 	}
@@ -863,10 +860,11 @@ void GuiApplication::setup_callbacks() {
 			// Reconnect cartridge to PPU to update mirroring mode from newly loaded ROM
 			ppu_->connect_cartridge(cartridge_);
 
-			// When a ROM is loaded, trigger a reset to set the PC to the reset vector
-			cpu_->trigger_reset();
-			// Process the reset immediately by stepping once
-			(void)cpu_->execute_instruction(); // Discard return value for reset processing
+			// Reset the entire system (including PPU, mapper, etc.) when ROM is loaded
+			// This ensures all components start in a clean state
+			if (bus_) {
+				bus_->reset();
+			}
 		});
 	}
 }

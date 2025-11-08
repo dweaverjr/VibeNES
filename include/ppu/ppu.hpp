@@ -188,6 +188,10 @@ class PPU : public Component {
 	uint8_t io_db_;						   // I/O data bus latch
 	bool vram_address_corruption_pending_; // VRAM address corruption flag
 
+	// MMC3 A12 line tracking for IRQ counter
+	bool last_a12_state_;			 // Previous state of A12 line (for edge detection)
+	bool a12_clocked_this_scanline_; // Prevent multiple clocks per scanline
+
 	// Memory management
 	PPUMemory memory_;
 
@@ -341,6 +345,9 @@ class PPU : public Component {
 	bool check_sprite_0_hit(uint8_t bg_pixel, uint8_t sprite_pixel, uint8_t x_pos); // Enhanced with edge case support
 	void render_combined_pixel(uint8_t bg_pixel, uint8_t sprite_pixel, bool sprite_priority, uint8_t x_pos,
 							   uint8_t y_pos);
+
+	// MMC3 A12 tracking for IRQ counter
+	void track_a12_line(uint16_t address);
 
 	// Advanced scrolling (Phase 4)
 	void increment_vram_address(); // Consolidated VRAM increment logic

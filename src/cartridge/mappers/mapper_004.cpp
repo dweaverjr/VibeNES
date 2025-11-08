@@ -9,7 +9,7 @@ Mapper004::Mapper004(std::vector<Byte> prg_rom, std::vector<Byte> chr_mem, Mirro
 	: prg_rom_(std::move(prg_rom)), chr_mem_(std::move(chr_mem)), initial_mirroring_(mirroring),
 	  has_prg_ram_(has_prg_ram), chr_is_ram_(chr_is_ram), bank_select_(0), banks_{}, mirroring_(false),
 	  prg_ram_protect_(0x80), // PRG RAM enabled by default
-	  irq_latch_(0), irq_counter_(0), irq_reload_(false), irq_enabled_(false), irq_pending_(false), a12_low_count_(0) {
+	  irq_latch_(0), irq_counter_(0), irq_reload_(false), irq_enabled_(false), irq_pending_(false) {
 
 	// Initialize PRG RAM if needed (8KB)
 	if (has_prg_ram_) {
@@ -52,7 +52,7 @@ void Mapper004::reset() {
 	irq_reload_ = false;
 	irq_enabled_ = false;
 	irq_pending_ = false;
-	a12_low_count_ = 0;
+	irq_initialized_ = false; // Game must write to IRQ registers first
 
 	// Clear PRG RAM
 	if (has_prg_ram_) {
@@ -117,16 +117,21 @@ void Mapper004::cpu_write(Address address, Byte value) {
 			if ((address & 0x0001) == 0) {
 				// Even addresses: IRQ Latch ($C000)
 				irq_latch_ = value;
+				irq_initialized_ = true; // Mark IRQ system as initialized
 			} else {
 				// Odd addresses: IRQ Reload ($C001)
+				// Writing here clears the counter and sets reload flag
+				// The counter will reload on the NEXT A12 clock
+				irq_counter_ = 0;
 				irq_reload_ = true;
+				irq_initialized_ = true; // Mark IRQ system as initialized
 			}
 		} else {
 			// $E000-$FFFF: IRQ Disable and IRQ Enable
 			if ((address & 0x0001) == 0) {
 				// Even addresses: IRQ Disable ($E000)
 				irq_enabled_ = false;
-				irq_pending_ = false;
+				irq_pending_ = false; // Also acknowledge any pending interrupts
 			} else {
 				// Odd addresses: IRQ Enable ($E001)
 				irq_enabled_ = true;
@@ -164,18 +169,25 @@ void Mapper004::ppu_write(Address address, Byte value) {
 }
 
 void Mapper004::ppu_a12_toggle() {
-	// MMC3 scanline counter is triggered by PPU A12 rising edges
-	// A12 goes low during horizontal blanking and high during rendering
-	// This creates a reliable per-scanline clock
-
-	// Simple A12 edge detection - count A12 low cycles
-	// When A12 goes high after being low, clock the counter
-	if (a12_low_count_ >= 3) { // Debounce filter
-		clock_irq_counter();
-		a12_low_count_ = 0;
-	} else {
-		a12_low_count_++;
+	// Don't clock the counter until the game has initialized the IRQ system
+	// This prevents the counter from reloading to 0 during boot before the game sets the latch
+	if (!irq_initialized_) {
+		return;
 	}
+
+	// MMC3 IRQ counter clocks on A12 rising edge (0→1 transition)
+	// The PPU's A12 line goes high when accessing pattern table 1 ($1000-$1FFF)
+	// and low when accessing pattern table 0 ($0000-$0FFF)
+
+	// During rendering, the PPU alternates between pattern tables:
+	// - Background tiles may use either table
+	// - Sprite tiles use the table specified by PPUCTRL bit 3
+	// This creates regular A12 transitions, typically once per scanline
+
+	// Simple implementation: clock the counter on each toggle
+	// A more accurate implementation would track A12 state and only clock on rising edges
+	// For now, we clock on every call which approximates scanline counting
+	clock_irq_counter();
 }
 
 std::size_t Mapper004::get_prg_bank_offset(Address address) const {
@@ -274,15 +286,23 @@ Mapper::Mirroring Mapper004::get_mirroring() const noexcept {
 }
 
 void Mapper004::clock_irq_counter() {
-	// Clock the IRQ counter when A12 toggles
-	if (irq_reload_ || irq_counter_ == 0) {
+	// MMC3 IRQ counter behavior (Sharp variant)
+	// Hardware-verified behavior:
+	// 1. If counter is 0 OR reload flag is set, reload counter from latch
+	// 2. Otherwise, decrement counter
+	// 3. After reload/decrement, check if counter==0 and fire IRQ if enabled
+
+	if (irq_counter_ == 0 || irq_reload_) {
+		// Reload counter from latch
 		irq_counter_ = irq_latch_;
 		irq_reload_ = false;
 	} else {
+		// Decrement counter
 		irq_counter_--;
 	}
 
-	// Generate IRQ when counter reaches 0 and IRQs are enabled
+	// Check if counter is now 0 and fire IRQ if enabled
+	// This check happens AFTER the reload/decrement above
 	if (irq_counter_ == 0 && irq_enabled_) {
 		irq_pending_ = true;
 	}
@@ -328,7 +348,6 @@ void Mapper004::serialize_state(std::vector<Byte> &buffer) const {
 	buffer.push_back(irq_reload_ ? 1 : 0);
 	buffer.push_back(irq_enabled_ ? 1 : 0);
 	buffer.push_back(irq_pending_ ? 1 : 0);
-	buffer.push_back(a12_low_count_);
 }
 
 void Mapper004::deserialize_state(const std::vector<Byte> &buffer, size_t &offset) {
@@ -363,7 +382,6 @@ void Mapper004::deserialize_state(const std::vector<Byte> &buffer, size_t &offse
 	irq_reload_ = buffer[offset++] != 0;
 	irq_enabled_ = buffer[offset++] != 0;
 	irq_pending_ = buffer[offset++] != 0;
-	a12_low_count_ = buffer[offset++];
 }
 
 } // namespace nes

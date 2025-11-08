@@ -68,9 +68,15 @@ void Mapper002::cpu_write(Address address, Byte value) {
 		return; // Outside mapper control range
 	}
 
+	// UxROM has bus conflicts: The mapper sees the AND of CPU data bus and ROM data bus
+	// Nintendo-published games (like Guardian Legend) work around this by writing to
+	// ROM addresses that already contain the desired value
+	Byte rom_value = cpu_read(address);
+	Byte effective_value = value & rom_value;
+
 	// Any write to $8000-$FFFF selects PRG bank
 	// Use mask to handle different ROM sizes (typically 3-4 bits)
-	selected_bank_ = value & get_bank_mask();
+	selected_bank_ = effective_value & get_bank_mask();
 }
 
 Byte Mapper002::ppu_read(Address address) const {

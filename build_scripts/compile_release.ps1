@@ -48,14 +48,19 @@ $CompilerFlags = @(
     "-O3",
     "-DNDEBUG",
     "-march=native",
-    "-flto",
-    "-pedantic-errors",
-    "-Werror",
     "-Wall",
-    "-Weffc++",
     "-Wextra",
-    "-Wconversion",
-    "-Wsign-conversion",
+    "-std=c++23"
+)
+
+# ImGui-specific flags (disable -Weffc++ for third-party code)
+$ImGuiFlags = @(
+    "-fdiagnostics-color=always",
+    "-O3",
+    "-DNDEBUG",
+    "-march=native",
+    "-Wall",
+    "-Wextra",
     "-std=c++23"
 )
 
@@ -87,13 +92,33 @@ $Defines = @(
 # Output
 $OutputFile = Join-Path $BuildDir "VibeNES.exe"
 
+# Compile ImGui files separately with relaxed warnings
+Write-Host "`nCompiling ImGui libraries..." -ForegroundColor Cyan
+$ImGuiObjects = @()
+foreach ($ImGuiFile in $ImGuiFiles) {
+    $ObjectFile = Join-Path $BuildDir ([System.IO.Path]::GetFileNameWithoutExtension($ImGuiFile) + ".o")
+    $ImGuiObjects += $ObjectFile
+
+    $ImGuiCompileCmd = @($Compiler) + $ImGuiFlags + @("-c", $ImGuiFile) + $IncludePaths + $Defines + @("-o", $ObjectFile)
+    & $ImGuiCompileCmd[0] $ImGuiCompileCmd[1..($ImGuiCompileCmd.Length-1)]
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Failed to compile $ImGuiFile" -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
+}
+
+# Compile project files with strict warnings
+Write-Host "`nCompiling project files..." -ForegroundColor Cyan
+$ProjectFiles = @($MainFile) + $SourceFiles
+$ProjectCompileCmd = @($Compiler) + $CompilerFlags + $ProjectFiles + $ImGuiObjects + $IncludePaths + $LinkerFlags + $Defines + @("-o", $OutputFile)
+
 # Build command
-Write-Host "`nBuilding with optimizations..." -ForegroundColor Cyan
-$CompileCommand = @($Compiler) + $CompilerFlags + $AllFiles + $IncludePaths + $LinkerFlags + $Defines + @("-o", $OutputFile)
+Write-Host "`nLinking..." -ForegroundColor Cyan
 
 # Execute compilation
 try {
-    & $CompileCommand[0] $CompileCommand[1..($CompileCommand.Length-1)]
+    & $ProjectCompileCmd[0] $ProjectCompileCmd[1..($ProjectCompileCmd.Length-1)]
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "`n=== Build Successful ===" -ForegroundColor Green

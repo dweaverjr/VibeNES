@@ -43,6 +43,9 @@ void SystemBus::tick(CpuCycle cycles) {
 
 void SystemBus::reset() {
 	// Reset all connected components
+	if (cpu_) {
+		cpu_->reset();
+	}
 	if (ram_) {
 		ram_->reset();
 	}
