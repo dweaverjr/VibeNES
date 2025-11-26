@@ -168,14 +168,15 @@ class PPU : public Component {
 	uint8_t vram_wrap_latched_value_;	// Latched value to expose on first read after wrap
 
 	// OAM (Object Attribute Memory) Management
-	std::array<uint8_t, 256> oam_memory_;	// Primary OAM (64 sprites × 4 bytes)
-	std::array<uint8_t, 32> secondary_oam_; // Secondary OAM for scanline sprites (8 sprites × 4 bytes)
-	bool oam_dma_active_;					// OAM DMA in progress ($4014)
-	uint16_t oam_dma_address_;				// OAM DMA source address
-	uint16_t oam_dma_cycle_;				// OAM DMA cycle counter (0-513)
-	uint8_t oam_dma_subcycle_;				// PPU subcycle counter for CPU timing (0-2)
-	bool oam_dma_pending_;					// OAM DMA requested but not started
-	uint8_t oam_dma_data_latch_;			// Latch holding data between DMA read/write phases
+	std::array<uint8_t, 256> oam_memory_;		  // Primary OAM (64 sprites × 4 bytes)
+	std::array<uint8_t, 32> secondary_oam_;		  // Secondary OAM for scanline sprites (8 sprites × 4 bytes)
+	std::array<uint8_t, 8> secondary_oam_source_; // Which OAM sprite (0-63) filled each secondary OAM slot
+	bool oam_dma_active_;						  // OAM DMA in progress ($4014)
+	uint16_t oam_dma_address_;					  // OAM DMA source address
+	uint16_t oam_dma_cycle_;					  // OAM DMA cycle counter (0-513)
+	uint8_t oam_dma_subcycle_;					  // PPU subcycle counter for CPU timing (0-2)
+	bool oam_dma_pending_;						  // OAM DMA requested but not started
+	uint8_t oam_dma_data_latch_;				  // Latch holding data between DMA read/write phases
 
 	// Hardware Timing State
 	bool odd_frame_;					   // Tracks odd/even frames for cycle skip
@@ -224,7 +225,7 @@ class PPU : public Component {
 	// Sprite evaluation state (for current scanline)
 	struct ScanlineSprite {
 		Sprite sprite_data;
-		uint8_t sprite_index;	   // Original sprite index (for sprite 0 detection)
+		uint8_t sprite_index;	   // Original OAM sprite index (0-63, used for sprite 0 detection)
 		uint8_t pattern_data_low;  // Low bit plane for current row
 		uint8_t pattern_data_high; // High bit plane for current row
 		bool is_sprite_0;		   // True if this is sprite 0

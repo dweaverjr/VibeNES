@@ -36,6 +36,7 @@ PPU::PPU()
 	// Initialize OAM memory to power-on state
 	oam_memory_.fill(0x00);
 	secondary_oam_.fill(0x00);
+	secondary_oam_source_.fill(0xFF); // 0xFF = no sprite (invalid OAM index)
 
 	power_on();
 }
@@ -88,6 +89,7 @@ void PPU::power_on() {
 	oam_dma_data_latch_ = 0;
 	oam_memory_.fill(0x00);
 	secondary_oam_.fill(0x00);
+	secondary_oam_source_.fill(0xFF); // 0xFF = no sprite (invalid OAM index)
 
 	// Initialize hardware timing state
 	odd_frame_ = false;
@@ -1185,8 +1187,6 @@ void PPU::track_a12_line(uint16_t address) {
 	if (edge_detected) {
 		// Rising edge detected - notify cartridge/mapper
 		if (cartridge_ && cartridge_->is_loaded()) {
-			std::cout << "A12 CLOCK: scanline=" << (int)current_scanline_ << " cycle=" << (int)current_cycle_
-					  << " addr=$" << std::hex << address << std::dec << std::endl;
 			cartridge_->ppu_a12_toggle();
 			a12_clocked_this_scanline_ = true; // Mark as clocked for this scanline
 		}
@@ -1433,6 +1433,7 @@ void PPU::perform_oam_dma_cycle() {
 void PPU::clear_secondary_oam() {
 	// Clear secondary OAM at start of sprite evaluation
 	secondary_oam_.fill(0xFF);
+	secondary_oam_source_.fill(0xFF);	// Clear source tracking (0xFF = no sprite)
 	sprite_count_next_scanline_ = 0;	// Reset counter for next scanline being evaluated
 	sprite_0_on_next_scanline_ = false; // Reset sprite 0 flag for next scanline
 	sprite_overflow_detected_ = false;
@@ -1490,6 +1491,9 @@ void PPU::perform_sprite_evaluation_cycle() {
 
 			// Write Y to secondary OAM
 			secondary_oam_[secondary_oam_index_++] = sprite_eval_buffer_;
+
+			// Record which OAM sprite (0-63) is being copied to this secondary OAM slot
+			secondary_oam_source_[sprite_count_next_scanline_] = sprite_eval_n_;
 
 			// Track sprite 0
 			if (sprite_eval_n_ == 0) {
@@ -1614,8 +1618,9 @@ void PPU::prepare_scanline_sprites() {
 		// Store sprite data and index
 		ScanlineSprite &scanline_sprite = scanline_sprites_next_[i]; // Write to NEXT buffer
 		scanline_sprite.sprite_data = sprite;
-		scanline_sprite.sprite_index = i;									  // Index in secondary OAM (0-7)
-		scanline_sprite.is_sprite_0 = (i == 0 && sprite_0_on_next_scanline_); // True if sprite 0 on next scanline
+		scanline_sprite.sprite_index = secondary_oam_source_[i]; // Original OAM sprite index (0-63)
+		scanline_sprite.is_sprite_0 =
+			(scanline_sprite.sprite_index == 0 && sprite_0_on_next_scanline_); // True if OAM sprite 0
 
 		// Calculate sprite row for next scanline (OAM Y is sprite top minus 1)
 		uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
