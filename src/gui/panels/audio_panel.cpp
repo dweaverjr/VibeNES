@@ -17,10 +17,7 @@ void AudioPanel::render(SystemBus *bus) {
 	}
 
 	render_controls(bus);
-	ImGui::Separator();
-	render_level_meter(bus);
-	ImGui::Separator();
-	render_info(bus);
+	// Removed level meter and info sections - only show controls
 }
 
 void AudioPanel::render_controls(SystemBus *bus) {
