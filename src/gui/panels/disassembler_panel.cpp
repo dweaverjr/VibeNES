@@ -61,18 +61,7 @@ void DisassemblerPanel::render(const nes::CPU6502 *cpu, const nes::SystemBus *bu
 }
 
 void DisassemblerPanel::render_controls() {
-	ImGui::Checkbox("Follow PC", reinterpret_cast<bool *>(&follow_pc_));
-
-	if (!follow_pc_) {
-		ImGui::SameLine();
-		ImGui::Text("Start:");
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(100);
-		if (ImGui::InputScalar("##start", ImGuiDataType_U16, &start_address_, nullptr, nullptr, "%04X",
-							   ImGuiInputTextFlags_CharsHexadecimal)) {
-			// Address updated
-		}
-	}
+	// Controls removed - always follow PC
 }
 
 void DisassemblerPanel::render_instruction_list(const nes::CPU6502 *cpu, const nes::SystemBus *bus) {
