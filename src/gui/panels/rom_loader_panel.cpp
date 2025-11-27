@@ -126,10 +126,6 @@ void RomLoaderPanel::render_rom_info(nes::Cartridge *cartridge) {
 
 	ImGui::Text("Filename: %s", std::filesystem::path(rom_data.filename).filename().string().c_str());
 	ImGui::Text("Mapper: %d (%s)", cartridge->get_mapper_id(), cartridge->get_mapper_name());
-	ImGui::Text("PRG ROM: %d x 16KB (%d bytes)", static_cast<int>(rom_data.prg_rom_pages),
-				static_cast<int>(rom_data.prg_rom.size()));
-	ImGui::Text("CHR ROM: %d x 8KB (%d bytes)", static_cast<int>(rom_data.chr_rom_pages),
-				static_cast<int>(rom_data.chr_rom.size()));
 
 	// Mirroring info
 	const char *mirroring_name = "Unknown";

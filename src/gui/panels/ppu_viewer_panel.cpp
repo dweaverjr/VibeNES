@@ -113,21 +113,9 @@ void PPUViewerPanel::render_display_controls() {
 	if (ImGui::RadioButton("Scanline Step", display_mode_ == PPUDisplayMode::SCANLINE_STEP)) {
 		display_mode_ = PPUDisplayMode::SCANLINE_STEP;
 	}
-
-	ImGui::SameLine();
-	ImGui::Text("Scale:");
-	ImGui::SameLine();
-	ImGui::SliderFloat("##scale", &display_scale_, 1.0f, 4.0f, "%.1fx");
 }
 
 void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
-	// Frame count and display mode
-	ImGui::Text("Frame count: %llu", ppu->get_frame_count());
-
-	// Display current mode
-	const char *mode_names[] = {"FRAME_COMPLETE", "REAL_TIME", "SCANLINE_STEP"};
-	ImGui::Text("Display mode: %s", mode_names[static_cast<int>(display_mode_)]);
-
 	// Check if we should update the display based on mode
 	bool should_update = false;
 	switch (display_mode_) {
@@ -152,10 +140,8 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 		display_mode_ = PPUDisplayMode::REAL_TIME;
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Force Update Display") && ppu->get_frame_buffer()) {
-		printf("FORCE: Updating display texture...\n");
-		update_main_display_texture(ppu->get_frame_buffer());
-	}
+	const char *mode_names[] = {"FRAME_COMPLETE", "REAL_TIME", "SCANLINE_STEP"};
+	ImGui::Text("Display mode: %s", mode_names[static_cast<int>(display_mode_)]);
 
 	if (should_update && ppu->get_frame_buffer()) {
 		update_main_display_texture(ppu->get_frame_buffer());
@@ -170,9 +156,7 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 		ImVec2 display_size(256 * display_scale_, 240 * display_scale_);
 		ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(main_display_texture_)), display_size);
 
-		// Show current frame info
-		ImGui::Text("Frame: %llu, Scanline: %d, Cycle: %d", ppu->get_frame_count(), ppu->get_current_scanline(),
-					ppu->get_current_cycle());
+		// Timing info removed - now in right panel
 	} else {
 		ImGui::Text("Main display texture not initialized (texture ID: %u)", main_display_texture_);
 		ImGui::Text("Textures initialized: %s", textures_initialized_ ? "YES" : "NO");
@@ -441,58 +425,52 @@ void PPUViewerPanel::render_ppu_registers(nes::PPU *ppu) {
 	// PPUCTRL ($2000) - Vertical format
 	uint8_t ctrl = ppu->get_control_register();
 	ImGui::TextColored(RetroTheme::get_register_color(), "PPUCTRL ($2000): $%02X", ctrl);
-	ImGui::Indent();
-	ImGui::Text("  Nametable: %d", ctrl & 0x03);
-	ImGui::Text("  Increment: %s", (ctrl & 0x04) ? "+32" : "+1");
-	ImGui::Text("  Sprite Pattern: $%04X", (ctrl & 0x08) ? 0x1000 : 0x0000);
-	ImGui::Text("  BG Pattern: $%04X", (ctrl & 0x10) ? 0x1000 : 0x0000);
-	ImGui::Text("  Sprite Size: %s", (ctrl & 0x20) ? "8x16" : "8x8");
-	ImGui::Text("  NMI: %s", (ctrl & 0x80) ? "ON" : "OFF");
-	ImGui::Unindent();
+	ImGui::Text("Nametable: %d", ctrl & 0x03);
+	ImGui::Text("NMI: %s", (ctrl & 0x80) ? "ON" : "OFF");
 
 	ImGui::Spacing();
 
 	// PPUMASK ($2001) - Vertical format
 	uint8_t mask = ppu->get_mask_register();
 	ImGui::TextColored(RetroTheme::get_register_color(), "PPUMASK ($2001): $%02X", mask);
-	ImGui::Indent();
-	ImGui::Text("  BG: %s", (mask & 0x08) ? "ON" : "OFF");
-	ImGui::Text("  SPR: %s", (mask & 0x10) ? "ON" : "OFF");
-	ImGui::Unindent();
+	ImGui::Text("BG: %s", (mask & 0x08) ? "ON" : "OFF");
+	ImGui::Text("SPR: %s", (mask & 0x10) ? "ON" : "OFF");
 
 	ImGui::Spacing();
 
 	// PPUSTATUS ($2002) - Vertical format
 	uint8_t status = ppu->get_status_register();
-	ImGui::TextColored(RetroTheme::get_register_color(), "PPUSTATUS ($2002): $%02X", status);
-	ImGui::Indent();
-	ImGui::Text("  VBlank: %s", (status & 0x80) ? "1" : "0");
-	ImGui::Text("  Sprite 0 Hit: %s", (status & 0x40) ? "1" : "0");
-	ImGui::Text("  Sprite Overflow: %s", (status & 0x20) ? "1" : "0");
-	ImGui::Unindent();
+	ImGui::TextColored(RetroTheme::get_register_color(), "PPUSTAT ($2002): $%02X", status);
+	ImGui::Text("VBlank: %s", (status & 0x80) ? "1" : "0");
+	ImGui::Text("Sprite 0 Hit: %s", (status & 0x40) ? "1" : "0");
+	ImGui::Text("Sprite Overflow: %s", (status & 0x20) ? "1" : "0");
+
+	// Timing information
+	ImGui::Spacing();
+	ImGui::Separator();
+	const char *phase_str = "Unknown";
+	switch (ppu->get_current_phase()) {
+	case nes::ScanlinePhase::VISIBLE:
+		phase_str = "Visible";
+		break;
+	case nes::ScanlinePhase::POST_RENDER:
+		phase_str = "Post-Render";
+		break;
+	case nes::ScanlinePhase::VBLANK:
+		phase_str = "VBlank";
+		break;
+	case nes::ScanlinePhase::PRE_RENDER:
+		phase_str = "Pre-Render";
+		break;
+	}
+	ImGui::Text("Phase: %s", phase_str);
+	ImGui::Text("Frame: %llu", ppu->get_frame_count());
+	ImGui::Text("Scanline: %d", ppu->get_current_scanline());
+	ImGui::Text("Cycle: %d", ppu->get_current_cycle());
 }
 
-void PPUViewerPanel::render_timing_info(nes::PPU *ppu) {
-	ImGui::Separator();
-	ImGui::Text("Timing Information:");
-
-	ImGui::TextColored(RetroTheme::get_value_color(), "Current Scanline: %d", ppu->get_current_scanline());
-	ImGui::TextColored(RetroTheme::get_value_color(), "Current Cycle: %d", ppu->get_current_cycle());
-	ImGui::TextColored(RetroTheme::get_value_color(), "Frame Count: %llu", ppu->get_frame_count());
-
-	// Show scanline phase
-	uint16_t scanline = ppu->get_current_scanline();
-	const char *phase = "Unknown";
-	if (scanline < 240)
-		phase = "Visible";
-	else if (scanline == 240)
-		phase = "Post-render";
-	else if (scanline <= 260)
-		phase = "VBlank";
-	else
-		phase = "Pre-render";
-
-	ImGui::TextColored(RetroTheme::get_address_color(), "Scanline Phase: %s", phase);
+void PPUViewerPanel::render_timing_info(nes::PPU * /*ppu*/) {
+	// Timing information removed - now displayed under NES Display
 }
 
 void PPUViewerPanel::initialize_textures() {

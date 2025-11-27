@@ -46,6 +46,7 @@ void AudioPanel::render_controls(SystemBus *bus) {
 	volume_slider_ = current_volume;
 
 	ImGui::Text("Volume:");
+	ImGui::SetNextItemWidth(ImGui::CalcItemWidth() * 0.8f);
 	if (ImGui::SliderFloat("##volume", &volume_slider_, 0.0f, 1.0f, "%.2f")) {
 		bus->set_audio_volume(volume_slider_);
 	}

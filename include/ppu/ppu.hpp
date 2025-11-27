@@ -95,6 +95,7 @@ class PPU : public Component {
 	uint64_t get_frame_count() const {
 		return frame_counter_;
 	}
+	ScanlinePhase get_current_phase() const;
 
 	// Register inspection (for debugging)
 	uint8_t get_control_register() const {
@@ -368,7 +369,6 @@ class PPU : public Component {
 	void check_nmi();
 
 	// Internal state helpers
-	ScanlinePhase get_current_phase() const;
 	bool is_rendering_enabled() const;
 	bool is_background_enabled() const;
 	bool is_sprites_enabled() const;

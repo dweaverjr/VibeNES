@@ -34,6 +34,7 @@ class MemoryViewerPanel {
 	uint16_t start_address_;
 	uint16_t bytes_per_row_;
 	uint16_t rows_to_show_;
+	bool scroll_to_address_; // Flag to trigger scroll jump
 
 	// Helper methods
 	void render_controls();

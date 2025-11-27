@@ -101,12 +101,12 @@ class GuiApplication {
 	float save_state_status_timer_;
 
 	// Layout constants - Optimized for 1080p displays (1920x1080)
-	static constexpr int WINDOW_WIDTH = 1900;
+	static constexpr int WINDOW_WIDTH = 1176;
 	static constexpr int WINDOW_HEIGHT = 1000;
 	static constexpr float HEADER_HEIGHT = 25.0f;
-	static constexpr float LEFT_WIDTH = 300.0f;
-	static constexpr float CENTER_WIDTH = 760.0f;
-	static constexpr float RIGHT_WIDTH = 840.0f;   // Fill remaining space (1900 - 300 - 760 = 840)
+	static constexpr float LEFT_WIDTH = 310.0f;
+	static constexpr float CENTER_WIDTH = 530.0f;
+	static constexpr float RIGHT_WIDTH = 336.0f;   // Pattern/Palette/Audio panel
 	static constexpr float BOTTOM_HEIGHT = 300.0f; // For memory/disassembler row
 
 	// Private methods

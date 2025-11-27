@@ -192,21 +192,6 @@ void CPUStatePanel::render_controls(nes::CPU6502 *cpu, std::function<void()> ste
 			cpu->trigger_reset();
 		}
 	}
-
-	ImGui::SameLine();
-
-	// Helper text
-	ImGui::TextDisabled("(?)");
-	if (ImGui::IsItemHovered()) {
-		ImGui::SetTooltip("Step 1x: Execute one CPU instruction\n"
-						  "Step 100x: Execute 100 CPU instructions\n"
-						  "Step 1000x: Execute 1000 CPU instructions\n"
-						  "Run/Pause: Toggle continuous execution at normal speed\n"
-						  "Step 10,000x: Execute 10,000 CPU instructions\n"
-						  "Step 100,000x: Execute 100,000 CPU instructions\n"
-						  "NES Reset: Reset entire NES system to initial state\n"
-						  "(Hold buttons to repeat rapidly)");
-	}
 }
 
 } // namespace nes::gui
