@@ -93,17 +93,19 @@ enum class CpuRegister : std::uint8_t {
 	P	// Processor status
 };
 
-/// CPU status flag bits
-enum class StatusFlag : std::uint8_t {
-	CARRY = 0x01,
-	ZERO = 0x02,
-	INTERRUPT = 0x04,
-	DECIMAL = 0x08,
-	BREAK = 0x10,
-	UNUSED = 0x20,
-	OVERFLOW = 0x40,
-	NEGATIVE = 0x80
-};
+/// CPU status flag bitmasks
+/// Note: The CPU uses a bitfield union in cpu_6502.hpp for flag access.
+/// These constants are provided for bitmask operations on the status register.
+namespace CpuFlag {
+inline constexpr std::uint8_t Carry = 0x01;
+inline constexpr std::uint8_t Zero = 0x02;
+inline constexpr std::uint8_t Interrupt = 0x04;
+inline constexpr std::uint8_t Decimal = 0x08;
+inline constexpr std::uint8_t Break = 0x10;
+inline constexpr std::uint8_t Unused = 0x20;
+inline constexpr std::uint8_t Overflow = 0x40;
+inline constexpr std::uint8_t Negative = 0x80;
+} // namespace CpuFlag
 
 // =============================================================================
 // Error Handling

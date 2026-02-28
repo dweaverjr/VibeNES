@@ -23,6 +23,11 @@
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl2.h>
 
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 #include <GL/gl.h>
 #include <SDL2/SDL.h>
 #include <iostream>
@@ -493,10 +498,10 @@ void GuiApplication::render_frame() {
 
 	ImGui::PopStyleVar(3);
 
-	// Show demo window if requested (as overlay)
-	if (show_demo_window_) {
-		ImGui::ShowDemoWindow(&show_demo_window_);
-	}
+	// Demo window removed (imgui_demo.cpp not compiled)
+	// if (show_demo_window_) {
+	//     ImGui::ShowDemoWindow(&show_demo_window_);
+	// }
 
 	// Display save state status message as overlay
 	if (save_state_status_timer_ > 0.0f) {
@@ -706,22 +711,27 @@ void GuiApplication::step_emulation() {
 	static int step_count = 0;
 	step_count++;
 
-	// Execute exactly one CPU instruction and get the cycles it consumed
-	int cycles_consumed = cpu_->execute_instruction();
-
-	// Advance PPU and other components by the exact number of cycles the CPU used
-	// This maintains perfect cycle-accurate synchronization between CPU and PPU
-	bus_->tick(cpu_cycles(cycles_consumed));
+	// Execute exactly one CPU instruction
+	// PPU/APU synchronization happens automatically inside consume_cycle()
+	(void)cpu_->execute_instruction();
 }
 
 void GuiApplication::step_frame() {
 	if (!bus_ || !cpu_ || !ppu_)
 		return;
 
-	// Run emulation for approximately one frame worth of cycles
-	// NES runs at ~1.79 MHz CPU, ~60 FPS, so about 29,830 cycles per frame
-	// We'll use a smaller chunk to simulate frame stepping
-	bus_->tick(cpu_cycles(1000));
+	// Run emulation for one full frame worth of cycles
+	// NES: 341 PPU dots/scanline × 262 scanlines = 89,342 PPU dots/frame
+	// 89,342 / 3 = 29,780.67 CPU cycles/frame (NTSC)
+	constexpr int CYCLES_PER_FRAME = 29781;
+	int executed = 0;
+	while (executed < CYCLES_PER_FRAME) {
+		int consumed = cpu_->execute_instruction();
+		if (consumed <= 0)
+			break;
+		// No bus_->tick() needed — synchronization happens inside consume_cycle()
+		executed += consumed;
+	}
 }
 
 void GuiApplication::start_emulation() {
@@ -777,7 +787,6 @@ void GuiApplication::process_continuous_emulation(double delta_seconds) {
 						  << std::endl;
 				break;
 			}
-			bus_->tick(cpu_cycles(consumed));
 			executed_cycles += consumed;
 			instruction_count++;
 
@@ -822,7 +831,6 @@ void GuiApplication::process_continuous_emulation(double delta_seconds) {
 					  << std::endl;
 			break;
 		}
-		bus_->tick(cpu_cycles(consumed));
 		executed_cycles += consumed;
 		instruction_count++;
 

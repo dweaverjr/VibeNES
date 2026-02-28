@@ -35,9 +35,32 @@ void SystemBus::tick(CpuCycle cycles) {
 	}
 
 	// Check for mapper IRQs (MMC3, etc.)
+	// IRQ line stays asserted until the game explicitly acknowledges it
+	// (e.g., MMC3 clears on write to $E000). Do NOT clear here.
 	if (cartridge_ && cpu_ && cartridge_->is_irq_pending()) {
 		cpu_->trigger_irq();
-		cartridge_->clear_irq();
+	}
+}
+
+void SystemBus::tick_single_cpu_cycle() {
+	// Advance PPU by exactly 3 dots (1 CPU cycle = 3 PPU dots)
+	if (ppu_) {
+		ppu_->tick(cpu_cycles(3));
+	}
+
+	// Advance APU by exactly 1 CPU cycle
+	if (apu_) {
+		apu_->tick(cpu_cycles(1));
+	}
+
+	// Advance cartridge (for mapper timing, e.g. MMC1 cycle tracking)
+	if (cartridge_) {
+		cartridge_->tick(cpu_cycles(1));
+	}
+
+	// Check for mapper IRQs (MMC3, etc.)
+	if (cartridge_ && cpu_ && cartridge_->is_irq_pending()) {
+		cpu_->trigger_irq();
 	}
 }
 

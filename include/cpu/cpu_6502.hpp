@@ -156,6 +156,7 @@ class CPU6502 final : public Component {
 
 	// Cycle tracking
 	CpuCycle cycles_remaining_;
+	int cycles_consumed_ = 0; // Tracks cycles used by current instruction (for fat consume_cycle)
 
 	// Interrupt state
 	InterruptState interrupt_state_;

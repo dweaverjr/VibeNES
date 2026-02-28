@@ -47,6 +47,11 @@ class SystemBus final : public Component {
 	// Debug interface
 	void debug_print_memory_map() const;
 
+	// Cycle-accurate synchronization: advance PPU (3 dots), APU (1 cycle),
+	// and check mapper IRQs for a single CPU cycle. Called from CPU's
+	// consume_cycle() for per-cycle interleaving.
+	void tick_single_cpu_cycle();
+
 	// DMA interface
 	[[nodiscard]] bool is_dma_active() const noexcept;
 
