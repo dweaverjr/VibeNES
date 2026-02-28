@@ -1,0 +1,8 @@
+{
+    "name": "vibenes",
+    "version-string": "0.1.0",
+    "description": "Cycle-accurate NES emulator",
+    "dependencies": [
+        "sdl2"
+    ]
+}
