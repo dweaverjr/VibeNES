@@ -290,23 +290,29 @@ class SystemBus {
 ## Building
 
 ### Prerequisites
-- MSYS2 with GCC 13+ (C++23 support)
-- VS Code with C/C++ extension
+- Visual Studio Build Tools 2022 (MSVC v143, C++23)
+- CMake 3.25+ and Ninja (bundled with Build Tools)
+- VS Code with CMake Tools and C/C++ extensions
+- vcpkg (bootstrapped locally in project)
 
 ### Build Commands
-```bash
-# Using VS Code Tasks (Recommended)
-Ctrl+Shift+P -> "Tasks: Run Task" -> "Debug Build"
-Ctrl+Shift+P -> "Tasks: Run Task" -> "Release Build"
-Ctrl+Shift+P -> "Tasks: Run Task" -> "Run Debug"
+```powershell
+# Configure (first time or after CMakeLists.txt changes)
+cmake --preset debug
 
-# Or use F5 to build and debug directly
+# Build
+cmake --build --preset debug
+
+# Run tests
+ctest --preset debug
+
+# Or use VS Code: F7 to build, F5 to debug
 ```
 
 ### Quick Start
 1. Open project in VS Code
-2. Build with `Ctrl+Shift+P` -> "Tasks: Run Task" -> "Debug Build"
-3. Run with `Ctrl+Shift+P` -> "Tasks: Run Task" -> "Run Debug"
+2. CMake Tools auto-configures on open
+3. Press F7 to build, F5 to debug
 4. Load a ROM file using the GUI interface
 5. Use CPU debugging controls to step through execution
 

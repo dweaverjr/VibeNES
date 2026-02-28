@@ -31,7 +31,7 @@ Development of a CPU state visualization and debugging GUI for the VibeNES emula
 - **Platform**: Cross-platform (Windows-first development)
 - **Visual Style**: Retro/authentic look
 - **Priority Features**: CPU state display and instruction disassembler
-- **Development Environment**: MSYS2/MinGW with additional dependencies
+- **Development Environment**: MSVC (Build Tools 2022) + CMake + vcpkg
 
 **Objectives**:
 - Setup ImGui + SDL2 integration
@@ -42,7 +42,7 @@ Development of a CPU state visualization and debugging GUI for the VibeNES emula
 
 **Detailed Tasks**:
 1. **Dependencies Setup**
-   - Add SDL2 to MSYS2 environment
+   - Add SDL2 via vcpkg
    - Integrate ImGui into build system
    - Setup OpenGL context
 

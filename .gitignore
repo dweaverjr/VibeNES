@@ -1,67 +1,52 @@
-ideas.txt
+# Build output
+build/
+bin/
+out/
 
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
+# Compiled objects
 *.obj
-
-# Precompiled Headers
-*.gch
+*.o
 *.pch
+*.gch
+*.pdb
+*.ilk
+*.exp
 
-# Compiled Dynamic libraries
+# Libraries (don't commit built libs — vcpkg handles dependencies)
+*.lib
+*.dll
+*.a
 *.so
 *.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
 
 # Executables
 *.exe
-*.out
-*.app
 
-# Build directories
-build/
-bin/
+# vcpkg (cloned locally, not committed)
+vcpkg/
 
-# VS Code specific
+# VS Code caches
 .vscode/ipch/
+.cache/
 
-# ROM files (optional - you may want to include test ROMs)
-*.nes
-*.chr
-*.prg
+# IDE files we don't need in repo
+imgui.ini
 
-# Debug files
-*.pdb
-*.ilk
+# ROM files (game ROMs not committed)
+roms/*.nes
+roms/*.chr
+roms/*.prg
 
-# Temporary files
+# Test ROMs ARE committed — don't ignore tests/test_roms/
+# (put standard test ROMs like nestest, blargg, etc. there)
+
+# Temp files
 *~
 *.tmp
 *.swp
 *.bak
-
-# Dependencies/Third-party
-vendor/
-third_party/
-deps/
-
-# ImGui specific
-imgui.ini
-
-# SDL2 specific
 *.log
+nul
+
+# Personal notes
+ideas.txt

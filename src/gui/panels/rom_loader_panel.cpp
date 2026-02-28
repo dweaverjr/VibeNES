@@ -210,12 +210,10 @@ std::string RomLoaderPanel::get_file_extension(const std::string &filename) cons
 }
 
 void RomLoaderPanel::find_default_rom_directory() {
-	// Try multiple possible ROM locations
+	// Try multiple possible ROM locations (prefer project root roms/ dir)
 	std::vector<std::string> possible_paths = {
-		"./build/debug/roms",	// Debug build location
-		"./build/release/roms", // Release build location
-		"./roms",				// Root project directory
-		".",					// Current directory
+		"./roms", // Project root roms directory
+		".",	  // Current directory
 	};
 
 	for (const auto &path : possible_paths) {
@@ -225,8 +223,8 @@ void RomLoaderPanel::find_default_rom_directory() {
 		}
 	}
 
-	// Default to build/debug/roms if nothing exists
-	current_directory_ = "./build/debug/roms";
+	// Default to roms/ if nothing exists
+	current_directory_ = "./roms";
 }
 
 } // namespace nes::gui

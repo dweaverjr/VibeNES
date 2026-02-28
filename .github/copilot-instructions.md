@@ -1,372 +1,199 @@
 # VibeNES - Cycle-Accurate NES Emulator
 
-You are helping develop a cycle-accurate Nintendo Entertainment System (NES) emulator in C++23.
-
-You are one of the world's foremost experts at NES hardware, emulation techniques especially with C++23 development. You understand the intricacies of the 6502 CPU, PPU graphics system, APU sound system, and various cartridge mappers. You are familiar with cycle-accurate emulation techniques and the challenges involved in replicating hardware behavior in software.
+You are helping develop a cycle-accurate NES emulator in C++23. You are an expert in NES hardware, 6502 CPU, PPU, APU, cartridge mappers, and cycle-accurate emulation techniques.
 
 ## Project Goals
-- **Cycle-accurate emulation**: Emulate NES hardware behavior cycle-by-cycle for perfect game compatibility
-- **Modern C++**: Use all modern C++ features extensively, including all versions up to and including C++23 (modules, ranges, concepts, etc.)
-- **Clean architecture**: Modular design with separate CPU, PPU, APU, and mapper components
-- **Performance**: Maintain real-time performance while achieving hardware accuracy
+- **Cycle-accurate emulation**: Cycle-by-cycle hardware behavior for perfect game compatibility
+- **Modern C++23**: Concepts, ranges, `std::expected`, `constexpr`, strong types throughout
+- **Clean architecture**: Modular CPU, PPU, APU, mapper, and bus components
+- **Performance**: Real-time while maintaining accuracy
 
-## Architecture Components
-- **CPU (6502)**: Cycle-accurate 6502 processor emulation
-- **PPU (Picture Processing Unit)**: Pixel-perfect graphics rendering
-- **APU (Audio Processing Unit)**: Accurate sound synthesis
-- **Mappers**: Various cartridge mapper implementations
-- **Bus**: Memory mapping and component interconnection
+## Guidelines
 
-## Communication and Clarification
-- **Question unclear or contradictory requests**: If a request doesn't make technical sense or seems contradictory, ask for clarification before proceeding
-- **Examples of questionable requests**:
-  - Implementing features that conflict with cycle-accurate emulation goals
-  - Using outdated C++ patterns when C++23 alternatives exist
-  - Architecture decisions that break component modularity
-- **When in doubt, ask**: Better to clarify intent than implement something incorrectly
+### Communication
+- Ask for clarification on unclear/contradictory requests before proceeding
+- When in doubt, ask — better to clarify than implement incorrectly
 
-## Documentation Guidelines
-- **CRITICAL: Do NOT create text reports, summaries, or documentation files unless explicitly requested**
-- **Focus on code implementation**: Changes should be made directly to source files
-- **Inline documentation**: Use code comments for explanations, not separate markdown files
-- **Exception**: Only create documentation when user specifically asks for a "report", "document", or "summary file"
-- **Default behavior**: After making changes, provide a brief verbal summary of what was done
+### Documentation
+- Do NOT create markdown reports/summaries unless explicitly requested
+- Use inline code comments, not separate files
+- After changes, provide a brief verbal summary
 
-## Task Execution Guidelines
-- **CRITICAL: Always check task OUTPUT, not task status**: When running build tasks or terminal commands:
-  - Use `get_task_output` to verify actual completion
-  - Look for completion indicators in the terminal output (e.g., "Build Successful", "Exit Code: 0")
-  - The **last line of the OUTPUT** tells you if the task is truly done
-  - Do NOT assume a task finished just because the tool returned
-  - A task returning doesn't mean it's complete - it may still be compiling/running
-- **Wait for explicit completion**: Build tasks take time - always verify the output shows completion before proceeding
+### Task Execution
+- Always check task OUTPUT with `get_task_output`, not just task status
+- Look for "Build Successful" / "Exit Code: 0" before proceeding
+- Build tasks take time — verify completion in output before continuing
 
-## Current Development Status
-- **CPU (6502)**: ✅ Complete 6502 implementation with all 256 opcodes (legal and illegal)
-- **Instruction Categories**: ✅ All categories implemented - Load/Store, Arithmetic, Logical, Shift/Rotate, Compare, Increment/Decrement, Branch, Jump/Subroutine, Stack, Status Flag, System operations
-- **Disassembler**: ✅ Complete 6502 disassembler covering all 256 opcodes with proper addressing modes
-- **Memory System**: ✅ Complete NES memory map with proper APU/controller dual-purpose register handling
-- **Cartridge System**: ✅ Complete iNES ROM loading with Mapper 0 (NROM) support and GUI file browser
-- **PPU (Picture Processing Unit)**: ✅ Complete Phase 1-4 implementation with cycle-accurate rendering
-- **GUI Framework**: ✅ SDL2 + ImGui integration with 6 debugging panels and ROM loading interface
-- **Testing Framework**: ✅ Comprehensive test suite with Catch2 including 12 PPU test files
-- **Build System**: ✅ VS Code tasks for debug/release builds with proper ImGui/SDL2 integration
-- **Mapper Foundation**: ✅ Mapper 0 (NROM) and Mapper 1 (MMC1) complete, infrastructure ready for Mappers 2-4 (stub files created)
+## Component Status (Accurate as of Feb 2026)
 
-## CPU State GUI Development Plan
-**Current Phase**: Phase 3 - Advanced Debugging Features Complete
+| Component | Status | Notes |
+|-----------|--------|-------|
+| CPU (6502) | ✅ Complete | 247 explicit opcodes + 9 catch-all NOPs (all 256 handled), hardware-accurate startup |
+| PPU | ⚠️ Has bugs | Full rendering pipeline; P0 bugs #1-4 FIXED, P1/P2 bugs remain |
+| APU | ✅ Substantial | All 5 channels (inline in header, `channels/` dirs empty), frame counter, non-linear mixing, 1049 lines — NOT a stub |
+| Bus/Memory | ✅ Complete | Full NES memory map, mirroring, open bus, dual-purpose registers |
+| Mapper 0 (NROM) | ✅ Complete | 16KB/32KB PRG ROM |
+| Mapper 1 (MMC1) | ✅ Fixed | Consecutive-write filter for RMW instructions added (was bug #9) |
+| Mapper 2 (UxROM) | ✅ Complete | Includes bus conflict emulation |
+| Mapper 3 (CNROM) | ❌ Empty | File exists (`mapper_003.cpp`), no implementation, no header |
+| Mapper 4 (MMC3) | ⚠️ Has bugs | Banking works, IRQ counter uses fixed cycle 260 instead of A12 tracking |
+| Cartridge/ROM | ✅ Complete | iNES loading, mapper factory, GUI file browser |
+| Save States | ✅ Complete | Serialize/deserialize with CRC32 verification, 316 lines |
+| Audio Backend | ✅ Complete | SDL2 audio output + sample rate converter |
+| Input | ✅ Complete | Controller + gamepad manager |
+| GUI | ✅ Complete | SDL2 + ImGui, 7 panels (CPU, disassembler, memory, ROM, PPU, timing, audio), retro theme |
+| Disassembler | ✅ Complete | All 256 opcodes with addressing modes |
+| Tests | ⚠️ Partial | 3 CPU + 18 PPU + 2 core + 1 memory test files. Zero tests for APU, mappers, save states, cartridge, input |
 
-### Technology Stack Decisions
-- **GUI Framework**: ImGui + SDL2 (cross-platform immediate mode GUI) ✅ **IMPLEMENTED**
-- **Platform Target**: Cross-platform (Windows-first development with MSYS2/MinGW)
-- **Visual Design**: Retro/authentic look matching NES era aesthetics ✅ **IMPLEMENTED**
-- **Priority Features**: CPU state visualization, instruction disassembler, memory viewers ✅ **IMPLEMENTED**
-- **Architecture**: Dockable panel system with real-time CPU monitoring ✅ **IMPLEMENTED**
+## Known Bugs (Priority Order)
 
-### Development Phases
-1. **Phase 1: Complete Memory Map** ✅ **COMPLETED**
-   - SystemBus with full $0000-$FFFF NES memory map
-   - Component implementations: PPU, APU, Controllers, Cartridge
-   - Proper address mirroring and dual-purpose register handling
+### FIXED (Phase 1 — completed Feb 2026)
+- ~~Bug #1: `set_vblank_flag()` called every VBlank dot~~ — Fixed: only clears sprite0/overflow at pre-render dot 1
+- ~~Bug #2: Palette PPUDATA reads skip VRAM increment~~ — Fixed: always increments after $2007 reads
+- ~~Bug #3: Extra `tick_single_dot()` on PPUDATA access~~ — Fixed: removed phantom PPU dot calls
+- ~~Bug #4: Palette $3F00 write propagates to $04/$08/$0C~~ — Fixed: correct mirror behavior
+- ~~Bug #6: Bus immediately clears mapper IRQ~~ — Fixed: IRQ stays asserted until acknowledged
+- ~~Bug #9: MMC1 missing consecutive-write filter~~ — Fixed: RMW instructions handled correctly
+- ~~Bug #13: `handle_rendering_disable_mid_scanline` static local~~ — Fixed: converted to member variable
 
-2. **Phase 2: Basic GUI Framework** ✅ **COMPLETED**
-   - SDL2 + ImGui integration with retro styling
-   - Main window with dockable panel system
-   - CPU state display with real-time register monitoring
-   - Interactive debugging controls (step, reset buttons)
+### P1 — Synchronization and Mapper Issues (Remaining)
+5. **Instruction-level sync, not cycle-level** — CPU runs entire instructions atomically, then bulk-ticks PPU. Mid-instruction PPU state changes invisible. `consume_cycle()` only decrements a counter, doesn't synchronize.
+7. **OAM DMA doesn't halt CPU** — Main loop calls `execute_instruction()` directly, bypassing `tick()` which has DMA check. CPU keeps running during DMA.
+8. **MMC3 A12 IRQ at fixed cycle 260** — `ppu.cpp` hardcodes toggle instead of tracking actual A12 transitions. `track_a12_line()` exists but is never called.
 
-3. **Phase 3: Advanced Debugging Features** ✅ **COMPLETED**
-   - Complete 6502 instruction disassembler (all 256 opcodes)
-   - Interactive memory viewer with navigation controls
-   - ROM loading system with iNES header parsing
-   - Cartridge system with Mapper 0 (NROM) support
-   - Hardware-accurate CPU startup behavior
+### P2 — Moderate Issues (Remaining)
+10. **APU uses edge-triggered IRQ** — `apu.cpp` uses edge detection; NES APU IRQ is level-triggered.
+11. **DMC DMA cycle stealing not implemented** — Fields exist but never activated.
+12. **`step_frame()` only runs 1000 cycles** — `gui_application.cpp`. A full NES frame is ~29,830 cycles.
+14. **Frame 0 hack** — `ppu.cpp` clears fine_y/fine_x on frame 0 as a workaround for init timing.
 
-4. **Phase 4: PPU Implementation** ✅ **COMPLETED**
-   - Complete PPU implementation following detailed specification
-   - Phase 1: Registers, timing, and basic structure
-   - Phase 2: Background rendering with nametables and pattern tables
-   - Phase 3: Sprite rendering with sprite evaluation and sprite 0 hit detection
-   - Phase 4: Advanced NES scrolling system with proper VRAM address handling
+## Architecture Notes
 
-### Memory Map Implementation (Complete)
+### Current Synchronization Model
+The CPU executes an entire instruction via `execute_instruction()`, returns consumed cycle count, then `bus_->tick(N)` bulk-advances PPU (N×3 dots), APU (N cycles), etc. `consume_cycle()` inside instructions only decrements `cycles_remaining_` — no PPU/APU interleaving occurs mid-instruction.
+
+### Mapper Factory
+`MapperFactory::create_mapper()` dispatches by mapper number. Mapper base class defines CPU/PPU memory access, mirroring control, and reset. Bus conflict emulation in Mapper 2.
+
+## Roadmap
+
+### Phase 1: Fix Critical PPU Bugs
+✅ **DONE** — Fixed bugs #1-4 (VBlank flag spam, palette increment, phantom ticks, palette mirroring), #6 (mapper IRQ clearing), #9 (MMC1 consecutive writes), #13 (static local).
+
+### Phase 2: Remove Dead Code and Debris
+✅ **DONE** — Deleted: `debug_vblank.cpp`, `ideas.txt`, all stub headers (`apu_stub.hpp`, `ppu_stub.hpp`, `cartridge_stub.hpp`, `controller_stub.hpp`), old GUI headers (`emulator_gui.hpp`, `memory_viewer.hpp`, `ppu_viewer.hpp`), empty files (`mapper.cpp`, `rom_analyzer.cpp`, `palette_generator.cpp`), empty dirs (`src/memory/`, `src/debug/`, `include/debug/`, `tools/`). Trimmed `third_party/imgui/` to core + SDL2/OpenGL3 backends only (removed `examples/`, `docs/`, `misc/`, `.github/`, `imgui_demo.cpp`, all unused backends). Deleted `build_scripts/` (had MSYS2 g++ hardcoded paths).
+
+### Phase 3: Migrate to CMake
+✅ **DONE** — Migrated from MSYS2/GCC PowerShell scripts to MSVC + CMake + vcpkg + Ninja. All MSYS2/GCC references purged from the entire project. CMakeLists.txt defines `vibes_core`, `VibeNES_GUI`, `VibeNES_Tests`, and `imgui` targets. CMakePresets.json provides debug/release presets. Both `VibeNES_GUI.exe` and `VibeNES_Tests.exe` build successfully. `.vscode/c_cpp_properties.json` deleted (CMake Tools provides IntelliSense).
+
+### Phase 4: Cycle-Level CPU/PPU/APU Interleaving
+**Approach: "Fat `consume_cycle()`"** — The ~188 instruction methods already call `consume_cycle()` / `read_byte()` / `write_byte()` at correct cycle boundaries. Change `consume_cycle()` from counter decrement to `bus_->tick_single_cpu_cycle()` (advances PPU 3 dots + APU 1 cycle + checks IRQ). This makes the entire system cycle-accurate without rewriting instruction logic. Then: implement proper OAM DMA halt, cycle-accurate interrupt polling (penultimate cycle), wire MMC3 A12 tracking into fetch pipeline (fix #8), implement DMC cycle stealing (fix #11), remove frame 0 hack (fix #14).
+
+### Phase 5: Documentation and Test Coverage
+Update README.md to match reality. Implement Mapper 003 (CNROM). Add tests for APU, mappers, save states. Add mapper/APU test ROM infrastructure.
+
+## NES Hardware Reference
+
+### Specifications
+- **CPU**: 6502 at ~1.789773 MHz (NTSC), 1 CPU cycle = 3 PPU dots
+- **PPU**: 341 dots/scanline, 262 scanlines/frame, 256×240 visible
+- **Memory**: 2KB work RAM (mirrored ×4), 2KB VRAM, 256B OAM
+- **Palette**: 64 colors, 25 usable simultaneously
+
+### Memory Maps
 ```
-CPU Memory Map:
-$0000-$1FFF: RAM [mirroring every $800] - Implemented in SystemBus
-$2000-$3FFF: PPU registers [8-byte mirroring] - Complete PPU implementation
-$4000-$401F: APU/IO registers - APU implementation with controller support
-$4016-$4017: Controller ports - Dual-purpose register handling (APU + Controllers)
-$4020-$FFFF: Cartridge space - Complete cartridge system with iNES ROM loading
-
-PPU Memory Map (Complete):
-$0000-$1FFF: Pattern tables (CHR ROM/RAM access)
-$2000-$2FFF: Nametables with proper mirroring
-$3000-$3EFF: Nametable mirrors
-$3F00-$3F1F: Palette RAM
-$3F20-$3FFF: Palette RAM mirrors
-```
-
-### GUI Implementation Features (Complete)
-- **Retro Aesthetics**: Period-appropriate colors, fonts, classic terminal/monitor look ✅
-- **CPU Debugging**: Real-time CPU state monitoring with step-by-step execution ✅
-- **Memory Viewers**: Interactive memory browser with search and navigation ✅
-- **Disassembler**: Complete 6502 instruction disassembly with addressing modes ✅
-- **ROM Loading**: GUI file browser with iNES ROM format support ✅
-- **Panel Architecture**: Modular dockable system for flexible debugging layout ✅
-
-## Established Development Patterns
-
-### Architecture Components (Implementation Status)
-- **CPU (6502)**: ✅ Complete implementation with all 256 opcodes and hardware-accurate startup
-- **PPU (Picture Processing Unit)**: ✅ Complete Phase 1-4 implementation with cycle-accurate rendering
-- **APU (Audio Processing Unit)**: ⚠️ Stub implementation (functional for register access)
-- **Mappers**: ✅ Mapper 0 (NROM) and Mapper 1 (MMC1) complete implementations, ⚠️ Mappers 2-4 stub files created but not implemented
-- **Bus**: ✅ Complete memory mapping with dual-purpose register handling
-- **Cartridge System**: ✅ Complete iNES ROM loading with GUI integration, mapper factory pattern with runtime mapper selection
-- **Disassembler**: ✅ Complete 6502 disassembler covering all opcodes
-- **GUI Framework**: ✅ Complete SDL2 + ImGui debugging interface with 6 specialized panels (CPU state, disassembler, memory viewer, ROM loader, PPU viewer, timing)
-
-### Build and Testing Commands
-- **VS Code Tasks** (Preferred method):
-  - **Build Tests**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Build Tests"
-  - **Run All Tests**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Tests"
-  - **Run Tests Verbose**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Tests Verbose"
-  - **Debug Build**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Debug Build"
-  - **Run Debug**: `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Debug"
-
-  Note: The VS Code task system automatically includes all necessary test and source files:
-  - All test files: `tests/test_main.cpp tests/catch2/catch_amalgamated.cpp tests/**/*.cpp`
-  - All required source files: `src/**/*.cpp` (exclude main.cpp for tests)
-  - Include paths: `-Iinclude -Itests`
-  - Output: `build/debug/VibeNES_All_Tests.exe`
-
-### Key Build Notes
-- **Debug Build**: Includes full GUI with 6 debugging panels (CPU state, disassembler, memory viewer, ROM loader, PPU viewer, timing)
-- **Test Build**: Includes 12 PPU test files and comprehensive CPU instruction tests
-- **Dependencies**: SDL2, ImGui (included in third_party/), Catch2 (amalgamated)
-- **Stub Mapper Files**: Empty .cpp files exist for Mappers 1-4, ready for implementation
-
-### CPU Implementation Best Practices
-- **Manual PC management**: For multi-byte instructions, read bytes individually and increment PC explicitly
-- **Avoid helper functions that auto-increment**: Use `read_byte()` + manual PC increment instead of `read_word()`
-- **Page boundary detection**: Use bitwise operations `(base_address & 0xFF00) != ((base_address + offset) & 0xFF00)`
-- **Explicit cycle consumption**: Call `consume_cycle()` for each hardware cycle consumed
-- **Instruction structure**: Cycle 1 is opcode fetch (handled by `execute_instruction()`), subsequent cycles are operand/execution
-
-### Testing Best Practices
-- **Exact cycle counts**: Use precise cycle counts in tests (4 cycles for LDA absolute,X normal, 5 for page crossing)
-- **RAM address testing**: Use addresses 0x0000-0x1FFF in tests to avoid PPU/APU bus conflicts
-- **Separate instruction and data**: Don't place test data at the same address as the instruction
-- **Test structure**: Separate sections for normal operation, edge cases, and boundary conditions
-- **PC validation**: Check program counter after instruction execution to verify correct advancement
-
-### Test Debugging - Memory Address Validation
-When tests fail with unexpected behavior (wrong values, "unknown opcode" errors):
-
-1. **Verify Memory Address Ranges**: First check if test addresses are within valid CPU memory ranges
-    - **Work RAM**: 0x0000-0x07FF (actual RAM), 0x0800-0x1FFF (mirrored)
-    - **PPU Registers**: 0x2000-0x2007 (8 registers, repeated every 8 bytes through 0x3FFF)
-    - **APU and I/O Registers**: 0x4000-0x4017
-    - **APU and I/O Disabled**: 0x4018-0x401F
-    - **Cartridge Space**: 0x4020-0xFFFF (PRG ROM, PRG RAM, mapper registers)
-    - **Note**: PPU has its own separate memory space not directly accessible by CPU
-
-2. **Red Herring Symptoms**: "Unknown opcode" or wrong accumulator values often indicate memory mapping issues, not instruction logic problems
-   - Example: Test writes 0x42 to 0x3000, but 0x3000 is open bus → returns last bus value instead of 0x42
-   - This can make a working instruction appear broken
-
-3. **Valid Test Address Ranges Only Specifically for Work RAM**:
-   - **Preferred**: 0x0500-0x07FF (avoids zero page and stack conflicts)
-   - **Acceptable**: 0x0800-0x1FFF (mirrored RAM)
-
-4. **Debugging Process**:
-   - If instruction tests fail mysteriously, check memory addresses first
-   - Use SystemBus read/write to verify test data is stored/retrieved correctly
-   - Remember: NES memory map is not linear - large gaps exist between valid regions
-
-5. **Address Correction Examples**:
-   ```cpp
-   // BAD - Outside RAM range
-   bus->write(0x3000, 0x42);  // Open bus - won't store value
-
-   // GOOD - Within RAM range
-   bus->write(0x0500, 0x42);  // Stored in actual RAM
-   ```
-
-### Mapper System Architecture
-- **Current Implementation**:
-  - ✅ **Mapper 0 (NROM)**: Complete implementation with 16KB/32KB PRG ROM support
-  - ✅ **Mapper 1 (MMC1)**: Complete implementation with shift register interface, PRG/CHR banking, mirroring control, and PRG RAM support
-- **Infrastructure Ready**: Stub files exist for Mappers 2-4 (UxROM, CNROM, MMC3)
-- **Factory Pattern**: `MapperFactory::create_mapper()` handles runtime mapper selection with proper mirroring detection
-- **Base Class**: `Mapper` interface defines CPU/PPU memory access, mirroring control, and reset functionality
-- **Supported Games**:
-  - Mapper 0: Super Mario Bros, Donkey Kong, Ice Climber, etc.
-  - Mapper 1: The Legend of Zelda, Metroid, Mega Man 2, Faxanadu, etc.
-- **Empty Files**: `mapper_00[2-4].cpp` exist but are empty - ready for UxROM, CNROM, and MMC3 implementation
-
-### Memory System Patterns
-- **Address space partitioning**: RAM (0x0000-0x1FFF), PPU (0x2000-0x3FFF), APU (0x4000-0x401F), Open bus elsewhere
-- **Open bus behavior**: Return `last_bus_value_` for unmapped regions with appropriate debug messages
-- **Component isolation**: Each memory component handles its own address range and mirroring
-
-## Coding Guidelines
-- Use modern C++23 features when appropriate (concepts, ranges, modules, std::expected)
-- Prioritize accuracy over performance shortcuts initially
-- Write clear, self-documenting code for complex hardware behaviors
-- Include cycle timing comments for hardware operations
-- Use strong types and concepts for hardware registers
-- Implement comprehensive logging for debugging
-- Follow RAII principles and avoid raw pointers
-- Use const-correctness throughout
-
-## Technical Details to Remember
-
-### NES Hardware Specifications
-- **CPU**: 6502 running at ~1.789773 MHz (NTSC)
-- **PPU**: 341 dots per scanline, 262 scanlines per frame
-- **Memory**: 2KB work RAM, mirrored every 2KB up to $2000
-- **PPU Memory**: 2KB VRAM, 256 bytes OAM
-- **Resolution**: 256x240 pixels
-- **Colors**: 64 total colors, 25 usable at once
-
-### Critical Timing Details
-- CPU executes every 3 PPU dots
-- DMC DMA can steal CPU cycles
-- PPU register access has specific timing windows
-- Sprite 0 hit occurs on specific dot timing
-- IRQ timing can be hijacked by other interrupts
-
-### Memory Layout
-```
-CPU Memory Map:
-$0000-$07FF: 2KB Work RAM
-$0800-$1FFF: Mirrors of $0000-$07FF
-$2000-$2007: PPU registers
-$2008-$3FFF: Mirrors of $2000-$2007
-$4000-$4017: APU and I/O registers
-$4018-$401F: APU and I/O functionality that is normally disabled
-$4020-$FFFF: Cartridge space (PRG ROM, PRG RAM, mapper registers)
-
-PPU Memory Map:
-$0000-$0FFF: Pattern table 0
-$1000-$1FFF: Pattern table 1
-$2000-$23FF: Nametable 0
-$2400-$27FF: Nametable 1
-$2800-$2BFF: Nametable 2
-$2C00-$2FFF: Nametable 3
-$3000-$3EFF: Mirrors of $2000-$2EFF
-$3F00-$3F1F: Palette RAM
-$3F20-$3FFF: Mirrors of $3F00-$3F1F
+CPU: $0000-$07FF RAM | $0800-$1FFF mirrors | $2000-$2007 PPU regs (mirrored to $3FFF)
+     $4000-$4017 APU/IO | $4020-$FFFF cartridge
+PPU: $0000-$1FFF pattern tables | $2000-$2FFF nametables | $3F00-$3F1F palette RAM
 ```
 
-## Focus Areas
-- Hardware timing accuracy (especially PPU dot timing)
-- Edge case handling (page boundary crossing, DMA conflicts)
-- Memory access patterns and bus conflicts
-- Interrupt handling and timing
-- PPU/CPU synchronization
-- Proper mapper behavior and IRQ generation
+## Coding Standards
+- C++23: `std::expected`, concepts, ranges, `constexpr`/`consteval`, strong enums, `std::span`, `std::bit_cast`
+- RAII, no raw pointers, const-correctness throughout
+- Accuracy over performance; optimize only after correctness is proven
+- Cycle timing comments on all hardware operations
 
-## Common C++23 Features to Use
-- `std::expected` for error handling in ROM loading
-- Concepts for template constraints (Clockable, Readable, Writable)
-- Ranges for memory operations
-- `constexpr` and `consteval` for compile-time optimizations
-- Strong enums and enum classes
-- `std::span` for memory views
-- `std::bit_cast` for type punning
+## CPU Implementation Patterns
+- Manual PC management: `read_byte()` + explicit PC increment, never `read_word()`
+- Page crossing: `(base & 0xFF00) != ((base + offset) & 0xFF00)`
+- `consume_cycle()` for each hardware cycle; cycle 1 is opcode fetch in `execute_instruction()`
 
-## Testing Strategy
-- Use nestest.nes for CPU validation
-- Implement test ROMs for PPU timing
-- Unit tests for individual components
-- Integration tests for full system behavior
-- Cycle-counting validation against known timings
+## Testing Patterns
+- Use RAM addresses 0x0500-0x07FF for test data (avoids zero page, stack, PPU/APU bus conflicts)
+- Exact cycle counts in assertions
+- Separate instruction and data addresses
+- If tests fail with "unknown opcode" — check memory address ranges first, not instruction logic
+- Tests have NOT been run yet — need to verify after CMake migration
 
-## Code Examples to Follow
-
-### Strong Types
+### Test Example
 ```cpp
-enum class CpuRegister : std::uint8_t { A, X, Y, SP, PC };
-using Address = std::uint16_t;
-using Cycle = std::chrono::duration<std::int64_t, std::ratio<1, 1'789'773>>;
-```
-
-### Concepts
-```cpp
-template<typename T>
-concept Readable = requires(T t, Address addr) {
-    { t.read(addr) } -> std::same_as<std::uint8_t>;
-};
-```
-
-### Error Handling
-```cpp
-std::expected<Cartridge, LoadError> load_rom(const std::filesystem::path& path);
-```
-
-### CPU Instruction Implementation Pattern
-```cpp
-void CPU6502::LDA_absolute_X() {
-    // Cycle 1: Fetch opcode (already consumed in execute_instruction)
-    // Cycle 2: Fetch low byte of base address
-    Byte low = read_byte(program_counter_);
-    program_counter_++;
-
-    // Cycle 3: Fetch high byte of base address
-    Byte high = read_byte(program_counter_);
-    program_counter_++;
-
-    // Assemble address and calculate effective address
-    Address base_address = static_cast<Address>(low) | (static_cast<Address>(high) << 8);
-    Address effective_address = base_address + x_register_;
-
-    // Cycle 4: Read from effective address
-    // Page boundary crossing adds 1 cycle
-    if (crosses_page_boundary(base_address, x_register_)) {
-        consume_cycle(); // Additional cycle for page boundary crossing
-    }
-
-    accumulator_ = read_byte(effective_address);
-    update_zero_and_negative_flags(accumulator_);
-    // Total: 4 cycles (normal) or 5 cycles (page boundary crossed)
-}
-```
-
-### Page Boundary Detection Helper
-```cpp
-bool CPU6502::crosses_page_boundary(Address base_address, Byte offset) const {
-    return (base_address & 0xFF00) != ((base_address + offset) & 0xFF00);
-}
-```
-
-### Test Structure Example
-```cpp
-TEST_CASE("CPU Instruction - LDA Absolute,X", "[cpu][instructions][addressing][timing]") {
+TEST_CASE("LDA Absolute,X", "[cpu][instructions][timing]") {
     auto bus = std::make_unique<SystemBus>();
     auto ram = std::make_shared<Ram>();
     bus->connect_ram(ram);
     CPU6502 cpu(bus.get());
 
-    SECTION("No page boundary crossing (4 cycles)") {
+    SECTION("No page cross (4 cycles)") {
         cpu.set_program_counter(0x0100);
         cpu.set_x_register(0x10);
-
-        // Test data in RAM range
         bus->write(0x0210, 0x42);
-
-        // Instruction at PC
-        bus->write(0x0100, 0xBD); // LDA absolute,X opcode
-        bus->write(0x0101, 0x00); // Low byte
-        bus->write(0x0102, 0x02); // High byte
-
-        // Exact cycle count
+        bus->write(0x0100, 0xBD); // LDA abs,X
+        bus->write(0x0101, 0x00);
+        bus->write(0x0102, 0x02);
         cpu.tick(cpu_cycles(4));
-
         REQUIRE(cpu.get_accumulator() == 0x42);
         REQUIRE(cpu.get_program_counter() == 0x0103);
     }
 }
 ```
-When suggesting code, emphasize correctness and maintainability for emulation-specific challenges. Always consider the hardware behavior first, then optimize if needed.
+
+## Build System
+MSVC v143 (Build Tools 2022 v17.14.27) + CMake 3.31.6 + Ninja 1.12.1 + vcpkg (project-local). Dependencies: SDL2 2.32.10 (vcpkg, x64-windows), ImGui (third_party/imgui/, compiled as static lib), Catch2 (tests/catch2/ amalgamated), OpenGL3. MSYS2 fully uninstalled from machine.
+
+### Key Paths
+- **Build Tools**: `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`
+- **CMake**: `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe`
+- **Ninja**: `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe`
+- **vcvarsall**: `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat`
+- **vcpkg**: `./vcpkg/vcpkg.exe` (project-local)
+- **Build output**: `build/debug/` and `build/release/`
+
+### Build Commands
+Use VS Code tasks (Ctrl+Shift+B for default build). All tasks use `cmd.exe`, source `vcvarsall.bat`, and use explicit MSVC cmake/ninja paths via env vars. No dependency on CMake Tools extension for building.
+- **Build Debug** (default build task)
+- **Build Release**
+- **Run Tests** (builds debug first, then runs ctest)
+- **Run VibeNES** (builds debug first, then launches GUI)
+- **Clean** (deletes build/debug and build/release)
+
+CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PATH issues.
+
+### CMake Targets
+- `imgui` — static lib from `third_party/imgui/` (core + SDL2/OpenGL3 backends)
+- `vibes_core` — static lib with all emulation code (CPU, PPU, APU, Bus, Cartridge, Input, SaveState)
+- `VibeNES_GUI` — main executable (links vibes_core, imgui, opengl32)
+- `VibeNES_Tests` — test executable (links vibes_core, uses Catch2 amalgamated)
+
+### MSVC-Specific Fixes Applied
+- `src/main.cpp` has `#define SDL_MAIN_HANDLED` at line 1 (prevents SDL2 main hijack)
+- `include/cartridge/rom_loader.hpp` has explicit `#include <array>` (MSVC doesn't transitively include it)
+- `include/gui/panels/ppu_viewer_panel.hpp`, `src/gui/gui_application.cpp`, `src/gui/panels/ppu_viewer_panel.cpp` all have `#define NOMINMAX` + `#define WIN32_LEAN_AND_MEAN` + `#include <windows.h>` before `#include <GL/gl.h>`
+- `src/ppu/nes_palette.cpp` — removed `#ifdef NES_GUI_ENABLED` guard; always compiles `get_imgui_color()` since `vibes_core` has imgui include path
+- `ImGui::ShowDemoWindow()` call commented out in `gui_application.cpp` (we removed `imgui_demo.cpp`)
+- `CMakeLists.txt` uses link options for subsystem (CONSOLE debug, WINDOWS release) instead of `WIN32` on `add_executable`
+- All targets use generator expressions for debug/release compile options (no D9025 override warnings)
+
+### Build Warnings (Non-blocking)
+~15 C4244 narrowing warnings in ppu.cpp, cpu_6502.cpp, audio_backend.cpp, ppu_viewer_panel.cpp, disassembler_panel.cpp — `int` → `uint8_t`/`uint16_t` and `int64_t` → `int`. Need explicit casts. One C4996 `sprintf` → `sprintf_s` in disassembler_panel.cpp.
+
+### VS Code Integration
+- `.vscode/tasks.json` — Shell tasks via `cmd.exe` with explicit MSVC paths (env vars `%VCVARS%`, `%CMAKE%`). No CMake Tools extension dependency for build/test.
+- `.vscode/settings.json` — CMake Tools for IntelliSense only (`configurationProvider: "ms-vscode.cmake-tools"`). Includes "MSVC Developer CMD" terminal profile.
+- `.vscode/launch.json` — Two `cppvsdbg` configurations: "Debug VibeNES" and "Debug Tests", both use `preLaunchTask: "Build Debug"`.
+- No `c_cpp_properties.json` — CMake Tools provides IntelliSense via `compile_commands.json`.
+
+## Current State (as of Feb 27, 2026)
+- **Phases 1-3 complete**. Debug and release builds green. MSYS2 fully removed from machine.
+- **Tests run**: 172 passed, 14 failed (19 failed assertions). Failures are pre-existing emulation bugs, not build issues.
+- **Test failures**: interrupt handling (3), palette mirroring at $3F14 (4), fine_x scroll (3), pattern table ctrl bits (2), OAM DMA addr (1), timing cycle counting (2), sprite overflow clear (1). These map to known P1/P2 bugs.
+- **Next step**: Fix C4244 warnings. Fix test failures. Proceed to Phase 4 (cycle-level interleaving).

@@ -55,17 +55,15 @@ VibeNES is designed as a cycle-accurate NES emulator with modular components tha
 - Separate test sections for different scenarios (normal operation vs. edge cases)
 
 ### Test Compilation
-To compile and run the test suite, use the following g++ command pattern:
+Tests are built via CMake as the `VibeNES_Tests` target:
 
-```bash
-c:\msys64\ucrt64\bin\g++.exe -fdiagnostics-color=always -g3 -O0 -std=c++23 -Wall -Wextra -Wconversion -Wsign-conversion tests/test_main.cpp tests/catch2/catch_amalgamated.cpp tests/core/test_types.cpp tests/memory/test_ram.cpp tests/core/test_bus.cpp tests/cpu/test_cpu_6502.cpp src/memory/ram.cpp src/core/bus.cpp src/cpu/cpu_6502.cpp -Iinclude -Itests -o build/debug/VibeNES_All_Tests.exe
+```powershell
+cmake --preset debug
+cmake --build --preset debug --target VibeNES_Tests
+ctest --preset debug
 ```
 
-Add new test files and corresponding source files as they are created. The pattern includes:
-- All test files from `tests/` directory
-- Required source files from `src/` directory
-- Include paths for both `include/` and `tests/` directories
-- Debug build with comprehensive warnings
+New test files in `tests/` are auto-discovered by `GLOB_RECURSE` in CMakeLists.txt. Source files are compiled into `vibes_core` and linked automatically.
 
 ### CPU Implementation Guidelines
 - Manual PC management for multi-byte instructions (avoid helper functions that auto-increment)

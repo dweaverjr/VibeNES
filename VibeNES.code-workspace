@@ -23,6 +23,14 @@
 			"regex": "cpp",
 			"valarray": "cpp",
 			"cstdint": "cpp"
+		},
+		"chat.tools.terminal.autoApprove": {
+			"where.exe": true,
+			"&": true,
+			"ForEach-Object": true,
+			"Test-Path": true,
+			"git clone": true,
+			".\\vcpkg\\bootstrap-vcpkg.bat": true
 		}
 	}
 }
