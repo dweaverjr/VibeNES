@@ -113,6 +113,8 @@ add_custom_command(TARGET VibeNES_GUI POST_BUILD
 find_package(Catch2 3 REQUIRED)
 
 file(GLOB_RECURSE TEST_SOURCES
+    tests/apu/*.cpp
+    tests/cartridge/*.cpp
     tests/core/*.cpp
     tests/cpu/*.cpp
     tests/memory/*.cpp

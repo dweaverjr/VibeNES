@@ -43,7 +43,7 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 | Input | ✅ Complete | Controller + gamepad manager |
 | GUI | ✅ Complete | SDL2 + ImGui, 7 panels (CPU, disassembler, memory, ROM, PPU, timing, audio), retro theme |
 | Disassembler | ✅ Complete | All 256 opcodes with addressing modes |
-| Tests | ⚠️ Partial | 3 CPU + 18 PPU + 2 core + 1 memory test files (189 tests, all passing). Zero tests for APU, mappers, save states, cartridge, input |
+| Tests | ✅ Substantial | 3 CPU + 18 PPU + 2 core + 1 memory + 1 APU + 3 cartridge test files (242 tests, all passing). Tests cover APU, all 5 mappers, ROM loader, save states. No tests for input. |
 
 ## Known Bugs (Priority Order)
 
@@ -96,7 +96,7 @@ DMC DMA cycle stealing implemented (bug #11 fixed). APU signals `dmc_dma_pending
 Frame 0 hack removed (bug #14 fixed). PPU honours initial scroll/VRAM state from the first frame.
 
 ### Phase 5: Documentation and Test Coverage
-Update README.md to match reality. Add tests for APU, mappers, save states. Add mapper/APU test ROM infrastructure.
+⚠️ **IN PROGRESS** — README.md rewritten to match current project reality. Added 53 new tests (189→242): APU tests (17 TEST_CASEs covering all 5 channels, frame counter, registers, mixing, serialization, DMA), mapper tests (all 5 mappers: banking, IRQ, bus conflicts, serialization), ROM loader tests (iNES parsing, header validation), save state tests (header magic, version, validation). Copilot instructions updated. Remaining: input tests, test ROM infrastructure.
 
 ## NES Hardware Reference
 
@@ -129,7 +129,7 @@ PPU: $0000-$1FFF pattern tables | $2000-$2FFF nametables | $3F00-$3F1F palette R
 - Exact cycle counts in assertions
 - Separate instruction and data addresses
 - If tests fail with "unknown opcode" — check memory address ranges first, not instruction logic
-- All 189 tests pass. Catch2 v3 via vcpkg with `catch_discover_tests()` for per-TEST_CASE CTest entries
+- All 242 tests pass. Catch2 v3 via vcpkg with `catch_discover_tests()` for per-TEST_CASE CTest entries
 
 ### Test Example
 ```cpp
@@ -199,9 +199,10 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 - No `c_cpp_properties.json` — CMake Tools provides IntelliSense via `compile_commands.json`.
 
 ## Current State (as of Feb 28, 2026)
-- **Phases 1-4 complete**. Debug and release builds green, **zero warnings**. MSYS2 fully removed from machine.
-- **All 189 tests pass** (0 failures). Catch2 v3 via vcpkg with `catch_discover_tests()`. 3 new penultimate-cycle interrupt polling tests added.
-- **Phase 4 highlights**: Fat `consume_cycle()` with per-cycle CPU/PPU/APU interleaving. Penultimate-cycle interrupt polling (CLI delay, SEI window). DMC DMA cycle stealing (~4 CPU stall cycles per sample byte). OAM DMA halt (513 cycles). MMC3 A12 IRQ low-time filter. Frame 0 hack removed.
+- **Phases 1-5 in progress**. Debug and release builds green, **zero warnings**. MSYS2 fully removed from machine.
+- **All 242 tests pass** (0 failures). 53 new tests added in Phase 5: APU (17 TEST_CASEs), mappers 0-4, ROM loader, save states.
+- **Test directories**: `tests/apu/`, `tests/cartridge/`, `tests/core/`, `tests/cpu/`, `tests/memory/`, `tests/ppu/`
+- **Phase 5 highlights**: README.md rewritten. APU tests cover all 5 channels, frame counter modes, register I/O, mixing, serialization, DMA interface. Mapper tests cover NROM/MMC1/UxROM/CNROM/MMC3 banking, IRQ, bus conflicts, serialization. ROM loader tests cover iNES parsing and validation. Save state tests cover header magic, version, CRC32.
 - **Games tested**: Super Mario Bros. (NROM/Mapper 0) — background + all sprites render correctly. Crystalis (MMC1/Mapper 1) — boots and runs.
 - **Dependencies**: SDL2 + Catch2 via vcpkg. ImGui vendored (vcpkg port lacks sdl2-binding feature).
-- **Next step**: Phase 5 — Documentation and test coverage. Fix remaining bug #10 (APU edge-triggered IRQ should be level-triggered).
+- **Remaining**: Fix bug #10 (APU edge-triggered IRQ → level-triggered). Add input tests. Add test ROM infrastructure.

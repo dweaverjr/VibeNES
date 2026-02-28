@@ -1,359 +1,174 @@
 # VibeNES - Cycle-Accurate NES Emulator
 
-A cycle-accurate Nintendo Entertainment System (NES) emulator written in C++23, designed for perfect game compatibility and hardware accuracy.
+A cycle-accurate Nintendo Entertainment System (NES) emulator written in modern C++23. Features per-cycle CPU/PPU/APU interleaving, 5 mapper implementations, a full debug GUI, and 242 passing tests.
 
-## Project Goals
-- **Cycle-accurate emulation**: Emulate NES hardware behavior cycle-by-cycle for perfect game compatibility
-- **Modern C++**: Use C++23 features extensively (modules, ranges, concepts, etc.)
-- **Clean architecture**: Modular design with separate CPU, PPU, APU, and mapper components
-- **Performance**: Maintain real-time performance while achieving hardware accuracy
+## Features
 
-## Current Status
+- **Cycle-accurate emulation** — Per-cycle CPU/PPU/APU interleaving via fat `consume_cycle()`. Each CPU cycle advances the PPU by 3 dots and the APU by 1 cycle.
+- **Complete 6502 CPU** — All 256 opcodes (legal + illegal), hardware-accurate startup, penultimate-cycle interrupt polling (CLI delay, SEI window), OAM DMA halt (513 cycles), DMC DMA cycle stealing (~4 CPU stall cycles).
+- **PPU rendering pipeline** — Dot-based rendering (341 dots × 262 scanlines), background + sprite evaluation, sprite 0 hit, scrolling, palette mirroring.
+- **APU with all 5 channels** — Pulse ×2, Triangle, Noise, DMC. Frame counter (4-step/5-step modes), non-linear mixing, length counters, envelopes, sweep units.
+- **5 cartridge mappers** — NROM (0), MMC1 (1), UxROM (2), CNROM (3), MMC3 (4) with bus conflict emulation and A12 IRQ filtering.
+- **Save states** — Serialize/deserialize with CRC32 verification across all components.
+- **Debug GUI** — SDL3 + ImGui with 7 panels: CPU state, disassembler, memory viewer, ROM info, PPU viewer, timing, audio.
+- **Modern C++23** — `std::expected`, concepts, ranges, `constexpr`, strong types, RAII, no raw pointers.
 
-### ✅ CPU (6502) - **Complete Implementation**
-- [x] Complete instruction execution framework with all 256 opcodes
-- [x] All addressing modes (immediate, absolute, zero page, indexed, indirect)
-- [x] Page boundary crossing detection and cycle penalties
-- [x] Cycle-accurate timing for all instructions and addressing modes
-- [x] Hardware-accurate startup behavior and reset sequence
-- [x] **Complete 6502 instruction set including illegal opcodes**
-  - [x] Load/Store Operations ✅
-  - [x] Arithmetic Operations ✅
-  - [x] Logical Operations ✅
-  - [x] Shift/Rotate Operations ✅
-  - [x] Compare Operations ✅
-  - [x] Transfer Operations ✅
-  - [x] Increment/Decrement Operations ✅
-  - [x] Branch Operations ✅
-  - [x] Jump/Subroutine Operations ✅
-  - [x] Stack Operations ✅
-  - [x] Status Flag Operations ✅
-  - [x] System Operations ✅
-  - [x] No Operation ✅
+## Games Tested
 
-### ✅ Memory System - **Complete**
-- [x] System bus with proper address decoding
-- [x] RAM with mirroring (0x0000-0x1FFF)
-- [x] PPU register mapping (0x2000-0x3FFF)
-- [x] APU/Controller register mapping (0x4000-0x401F)
-- [x] Dual-purpose register handling (APU Frame Counter / Controller 2)
-- [x] Open bus behavior for unmapped regions
-- [x] Cartridge memory mapping (0x4020-0xFFFF)
-
-### ✅ PPU (2C02) - **Complete Phase 1-4 Implementation**
-- [x] Complete PPU register interface with proper timing
-- [x] Cycle-accurate dot-based rendering pipeline (341 dots × 262 scanlines)
-- [x] Background rendering with nametables and pattern tables
-- [x] Sprite evaluation and rendering with sprite 0 hit detection
-- [x] Advanced NES scrolling system with proper VRAM address handling
-- [x] Palette system with authentic NES colors
-- [x] Frame buffer generation for display output
-
-### ✅ Cartridge System - **Complete with iNES Support**
-- [x] iNES ROM file format parsing with header validation
-- [x] Mapper 0 (NROM) complete implementation
-- [x] Cartridge factory pattern for extensible mapper support
-- [x] CHR ROM/RAM access for PPU pattern tables
-- [x] PRG ROM bank management
-- [x] GUI file browser integration for ROM loading
-
-### ✅ Debug System - **Complete GUI Framework**
-- [x] SDL2 + ImGui integration with retro aesthetics
-- [x] Real-time CPU state monitoring (registers, flags, stack)
-- [x] Interactive memory viewer with search and navigation
-- [x] Complete 6502 disassembler (all 256 opcodes with addressing modes)
-- [x] Step-by-step CPU execution controls
-- [x] Dockable panel system for flexible debugging layout
-- [x] ROM loading interface with drag-and-drop support
-
-### ⚠️ APU (2A03) - **Stub Implementation**
-- [x] Register interface for CPU compatibility
-- [x] Frame counter basic functionality
-- [ ] Audio channel implementations (pulse, triangle, noise, DMC)
-- [ ] Audio mixing and output
-- [ ] Sample-accurate synthesis
-
-### 🎯 Next Priority: Audio Implementation**
-- [ ] Complete APU channel implementations
-- [ ] Audio output integration
-- [ ] Frame buffer display in GUI
-- [ ] Additional mapper support (MMC1, MMC3)
-- [ ] Save state functionality
-
-## Key Features Implemented
-
-### Complete 6502 CPU Emulation
-- **All 256 opcodes**: Legal and illegal instructions with proper cycle timing
-- **Hardware accuracy**: Authentic startup behavior and reset sequences
-- **Comprehensive disassembler**: Real-time instruction analysis with all addressing modes
-- **Interactive debugging**: Step-by-step execution with register monitoring
-
-### Advanced PPU Graphics System
-- **Cycle-accurate rendering**: 341-dot scanline timing with proper frame structure
-- **Complete background system**: Nametable rendering with pattern table lookups
-- **Sprite system**: 8-sprite-per-scanline evaluation with sprite 0 hit detection
-- **NES scrolling**: Authentic 15-bit VRAM address register system
-- **Palette support**: Hardware-accurate color generation
-
-### Robust Cartridge System
-- **iNES ROM format**: Complete header parsing and validation
-- **Mapper 0 (NROM)**: Full implementation with CHR/PRG ROM support
-- **Extensible design**: Factory pattern ready for additional mappers
-- **GUI integration**: Drag-and-drop ROM loading interface
-
-### Professional Debug Interface
-- **Modern GUI**: SDL2 + ImGui with authentic retro styling
-- **Real-time monitoring**: Live CPU state, memory contents, and execution flow
-- **Interactive tools**: Memory search, navigation, and hex editing capabilities
-- **Modular panels**: Dockable interface for customizable debugging layout
-
-## Detailed Project Structure
-
-```
-VibeNES/
-├── include/
-│   ├── core/
-│   │   ├── types.hpp           # Strong types, concepts, common definitions
-│   │   ├── clock.hpp           # Master clock and synchronization
-│   │   ├── bus.hpp             # System bus interface
-│   │   └── component.hpp       # Base component interface
-│   │
-│   ├── cpu/
-│   │   ├── cpu_6502.hpp        # Main CPU class
-│   │   ├── instructions.hpp    # Instruction set definitions
-│   │   ├── addressing_modes.hpp # Addressing mode handlers
-│   │   ├── registers.hpp       # CPU register definitions
-│   │   └── interrupts.hpp      # IRQ/NMI handling
-│   │
-│   ├── ppu/
-│   │   ├── ppu_2c02.hpp        # Main PPU class
-│   │   ├── registers.hpp       # PPU register definitions
-│   │   ├── rendering.hpp       # Rendering pipeline
-│   │   ├── sprites.hpp         # Sprite evaluation and rendering
-│   │   ├── background.hpp      # Background rendering
-│   │   ├── palette.hpp         # Color palette management
-│   │   └── frame_buffer.hpp    # Frame buffer management
-│   │
-│   ├── apu/
-│   │   ├── apu_2a03.hpp        # Main APU class
-│   │   ├── channels/
-│   │   │   ├── pulse.hpp       # Pulse wave channels
-│   │   │   ├── triangle.hpp    # Triangle wave channel
-│   │   │   ├── noise.hpp       # Noise channel
-│   │   │   └── dmc.hpp         # Delta modulation channel
-│   │   ├── mixer.hpp           # Audio mixing
-│   │   └── frame_counter.hpp   # Frame sequencer
-│   │
-│   ├── memory/
-│   │   ├── memory_map.hpp      # Memory mapping definitions
-│   │   ├── ram.hpp             # Work RAM (2KB)
-│   │   ├── ppu_memory.hpp      # PPU memory (VRAM, OAM)
-│   │   └── dma.hpp             # DMA controller
-│   │
-│   ├── cartridge/
-│   │   ├── cartridge.hpp       # Cartridge interface
-│   │   ├── rom_loader.hpp      # ROM file parsing (iNES/NES2.0)
-│   │   ├── mappers/
-│   │   │   ├── mapper.hpp      # Base mapper interface
-│   │   │   ├── mapper_000.hpp  # NROM
-│   │   │   ├── mapper_001.hpp  # MMC1
-│   │   │   ├── mapper_002.hpp  # UxROM
-│   │   │   ├── mapper_003.hpp  # CNROM
-│   │   │   ├── mapper_004.hpp  # MMC3
-│   │   │   └── ...             # Other mappers
-│   │   └── mapper_factory.hpp  # Mapper creation
-│   │
-│   ├── input/
-│   │   ├── controller.hpp      # Controller interface
-│   │   ├── standard_controller.hpp
-│   │   └── zapper.hpp          # Light gun support
-│   │
-│   ├── system/
-│   │   ├── nes_system.hpp      # Main system class
-│   │   ├── reset_manager.hpp   # System reset handling
-│   │   └── save_state.hpp     # Save state support
-│   │
-│   └── debug/
-│       ├── debugger.hpp        # Debug interface
-│       ├── disassembler.hpp    # 6502 disassembler
-│       ├── memory_viewer.hpp   # Memory inspection
-│       ├── ppu_viewer.hpp      # PPU state viewer
-│       └── trace_logger.hpp    # Execution tracing
-│
-├── src/
-│   ├── core/
-│   ├── cpu/
-│   ├── ppu/
-│   ├── apu/
-│   ├── memory/
-│   ├── cartridge/
-│   ├── input/
-│   ├── system/
-│   ├── debug/
-│   └── main.cpp
-│
-├── tests/
-│   ├── cpu/
-│   │   ├── instruction_tests.cpp
-│   │   ├── timing_tests.cpp
-│   │   └── nestest_validation.cpp
-│   ├── ppu/
-│   │   ├── rendering_tests.cpp
-│   │   └── timing_tests.cpp
-│   ├── test_roms/
-│   │   ├── nestest.nes
-│   │   ├── ppu_tests/
-│   │   └── apu_tests/
-│   └── fixtures/
-│
-├── tools/
-│   ├── rom_analyzer.cpp        # ROM analysis tool
-│   └── palette_generator.cpp   # PAL/NTSC palette generation
-│
-└── docs/
-    ├── architecture.md
-    ├── timing_notes.md
-    └── mapper_notes.md
-```
-
-## Key Component Details
-
-### Core Types (`include/core/types.hpp`)
-```cpp
-namespace nes {
-    // Strong type for cycles
-    using Cycle = std::chrono::duration<std::int64_t, std::ratio<1, 1'789'773>>;
-
-    // Memory addresses
-    using Address = std::uint16_t;
-    using Byte = std::uint8_t;
-
-    // Concepts
-    template<typename T>
-    concept Clockable = requires(T t, Cycle cycles) {
-        { t.tick(cycles) } -> std::same_as<void>;
-    };
-}
-```
-
-### Component Interface (`include/core/component.hpp`)
-```cpp
-class Component {
-public:
-    virtual void tick(Cycle cycles) = 0;
-    virtual void reset() = 0;
-    virtual void power_on() = 0;
-};
-```
-
-### System Bus (`include/core/bus.hpp`)
-```cpp
-class SystemBus {
-    // CPU memory map ($0000-$FFFF)
-    // PPU registers ($2000-$2007)
-    // APU registers ($4000-$4017)
-    // Cartridge space ($4020-$FFFF)
-};
-```
-
-### CPU Structure
-- **Separate instruction handling** for each addressing mode
-- **Cycle-accurate timing** with proper memory access patterns
-- **Page boundary crossing** detection
-- **Interrupt timing** with proper hijacking
-
-### PPU Structure
-- **Dot-based rendering** (341 dots per scanline)
-- **Proper sprite evaluation** with overflow
-- **Mid-frame register changes** support
-- **Accurate VRAM access timing**
-
-### APU Structure
-- **Sample-accurate synthesis**
-- **Proper frame counter** modes
-- **DMC DMA** conflicts with CPU
-
-### Mapper Architecture
-- **Interface-based design** for extensibility
-- **Cycle-accurate IRQ** generation (MMC3)
-- **Proper bus conflicts** emulation
-
-## Key Design Patterns
-
-1. **Component-based**: Each hardware component inherits from `Component`
-2. **Message passing**: Components communicate through the bus
-3. **Strong typing**: Use C++23 concepts and strong types
-4. **RAII**: Resource management for memory regions
-5. **Factory pattern**: For mapper creation
-6. **Observer pattern**: For debugging hooks
+| Game | Mapper | Status |
+|------|--------|--------|
+| Super Mario Bros. | NROM (0) | ✅ Background + all sprites render correctly |
+| Crystalis | MMC1 (1) | ✅ Boots and runs |
 
 ## Building
 
 ### Prerequisites
-- Visual Studio Build Tools 2022 (MSVC v143, C++23)
-- CMake 3.25+ and Ninja (bundled with Build Tools)
-- VS Code with CMake Tools and C/C++ extensions
-- vcpkg (bootstrapped locally in project)
+
+- **Visual Studio Build Tools 2022** (MSVC v143, C++23 support)
+- **CMake 3.25+** and **Ninja** (bundled with Build Tools)
+- **vcpkg** (bootstrapped locally in project — `./vcpkg/vcpkg.exe`)
+
+Dependencies (installed automatically via vcpkg):
+- SDL3 3.4.2
+- Catch2 3.13.0
+- ImGui 1.91.9
 
 ### Build Commands
-```powershell
-# Configure (first time or after CMakeLists.txt changes)
-cmake --preset debug
 
-# Build
+Use VS Code tasks (Ctrl+Shift+B for default build) or the command line:
+
+```cmd
+:: Configure + build debug
+"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+cmake --preset debug
 cmake --build --preset debug
 
-# Run tests
-ctest --preset debug
+:: Run tests
+cmake -E chdir build/debug ctest --output-on-failure
 
-# Or use VS Code: F7 to build, F5 to debug
+:: Build + run the emulator
+cmake --build --preset debug
+.\build\debug\VibeNES_GUI.exe
 ```
 
-### Quick Start
-1. Open project in VS Code
-2. CMake Tools auto-configures on open
-3. Press F7 to build, F5 to debug
-4. Load a ROM file using the GUI interface
-5. Use CPU debugging controls to step through execution
+### VS Code Tasks
 
-## Screenshots
+| Task | Description |
+|------|-------------|
+| **Build Debug** (default) | Configure + build debug with MSVC + Ninja |
+| **Build Release** | Configure + build release |
+| **Run Tests** | Build debug + run all CTest suites |
+| **Run VibeNES** | Build debug + launch GUI |
+| **Clean** | Delete build directories |
 
-### Main Debug Interface
-*Complete debugging environment with CPU state, memory viewer, and disassembler*
+### CMake Targets
 
-### PPU Visualization
-*Real-time graphics rendering with pattern table and nametable display*
+| Target | Description |
+|--------|-------------|
+| `vibes_core` | Static library — CPU, PPU, APU, Bus, Cartridge, Input, SaveState |
+| `VibeNES_GUI` | Main executable — links vibes_core, imgui, opengl32 |
+| `VibeNES_Tests` | Test executable — links vibes_core + Catch2, `catch_discover_tests()` |
 
-### ROM Loading
-*Integrated ROM browser with iNES header validation*
+## Architecture
 
-## Technical Achievements
+### Synchronization Model
 
-### CPU Implementation Highlights
-- **Complete instruction set**: All 256 opcodes including undocumented instructions
-- **Cycle accuracy**: Proper timing for all addressing modes and page boundary penalties
-- **Hardware fidelity**: Authentic power-on state and reset behavior
-- **Debug integration**: Real-time register monitoring and step execution
+Each `consume_cycle()` call inside CPU instructions calls `bus_->tick_single_cpu_cycle()`, which:
+1. Advances PPU by 3 dots
+2. Advances APU by 1 cycle
+3. Checks mapper IRQs
+4. Samples NMI/IRQ lines for penultimate-cycle interrupt polling
+5. Checks for pending DMC DMA requests
 
-### PPU Implementation Highlights
-- **Phase-based development**: Systematic implementation following NES PPU specification
-- **Authentic scrolling**: Complex 15-bit VRAM address register system
-- **Sprite accuracy**: Proper 8-sprite evaluation with sprite 0 hit timing
-- **Memory integration**: Complete PPU memory map with proper mirroring
+The main loop calls `execute_instruction()` which returns the consumed cycle count.
 
-### Software Engineering Excellence
-- **Modern C++23**: Extensive use of concepts, ranges, and strong typing
-- **Component architecture**: Modular design with clean interfaces
-- **Comprehensive testing**: Extensive test coverage for CPU instruction accuracy
-- **Professional tooling**: Complete debugging suite with GUI integration
+### Component Overview
 
-## Architecture Overview
+| Component | Lines | Description |
+|-----------|-------|-------------|
+| CPU (6502) | ~2200 | 247 explicit opcodes + 9 catch-all NOPs, all 256 handled |
+| PPU (2C02) | ~1800 | Full rendering pipeline, sprite evaluation, scrolling |
+| APU (2A03) | ~1050 | All 5 channels inline in header, frame counter, non-linear mixing |
+| Bus | ~500 | Full NES memory map, mirroring, open bus, DMA |
+| Mappers 0–4 | ~1200 | NROM, MMC1, UxROM, CNROM, MMC3 |
+| Save States | ~320 | Serialize/deserialize with CRC32 |
+| GUI | ~2000 | SDL3 + ImGui, 7 debug panels, retro theme |
+| Disassembler | ~400 | All 256 opcodes with addressing modes |
 
-This structure provides clear separation of concerns while maintaining the tight coupling needed for cycle-accurate emulation. Each component can be developed and tested independently while ensuring proper system-wide timing.
+### Memory Map
 
-The design emphasizes:
-- **Accuracy over speed** (initially) - Hardware-faithful emulation
-- **Modularity** for easy testing and debugging
-- **Modern C++** for maintainable and efficient code
-- **Extensibility** for adding new mappers and features
-- **Developer experience** with comprehensive debugging tools
+```
+CPU:  $0000-$07FF  2KB RAM (mirrored ×4 to $1FFF)
+      $2000-$2007  PPU registers (mirrored to $3FFF)
+      $4000-$4017  APU/IO registers
+      $4020-$FFFF  Cartridge space (PRG ROM/RAM)
+
+PPU:  $0000-$1FFF  Pattern tables (CHR ROM/RAM)
+      $2000-$2FFF  Nametables (2KB VRAM)
+      $3F00-$3F1F  Palette RAM (25 usable colors)
+```
+
+### NES Specifications
+
+- **CPU**: 6502 at ~1.789773 MHz (NTSC), 1 CPU cycle = 3 PPU dots
+- **PPU**: 341 dots/scanline, 262 scanlines/frame, 256×240 visible
+- **Memory**: 2KB work RAM, 2KB VRAM, 256B OAM
+- **Palette**: 64 colors, 25 usable simultaneously
+
+## Project Structure
+
+```
+VibeNES/
+├── include/
+│   ├── apu/            apu.hpp
+│   ├── audio/          audio_backend.hpp, sample_rate_converter.hpp
+│   ├── cartridge/      cartridge.hpp, rom_loader.hpp, mapper_factory.hpp
+│   │   └── mappers/    mapper_000–004.hpp
+│   ├── core/           bus.hpp, component.hpp, types.hpp
+│   ├── cpu/            cpu_6502.hpp, interrupts.hpp
+│   ├── gui/            gui_application.hpp + panels/ + style/
+│   ├── input/          controller.hpp, gamepad_manager.hpp
+│   ├── memory/         ram.hpp
+│   ├── ppu/            ppu.hpp, ppu_registers.hpp, ppu_memory.hpp, nes_palette.hpp
+│   └── system/         save_state.hpp
+├── src/                Implementations matching include/ layout
+├── tests/
+│   ├── apu/            APU channel, register, mixing, serialization tests
+│   ├── cartridge/      Mapper 0–4, ROM loader, save state tests
+│   ├── core/           Bus, component tests
+│   ├── cpu/            Instruction, timing, interrupt tests
+│   ├── memory/         RAM mirroring tests
+│   └── ppu/            Rendering, scrolling, sprite, register tests
+├── vcpkg/              Project-local vcpkg installation
+├── docs/               Architecture, timing, mapper notes
+└── roms/               Test ROM files
+```
+
+## Testing
+
+**242 tests, all passing.** Catch2 v3 via vcpkg with `catch_discover_tests()` for per-TEST_CASE CTest entries.
+
+| Area | Tests | Coverage |
+|------|-------|----------|
+| CPU | ~80 | All instruction groups, addressing modes, timing, interrupts |
+| PPU | ~90 | Rendering pipeline, registers, scrolling, sprites, palette |
+| APU | ~40 | All 5 channels, frame counter, mixing, serialization, DMA |
+| Mappers | ~20 | NROM, MMC1, UxROM, CNROM, MMC3 — banking, IRQ, serialization |
+| Cartridge | ~10 | iNES parsing, ROM loading, save state header validation |
+| Core | ~5 | Bus, memory, type system |
+
+Run tests:
+```cmd
+cmake --build --preset debug
+cmake -E chdir build/debug ctest --output-on-failure
+```
+
+## Known Issues
+
+- **APU uses edge-triggered IRQ** — NES APU IRQ is level-triggered
+- **MMC3 sprite fetch timing** — Batched at cycle 257 instead of per-sprite
+- **Minor PPU rendering issues** — Some edge-case rendering bugs remain
+
+## License
+
+See [LICENSE](LICENSE) for details.
