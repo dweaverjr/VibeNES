@@ -1,3 +1,4 @@
+#define SDL_MAIN_HANDLED
 #include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"

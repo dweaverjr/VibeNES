@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/types.hpp"
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>

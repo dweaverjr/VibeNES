@@ -3,6 +3,11 @@
 #include "gui/style/retro_theme.hpp"
 #include "ppu/nes_palette.hpp"
 #include "ppu/ppu.hpp"
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 #include <GL/gl.h>
 
 // GL_CLAMP_TO_EDGE is part of OpenGL 1.2+, define if not available
@@ -327,7 +332,7 @@ void PPUViewerPanel::render_palette_viewer(nes::PPU *ppu) {
 		ImGui::SameLine();
 
 		for (int color = 0; color < 4; color++) {
-			uint8_t palette_index = palette * 4 + color;
+			uint8_t palette_index = static_cast<uint8_t>(palette * 4 + color);
 			uint8_t nes_color = palette_ram[palette_index];
 			ImVec4 color_vec = NESPalette::get_imgui_color(nes_color);
 
@@ -354,7 +359,7 @@ void PPUViewerPanel::render_palette_viewer(nes::PPU *ppu) {
 
 		for (int color = 0; color < 4; color++) {
 			// Sprite palettes are at indices 16-31 (0x10-0x1F)
-			uint8_t palette_index = 16 + palette * 4 + color;
+			uint8_t palette_index = static_cast<uint8_t>(16 + palette * 4 + color);
 			uint8_t nes_color = palette_ram[palette_index];
 			ImVec4 color_vec = NESPalette::get_imgui_color(nes_color);
 
@@ -562,25 +567,26 @@ void PPUViewerPanel::generate_pattern_table_visualization(nes::PPU *ppu, nes::Ca
 	// Pattern table layout: 128x128 pixels (single pattern table)
 	// Display only the selected pattern table ($0000 or $1000)
 
-	uint16_t base_address = selected_pattern_table_ * 0x1000; // $0000 or $1000 based on selection
+	uint16_t base_address =
+		static_cast<uint16_t>(selected_pattern_table_ * 0x1000); // $0000 or $1000 based on selection
 
 	// Each pattern table is 16x16 tiles, each tile is 8x8 pixels
 	for (int tile_y = 0; tile_y < 16; tile_y++) {
 		for (int tile_x = 0; tile_x < 16; tile_x++) {
-			uint8_t tile_index = tile_y * 16 + tile_x;
-			uint16_t tile_address = base_address + (tile_index * 16);
+			uint8_t tile_index = static_cast<uint8_t>(tile_y * 16 + tile_x);
+			uint16_t tile_address = static_cast<uint16_t>(base_address + (tile_index * 16));
 
 			// Render 8x8 tile
 			for (int pixel_y = 0; pixel_y < 8; pixel_y++) {
 				// Read pattern data for this row
-				uint16_t plane0_addr = tile_address + pixel_y;
-				uint16_t plane1_addr = tile_address + pixel_y + 8;
+				uint16_t plane0_addr = static_cast<uint16_t>(tile_address + pixel_y);
+				uint16_t plane1_addr = static_cast<uint16_t>(tile_address + pixel_y + 8);
 				uint8_t plane0 = ppu->read_chr_rom(plane0_addr);
 				uint8_t plane1 = ppu->read_chr_rom(plane1_addr);
 
 				for (int pixel_x = 0; pixel_x < 8; pixel_x++) {
 					// Extract 2-bit pixel value
-					uint8_t bit_pos = 7 - pixel_x;
+					uint8_t bit_pos = static_cast<uint8_t>(7 - pixel_x);
 					uint8_t pixel_value = ((plane0 >> bit_pos) & 1) | (((plane1 >> bit_pos) & 1) << 1);
 
 					// Calculate screen position (single pattern table, so no x_offset)
@@ -595,7 +601,7 @@ void PPUViewerPanel::generate_pattern_table_visualization(nes::PPU *ppu, nes::Ca
 						color = 0xFF404040;
 					} else {
 						// Use palette 0 + selected background palette for visualization
-						color = get_pattern_pixel_color(pixel_value, selected_palette_, ppu);
+						color = get_pattern_pixel_color(pixel_value, static_cast<uint8_t>(selected_palette_), ppu);
 					}
 
 					pattern_table_buffer_[buffer_index] = color;

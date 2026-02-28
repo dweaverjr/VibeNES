@@ -28,9 +28,9 @@ bool AudioBackend::initialize(int sample_rate, int buffer_size) {
 	// Configure desired audio specification
 	SDL_AudioSpec desired_spec{};
 	desired_spec.freq = sample_rate;
-	desired_spec.format = AUDIO_F32SYS; // 32-bit float, system byte order
-	desired_spec.channels = 2;			// Stereo
-	desired_spec.samples = buffer_size; // Buffer size in sample frames
+	desired_spec.format = AUDIO_F32SYS;						 // 32-bit float, system byte order
+	desired_spec.channels = 2;								 // Stereo
+	desired_spec.samples = static_cast<Uint16>(buffer_size); // Buffer size in sample frames
 	desired_spec.callback = audio_callback;
 	desired_spec.userdata = this;
 

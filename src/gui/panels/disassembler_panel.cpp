@@ -157,7 +157,7 @@ void DisassemblerPanel::update_instruction_stream(uint16_t pc, const nes::System
 
 		// Try multiple starting points to find proper alignment
 		for (int offset = 0; offset <= 50 && !found_alignment; ++offset) {
-			uint16_t try_start = start_addr + offset;
+			uint16_t try_start = static_cast<uint16_t>(start_addr + offset);
 			if (try_start >= pc)
 				break;
 
@@ -260,7 +260,7 @@ std::vector<uint16_t> DisassemblerPanel::find_instructions_before_pc(uint16_t pc
 
 	// Try starting points from 5 to 100 bytes before PC to establish proper alignment
 	for (int start_offset = 5; start_offset <= 100 && start_offset < pc; start_offset += 1) {
-		uint16_t start_addr = pc - start_offset;
+		uint16_t start_addr = static_cast<uint16_t>(pc - start_offset);
 		std::vector<uint16_t> sequence;
 		uint16_t scan_addr = start_addr;
 
@@ -303,7 +303,7 @@ std::vector<uint16_t> DisassemblerPanel::find_instructions_before_pc(uint16_t pc
 	} else {
 		// Fallback if no perfect alignment found
 		for (int i = count; i > 0; --i) {
-			uint16_t addr = pc >= (i * 2) ? pc - (i * 2) : 0;
+			uint16_t addr = pc >= (i * 2) ? static_cast<uint16_t>(pc - (i * 2)) : static_cast<uint16_t>(0);
 			candidates.push_back(addr);
 		}
 	}
@@ -334,7 +334,7 @@ void DisassemblerPanel::render_single_instruction(uint16_t addr, uint16_t curren
 	char hex_bytes[10] = "         "; // 9 spaces for padding
 	for (uint8_t i = 0; i < size && i < 3; ++i) {
 		uint8_t byte = bus->read(addr + i);
-		sprintf(&hex_bytes[i * 3], "%02X ", byte);
+		snprintf(&hex_bytes[i * 3], sizeof(hex_bytes) - (i * 3), "%02X ", byte);
 	}
 	hex_bytes[9] = '\0'; // Ensure null termination
 

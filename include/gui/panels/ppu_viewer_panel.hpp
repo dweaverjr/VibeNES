@@ -1,6 +1,11 @@
 #pragma once
 
 #include "core/types.hpp"
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 #include <GL/gl.h>
 #include <SDL2/SDL.h>
 #include <memory>

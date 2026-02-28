@@ -1,7 +1,5 @@
 #include "ppu/nes_palette.hpp"
-#ifdef NES_GUI_ENABLED
 #include <imgui.h>
-#endif
 
 namespace nes {
 
@@ -22,7 +20,6 @@ uint32_t NESPalette::get_rgba_color(uint8_t nes_color_index) {
 	return (a << 24) | (b << 16) | (g << 8) | r; // ABGR format for OpenGL
 }
 
-#ifdef NES_GUI_ENABLED
 ImVec4 NESPalette::get_imgui_color(uint8_t nes_color_index) {
 	uint32_t rgb = get_rgb_color(nes_color_index);
 
@@ -32,6 +29,5 @@ ImVec4 NESPalette::get_imgui_color(uint8_t nes_color_index) {
 
 	return ImVec4(r, g, b, 1.0f);
 }
-#endif
 
 } // namespace nes
