@@ -152,10 +152,13 @@ void CPU6502::process_interrupts() {
 }
 
 void CPU6502::handle_reset() {
-	// Reset sequence takes 7 cycles total
-	consume_cycles(7);
+	// Reset sequence takes 7 cycles total:
+	// Cycles 1-2: Internal operations
+	// Cycles 3-5: Suppressed pushes (PCH, PCL, P) — no bus writes, SP decrements
+	// Cycles 6-7: Read reset vector low/high (via read_byte below)
+	consume_cycles(5);
 
-	// Read reset vector from $FFFC-$FFFD
+	// Read reset vector from $FFFC-$FFFD (2 cycles)
 	Byte low_byte = read_byte(RESET_VECTOR);
 	Byte high_byte = read_byte(RESET_VECTOR + 1);
 	Address reset_address = make_word(low_byte, high_byte);
@@ -172,8 +175,12 @@ void CPU6502::handle_reset() {
 }
 
 void CPU6502::handle_nmi() {
-	// NMI sequence takes 7 cycles
-	consume_cycles(7);
+	// NMI sequence takes 7 cycles total:
+	// Cycles 1-2: Internal operations (2 cycles below)
+	// Cycles 3-4: Push PCH, PCL (via push_word — 2 write_byte calls)
+	// Cycle 5:   Push P (via push_byte — 1 write_byte call)
+	// Cycles 6-7: Read NMI vector (via read_word — 2 read_byte calls)
+	consume_cycles(2);
 
 	// Push return address (PC) onto stack
 	push_word(program_counter_);
@@ -192,8 +199,12 @@ void CPU6502::handle_nmi() {
 }
 
 void CPU6502::handle_irq() {
-	// IRQ/BRK sequence takes 7 cycles
-	consume_cycles(7);
+	// IRQ/BRK sequence takes 7 cycles total:
+	// Cycles 1-2: Internal operations (2 cycles below)
+	// Cycles 3-4: Push PCH, PCL (via push_word — 2 write_byte calls)
+	// Cycle 5:   Push P (via push_byte — 1 write_byte call)
+	// Cycles 6-7: Read IRQ vector (via read_word — 2 read_byte calls)
+	consume_cycles(2);
 
 	// Push return address (PC) onto stack
 	push_word(program_counter_);
@@ -212,8 +223,8 @@ void CPU6502::handle_irq() {
 }
 
 int CPU6502::execute_instruction() {
-	// Track cycles before execution
-	int cycles_before = static_cast<int>(cycles_remaining_.count());
+	// Reset per-instruction cycle counter (fat consume_cycle tracks this)
+	cycles_consumed_ = 0;
 
 	// Check for pending interrupts before instruction fetch
 	if (has_pending_interrupt()) {
@@ -237,7 +248,7 @@ int CPU6502::execute_instruction() {
 		if (should_process) {
 			process_interrupts();
 			// Return cycles consumed by interrupt processing
-			return cycles_before - static_cast<int>(cycles_remaining_.count());
+			return cycles_consumed_;
 		}
 	}
 
@@ -1050,7 +1061,7 @@ int CPU6502::execute_instruction() {
 	}
 
 	// Return the number of cycles consumed by this instruction
-	return cycles_before - static_cast<int>(cycles_remaining_.count());
+	return cycles_consumed_;
 }
 
 // Memory access methods
@@ -1162,12 +1173,20 @@ void CPU6502::perform_compare(Byte register_value, Byte memory_value) noexcept {
 }
 
 // Cycle management helpers
-void CPU6502::consume_cycle() noexcept {
+// "Fat" consume_cycle: each CPU cycle advances PPU by 3 dots, APU by 1
+// cycle, and checks mapper IRQs. This gives cycle-accurate interleaving
+// without rewriting instruction logic — every read_byte/write_byte/
+// consume_cycle call site remains unchanged.
+void CPU6502::consume_cycle() {
 	cycles_remaining_ -= CpuCycle{1};
+	cycles_consumed_++;
+	bus_->tick_single_cpu_cycle();
 }
 
-void CPU6502::consume_cycles(int count) noexcept {
-	cycles_remaining_ -= CpuCycle{count};
+void CPU6502::consume_cycles(int count) {
+	for (int i = 0; i < count; ++i) {
+		consume_cycle();
+	}
 }
 
 // Addressing mode helpers

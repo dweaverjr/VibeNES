@@ -185,8 +185,10 @@ class CPU6502 final : public Component {
 	void perform_compare(Byte register_value, Byte memory_value) noexcept;
 
 	// Cycle management helpers
-	void consume_cycle() noexcept;
-	void consume_cycles(int count) noexcept;
+	// "Fat" consume_cycle: advances PPU (3 dots), APU (1 cycle), and checks
+	// mapper IRQs via bus_->tick_single_cpu_cycle() for per-cycle interleaving.
+	void consume_cycle();
+	void consume_cycles(int count);
 
 	// Interrupt handling
 	void handle_nmi();		   ///< Handle Non-Maskable Interrupt
