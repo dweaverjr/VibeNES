@@ -96,6 +96,7 @@ void PPU::power_on() {
 	nmi_delay_ = 0;
 	suppress_vbl_ = false;
 	rendering_disabled_mid_scanline_ = false;
+	was_rendering_enabled_ = false;
 
 	// Initialize bus state
 	ppu_data_bus_ = 0;
@@ -301,10 +302,9 @@ uint8_t PPU::read_register(uint16_t address) {
 		break;
 	}
 
-	// Only PPUDATA reads consume a PPU dot for timing tests
-	if (reg == PPURegister::PPUDATA) {
-		tick_single_dot();
-	}
+	// PPUDATA reads do not consume extra PPU dots — the CPU bus access
+	// handles its own cycle cost. (Previous tick_single_dot() here was
+	// desynchronizing CPU/PPU timing.)
 	return result;
 }
 
@@ -377,11 +377,8 @@ void PPU::write_register(uint16_t address, uint8_t value) {
 		break;
 	}
 
-	// For timing-accuracy in tests: PPUDATA ($2007) writes should take 1 PPU dot
-	// (other register writes are treated as 0-cost for now).
-	if (reg == PPURegister::PPUDATA) {
-		tick_single_dot();
-	}
+	// PPUDATA writes do not consume extra PPU dots — the CPU bus access
+	// handles its own cycle cost.
 }
 
 // Scanline processing (Phase 4 with proper scrolling timing)
@@ -395,8 +392,8 @@ void PPU::process_visible_scanline() {
 		perform_sprite_evaluation_cycle();
 	}
 
-	// Background and sprite rendering during visible cycles (1-255)
-	if (current_cycle_ > 0 && current_cycle_ < PPUTiming::VISIBLE_PIXELS && is_rendering_enabled()) {
+	// Background and sprite rendering during visible cycles (1-256)
+	if (current_cycle_ > 0 && current_cycle_ <= PPUTiming::VISIBLE_PIXELS && is_rendering_enabled()) {
 		// Background tile fetching and VRAM updates (cycles 1-255)
 		// Tiles are fetched in 8-cycle groups aligned to cycles 1-8, 9-16, 17-24, etc.
 		if (is_background_enabled()) {
@@ -431,16 +428,6 @@ void PPU::process_visible_scanline() {
 		// At cycle 256: Increment fine Y (move to next row)
 		if (current_cycle_ == 256) {
 			increment_fine_y();
-		}
-
-		// At cycle 260: Clock MMC3 IRQ counter (once per scanline)
-		// This is when the PPU typically switches from background to sprite fetches
-		// Standard setup has BG at $0000 and sprites at $1000, creating A12 toggle
-		// Only clock when rendering is enabled
-		if (current_cycle_ == 260 && is_rendering_enabled()) {
-			if (cartridge_ && cartridge_->is_loaded()) {
-				cartridge_->ppu_a12_toggle();
-			}
 		}
 
 		// At cycle 257: Copy horizontal scroll from temp to current
@@ -546,12 +533,7 @@ void PPU::process_pre_render_scanline() {
 			}
 		}
 
-		// At cycle 260: Clock MMC3 IRQ counter (once per scanline)
-		if (current_cycle_ == 260 && is_rendering_enabled()) {
-			if (cartridge_ && cartridge_->is_loaded()) {
-				cartridge_->ppu_a12_toggle();
-			}
-		} // Copy vertical scroll during cycles 280-304
+		// Copy vertical scroll during cycles 280-304
 		// This is CRITICAL - it copies the nametable selection from PPUCTRL!
 		if (current_cycle_ >= 280 && current_cycle_ <= 304) {
 			copy_vertical_scroll();
@@ -661,15 +643,17 @@ uint8_t PPU::read_ppudata() {
 	// Apply PPU memory mirroring for address range checks
 	uint16_t effective_address = vram_address_ & 0x3FFF;
 
-	// Palette region behaves differently: direct read, no increment,
-	// but buffer is updated from underlying nametable ($2xxx) address
+	// Palette region behaves differently: direct read with buffer updated
+	// from underlying nametable ($2xxx) address. VRAM always increments.
 	if (effective_address >= PPUMemoryMap::PALETTE_START) {
 		// Direct read from palette
 		result = read_ppu_memory(vram_address_);
 		// Update buffer with underlying nametable data (mirrors)
 		Address underlying = effective_address & 0x2FFF;
 		read_buffer_ = read_ppu_memory(underlying);
-		// Do NOT increment address for palette reads per tests
+		// Real hardware always increments VRAM address after $2007 reads,
+		// including palette reads.
+		increment_vram_address();
 		return result;
 	}
 
@@ -837,13 +821,10 @@ void PPU::write_ppu_memory(uint16_t address, uint8_t value) {
 		// Write to the target palette location
 		memory_.write_palette(pal_index, value);
 
-		// If writing to universal background color ($3F00), propagate to all universal entries
-		// This ensures $3F10/$3F14/$3F18/$3F1C reads work correctly after writing $3F00
-		if (pal_index == 0x00) {
-			memory_.write_palette(0x04, value);
-			memory_.write_palette(0x08, value);
-			memory_.write_palette(0x0C, value);
-		}
+		// NES palette mirroring: sprite universal colors at $3F10/$3F14/$3F18/$3F1C
+		// redirect to background universals at $3F00/$3F04/$3F08/$3F0C (handled above).
+		// Writing to $3F00 should NOT propagate to $04/$08/$0C — those are separate
+		// background palette entries, not mirrors of $3F00.
 	}
 }
 
@@ -919,7 +900,7 @@ void PPU::render_pixel() {
 		sprite_0_hit_delay_ = 2;
 	}
 
-	render_combined_pixel(bg_pixel, sprite_pixel, sprite_priority, pixel_x, current_scanline_);
+	render_combined_pixel(bg_pixel, sprite_pixel, sprite_priority, pixel_x, static_cast<uint8_t>(current_scanline_));
 }
 
 void PPU::clear_frame_buffer() {
@@ -1152,6 +1133,9 @@ uint8_t PPU::fetch_sprite_pattern_data_raw(uint8_t tile_index, uint8_t fine_y, b
 	uint16_t pattern_base = sprite_table ? 0x1000 : 0x0000;
 	uint16_t pattern_addr = pattern_base + (tile_index * 16) + fine_y;
 
+	// Track A12 line for MMC3 IRQ counting — sprite fetches toggle A12
+	track_a12_line(pattern_addr);
+
 	// Read from cartridge CHR ROM/RAM with support for dynamic banking
 	// This allows mappers to switch CHR banks during sprite evaluation
 	if (cartridge_) {
@@ -1280,13 +1264,10 @@ void PPU::increment_oam_address() {
 }
 
 void PPU::set_vblank_flag() {
-	// Consolidated VBlank flag setting and sprite flag clearing
-	// At VBlank start (scanline 241, cycle 1), hardware clears sprite flags
+	// Set VBlank bit only — called once at scanline 241, dot 1.
+	// Sprite flags are cleared separately at pre-render scanline dot 1,
+	// matching real hardware behavior.
 	status_register_ |= PPUConstants::PPUSTATUS_VBLANK_MASK;
-	status_register_ &= ~(PPUConstants::PPUSTATUS_SPRITE0_MASK | PPUConstants::PPUSTATUS_OVERFLOW_MASK);
-
-	// Reset sprite 0 hit detection for next frame
-	sprite_0_hit_detected_ = false;
 }
 
 void PPU::clear_vblank_flag() {
@@ -1344,7 +1325,7 @@ void PPU::increment_fine_y() {
 			coarse_y++;
 		}
 
-		vram_address_ = (vram_address_ & ~0x03E0) | (coarse_y << 5);
+		vram_address_ = static_cast<uint16_t>((vram_address_ & ~0x03E0) | (coarse_y << 5));
 		vram_address_ &= 0x7FFF; // Mask to 15 bits
 	}
 }
@@ -1446,7 +1427,7 @@ void PPU::perform_sprite_evaluation_cycle() {
 	}
 
 	// Calculate evaluation cycle within the sprite evaluation window (0-191)
-	uint8_t eval_cycle = current_cycle_ - PPUTiming::SPRITE_EVAL_START_CYCLE;
+	uint8_t eval_cycle = static_cast<uint8_t>(current_cycle_ - PPUTiming::SPRITE_EVAL_START_CYCLE);
 
 	// Initialize sprite evaluation at cycle 0
 	if (eval_cycle == 0) {
@@ -1711,32 +1692,25 @@ void PPU::handle_vblank_timing() {
 		}
 	}
 
-	// CRITICAL: VBlank flag should remain set during entire VBlank period (241-260)
-	// Tests advance to scanline but may land at any cycle, so ensure flag is visible
-	if (current_scanline_ >= PPUTiming::VBLANK_START_SCANLINE && current_scanline_ <= PPUTiming::VBLANK_END_SCANLINE) {
-		// Set VBlank if we're past the set point and not suppressed
-		if ((current_scanline_ > PPUTiming::VBLANK_START_SCANLINE) ||
-			(current_scanline_ == PPUTiming::VBLANK_START_SCANLINE && current_cycle_ >= PPUTiming::VBLANK_SET_CYCLE)) {
-			if (!suppress_vbl_) {
-				set_vblank_flag();
-			}
-		}
-	}
+	// VBlank flag remains set from (241,1) until the pre-render scanline clears it.
+	// No action needed here — the flag is set once above and persists in the status register.
 
-	// Clear VBlank flag at pre-render scanline (261,1)
+	// Pre-render scanline (261): clear VBlank, sprite 0 hit, and sprite overflow at dot 1.
+	// Real hardware clears all three flags here, not during VBlank.
 	if (current_scanline_ == PPUTiming::PRE_RENDER_SCANLINE) {
 		if (current_cycle_ == PPUTiming::VBLANK_CLEAR_CYCLE) {
 			clear_vblank_flag();
+			status_register_ &= ~(PPUConstants::PPUSTATUS_SPRITE0_MASK | PPUConstants::PPUSTATUS_OVERFLOW_MASK);
+			sprite_0_hit_detected_ = false;
 		}
 	}
 }
 
 void PPU::handle_rendering_disable_mid_scanline() {
 	// Track when rendering is disabled mid-scanline for proper timing
-	static bool was_rendering_enabled = false;
 	bool is_rendering = is_rendering_enabled();
 
-	if (was_rendering_enabled && !is_rendering && current_scanline_ < PPUTiming::VISIBLE_SCANLINES &&
+	if (was_rendering_enabled_ && !is_rendering && current_scanline_ < PPUTiming::VISIBLE_SCANLINES &&
 		current_cycle_ < PPUTiming::VISIBLE_PIXELS) {
 
 		rendering_disabled_mid_scanline_ = true;
@@ -1745,7 +1719,7 @@ void PPU::handle_rendering_disable_mid_scanline() {
 		// updating VRAM address and shift registers
 	}
 
-	was_rendering_enabled = is_rendering;
+	was_rendering_enabled_ = is_rendering;
 }
 
 // =============================================================================
@@ -2115,12 +2089,16 @@ void PPU::perform_tile_fetch_cycle() {
 	case 1: // Fetch nametable byte
 	{
 		uint16_t nt_addr = get_current_nametable_address();
+		// Track A12 for MMC3 — nametable addresses have A12=0
+		track_a12_line(nt_addr);
 		tile_fetch_state_.current_tile_id = memory_.read_vram(nt_addr);
 	} break;
 
 	case 3: // Fetch attribute byte
 	{
 		uint16_t attr_addr = get_current_attribute_address();
+		// Track A12 for MMC3 — attribute addresses have A12=0
+		track_a12_line(attr_addr);
 		uint8_t attr_byte = memory_.read_vram(attr_addr);
 
 		// Extract 2-bit palette for current tile position
@@ -2142,6 +2120,9 @@ void PPU::perform_tile_fetch_cycle() {
 		uint8_t fine_y = get_fine_y_scroll();
 		uint16_t pattern_addr = pattern_base + (tile_fetch_state_.current_tile_id * 16) + fine_y;
 
+		// Track A12 line for MMC3 IRQ counting — BG pattern low fetch
+		track_a12_line(pattern_addr);
+
 		// Support for mid-frame CHR bank switching
 		// Each CHR read goes through the cartridge (if loaded) or fallback CHR RAM
 		tile_fetch_state_.current_pattern_low = read_chr_rom(pattern_addr);
@@ -2153,6 +2134,9 @@ void PPU::perform_tile_fetch_cycle() {
 		uint16_t pattern_base = bg_table ? 0x1000 : 0x0000;
 		uint8_t fine_y = get_fine_y_scroll();
 		uint16_t pattern_addr = pattern_base + (tile_fetch_state_.current_tile_id * 16) + fine_y + 8;
+
+		// Track A12 line for MMC3 IRQ counting — BG pattern high fetch
+		track_a12_line(pattern_addr);
 
 		// Support for mid-frame CHR bank switching
 		tile_fetch_state_.current_pattern_high = read_chr_rom(pattern_addr);

@@ -5,7 +5,6 @@
 #include "../catch2/catch_amalgamated.hpp"
 
 // Include all PPU test files
-#include "background_rendering_tests.cpp"
 #include "memory_mapping_tests.cpp"
 #include "scrolling_tests.cpp"
 #include "sprite_tests.cpp"

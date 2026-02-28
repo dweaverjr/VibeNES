@@ -151,7 +151,7 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address Wrapping", "[ppu][vram][w
 
 		// Write to base nametable
 		set_vram_address(0x2000);
-		write_ppu_register(0x2007, test_data);
+		write_ppu_register(0x2007, static_cast<uint8_t>(test_data));
 
 		// Check mirrors
 		for (uint16_t mirror = 0x3000; mirror <= 0x3F00; mirror += 0x1000) {

@@ -184,6 +184,7 @@ class PPU : public Component {
 	uint8_t nmi_delay_;					   // NMI generation delay cycles
 	bool suppress_vbl_;					   // VBlank suppression flag
 	bool rendering_disabled_mid_scanline_; // Track rendering disable timing
+	bool was_rendering_enabled_;		   // Previous frame's rendering state (for mid-scanline disable detection)
 
 	// Bus State and Open Bus Behavior
 	uint8_t ppu_data_bus_;				   // PPU data bus for open bus behavior
