@@ -9,7 +9,8 @@ Mapper004::Mapper004(std::vector<Byte> prg_rom, std::vector<Byte> chr_mem, Mirro
 	: prg_rom_(std::move(prg_rom)), chr_mem_(std::move(chr_mem)), initial_mirroring_(mirroring),
 	  has_prg_ram_(has_prg_ram), chr_is_ram_(chr_is_ram), bank_select_(0), banks_{}, mirroring_(false),
 	  prg_ram_protect_(0x80), // PRG RAM enabled by default
-	  irq_latch_(0), irq_counter_(0), irq_reload_(false), irq_enabled_(false), irq_pending_(false) {
+	  irq_latch_(0), irq_counter_(0), irq_reload_(false), irq_enabled_(false), irq_pending_(false),
+	  irq_initialized_(false) {
 
 	// Initialize PRG RAM if needed (8KB)
 	if (has_prg_ram_) {
@@ -223,13 +224,14 @@ std::size_t Mapper004::get_chr_bank_offset(Address address) const {
 		// Normal mode: R0/R1 control $0000-$0FFF, R2-R5 control $1000-$1FFF
 		if (address < 0x0800) {
 			// $0000-$07FF: 2KB bank (R0, even numbers only)
-			Byte bank = banks_[0] & 0xFE; // Clear lowest bit for 2KB alignment
-			bank &= static_cast<Byte>((bank_1kb_count / 2) - 1);
+			// R0/R1 values are 1KB bank numbers forced to even alignment for 2KB regions
+			Byte bank = banks_[0] & 0xFE;				   // Clear lowest bit for 2KB alignment
+			bank &= static_cast<Byte>(bank_1kb_count - 1); // Mask to full CHR address space
 			return (bank * 1024) + address;
 		} else if (address < 0x1000) {
 			// $0800-$0FFF: 2KB bank (R1, even numbers only)
 			Byte bank = banks_[1] & 0xFE;
-			bank &= static_cast<Byte>((bank_1kb_count / 2) - 1);
+			bank &= static_cast<Byte>(bank_1kb_count - 1); // Mask to full CHR address space
 			return (bank * 1024) + (address - 0x0800);
 		} else if (address < 0x1400) {
 			// $1000-$13FF: 1KB bank (R2)
@@ -269,12 +271,12 @@ std::size_t Mapper004::get_chr_bank_offset(Address address) const {
 		} else if (address < 0x1800) {
 			// $1000-$17FF: 2KB bank (R0, even numbers only)
 			Byte bank = banks_[0] & 0xFE;
-			bank &= static_cast<Byte>((bank_1kb_count / 2) - 1);
+			bank &= static_cast<Byte>(bank_1kb_count - 1); // Mask to full CHR address space
 			return (bank * 1024) + (address - 0x1000);
 		} else {
 			// $1800-$1FFF: 2KB bank (R1, even numbers only)
 			Byte bank = banks_[1] & 0xFE;
-			bank &= static_cast<Byte>((bank_1kb_count / 2) - 1);
+			bank &= static_cast<Byte>(bank_1kb_count - 1); // Mask to full CHR address space
 			return (bank * 1024) + (address - 0x1800);
 		}
 	}

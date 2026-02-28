@@ -2,9 +2,8 @@
 #include "cartridge/mappers/mapper_000.hpp"
 #include "cartridge/mappers/mapper_001.hpp"
 #include "cartridge/mappers/mapper_002.hpp"
+#include "cartridge/mappers/mapper_003.hpp"
 #include "cartridge/mappers/mapper_004.hpp"
-// TODO: Add other mapper headers as they are implemented
-// #include "cartridge/mappers/mapper_003.hpp"
 #include <iostream>
 
 namespace nes {
@@ -39,12 +38,11 @@ std::unique_ptr<Mapper> MapperFactory::create_mapper(const RomData &rom_data) {
 		std::cout << "Creating Mapper 002 (UxROM)" << std::endl;
 		return std::make_unique<Mapper002>(rom_data.prg_rom, rom_data.chr_rom, mirroring);
 
-		// TODO: Implement these mappers
-		// case 3:
-		// 	// Mapper 3 - CNROM
-		// 	// Used by: Q*bert, Cybernoid, Solomon's Key, etc.
-		// 	std::cout << "Creating Mapper 003 (CNROM)" << std::endl;
-		// 	return std::make_unique<Mapper003>(rom_data.prg_rom, rom_data.chr_rom, mirroring);
+	case 3:
+		// Mapper 3 - CNROM
+		// Used by: Arkanoid, Solomon's Key, Gradius, Paperboy, Q*bert, etc.
+		std::cout << "Creating Mapper 003 (CNROM)" << std::endl;
+		return std::make_unique<Mapper003>(rom_data.prg_rom, rom_data.chr_rom, mirroring);
 
 	case 4: {
 		// Mapper 4 - MMC3 (TxROM)
@@ -61,7 +59,7 @@ std::unique_ptr<Mapper> MapperFactory::create_mapper(const RomData &rom_data) {
 
 	default:
 		std::cerr << "Unsupported mapper ID: " << static_cast<int>(rom_data.mapper_id) << std::endl;
-		std::cerr << "Currently supported mappers: 0 (NROM), 1 (MMC1), 2 (UxROM), 4 (MMC3)" << std::endl;
+		std::cerr << "Currently supported mappers: 0 (NROM), 1 (MMC1), 2 (UxROM), 3 (CNROM), 4 (MMC3)" << std::endl;
 		std::cerr << "To add support, implement the mapper class and add it to MapperFactory." << std::endl;
 		return nullptr;
 	}

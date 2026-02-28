@@ -8,7 +8,8 @@ Mapper001::Mapper001(std::vector<Byte> prg_rom, std::vector<Byte> chr_mem, Mirro
 	: prg_rom_(std::move(prg_rom)), chr_mem_(std::move(chr_mem)), initial_mirroring_(mirroring),
 	  has_prg_ram_(has_prg_ram), chr_is_ram_(chr_is_ram), shift_register_(0x10), // Initialize with bit 4 set
 	  shift_count_(0), control_register_(0x0C),									 // Default: last bank fixed, 8KB CHR
-	  chr_bank_0_(0), chr_bank_1_(0), prg_bank_(0), prg_ram_enabled_(true) {
+	  chr_bank_0_(0), chr_bank_1_(0), prg_bank_(0), prg_ram_enabled_(true), cpu_cycle_counter_(0),
+	  last_write_cycle_(0) {
 
 	// Initialize PRG RAM if needed (8KB)
 	if (has_prg_ram_) {
@@ -30,6 +31,8 @@ void Mapper001::reset() {
 	chr_bank_1_ = 0;
 	prg_bank_ = 0;
 	prg_ram_enabled_ = true;
+	cpu_cycle_counter_ = 0;
+	last_write_cycle_ = 0;
 
 	// Clear PRG RAM
 	if (has_prg_ram_) {
@@ -68,6 +71,14 @@ void Mapper001::cpu_write(Address address, Byte value) {
 
 	// MMC1 Register writes: $8000-$FFFF
 	if (address >= 0x8000) {
+		// Consecutive-write filter: ignore writes on back-to-back CPU cycles.
+		// RMW instructions write the old value then new value on consecutive
+		// cycles; real MMC1 hardware only processes the first write.
+		if (cpu_cycle_counter_ == last_write_cycle_ + 1 && last_write_cycle_ != 0) {
+			last_write_cycle_ = cpu_cycle_counter_;
+			return; // Ignore this consecutive write
+		}
+		last_write_cycle_ = cpu_cycle_counter_;
 		write_shift_register(address, value);
 		return;
 	}

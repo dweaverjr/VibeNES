@@ -5,9 +5,12 @@
 namespace nes {
 
 void Cartridge::tick(CpuCycle cycles) {
-	// Most mappers don't need tick behavior
-	// Some advanced mappers might need timing (MMC5, etc.)
-	(void)cycles;
+	// Notify mapper of elapsed CPU cycles for timing-sensitive behavior
+	if (mapper_) {
+		for (int64_t i = 0; i < cycles.count(); ++i) {
+			mapper_->notify_cpu_cycle();
+		}
+	}
 }
 
 void Cartridge::reset() {

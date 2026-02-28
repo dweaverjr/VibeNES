@@ -44,6 +44,11 @@ class Mapper001 final : public Mapper {
 	void reset() override;
 	Mirroring get_mirroring() const noexcept override;
 
+	// Cycle tracking for consecutive-write filter
+	void notify_cpu_cycle() override {
+		++cpu_cycle_counter_;
+	}
+
 	// Save state serialization
 	void serialize_state(std::vector<uint8_t> &buffer) const override;
 	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) override;
@@ -66,6 +71,12 @@ class Mapper001 final : public Mapper {
 	Byte chr_bank_1_;		// $C000-$DFFF: CHR bank 1 (4KB mode only)
 	Byte prg_bank_;			// $E000-$FFFF: PRG bank select
 	bool prg_ram_enabled_;	// PRG RAM enable bit (bit 4 of PRG bank register)
+
+	// Consecutive-write filter: real MMC1 ignores writes on consecutive CPU cycles.
+	// RMW instructions (INC, DEC, ASL, etc.) write the old value then the new value
+	// on back-to-back cycles; only the first (old value) should be processed.
+	uint64_t cpu_cycle_counter_; // Running CPU cycle count
+	uint64_t last_write_cycle_;	 // Cycle of last $8000+ write
 
 	// Helper functions
 	void write_shift_register(Address address, Byte value);

@@ -48,6 +48,12 @@ class Mapper {
 		// Default implementation does nothing
 	}
 
+	// Notify mapper of CPU cycles elapsed (for timing-sensitive behavior)
+	virtual void notify_cpu_cycle() {
+		// Default implementation does nothing
+		// Override in mappers that need cycle tracking (like MMC1)
+	}
+
 	// Save state serialization
 	virtual void serialize_state(std::vector<uint8_t> &buffer) const = 0;
 	virtual void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) = 0;
