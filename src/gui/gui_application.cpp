@@ -21,7 +21,7 @@
 
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
-#include <imgui_impl_sdl2.h>
+#include <imgui_impl_sdl3.h>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -29,7 +29,7 @@
 #include <windows.h>
 #endif
 #include <GL/gl.h>
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <iostream>
 #include <memory>
 
@@ -68,8 +68,8 @@ bool GuiApplication::initialize() {
 }
 
 bool GuiApplication::initialize_sdl() {
-	// Initialize SDL with video, audio, and gamecontroller subsystems
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) {
+	// Initialize SDL with video, audio, and gamepad subsystems
+	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
 		std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
 		return false;
 	}
@@ -82,8 +82,7 @@ bool GuiApplication::initialize_sdl() {
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
 	// Create window - Optimized for 1080p displays
-	window_ = SDL_CreateWindow("VibeNES - Cycle-Accurate NES Emulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-							   WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL);
+	window_ = SDL_CreateWindow("VibeNES - Cycle-Accurate NES Emulator", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL);
 
 	if (!window_) {
 		std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
@@ -99,14 +98,15 @@ bool GuiApplication::initialize_sdl() {
 
 	// Enable VSync (1 = sync to refresh rate for consistent frame pacing)
 	// Standard VSync prevents the "compress/decompress" effect during scrolling
-	if (SDL_GL_SetSwapInterval(1) < 0) {
+	if (!SDL_GL_SetSwapInterval(1)) {
 		std::cerr << "Warning: Failed to enable VSync: " << SDL_GetError() << std::endl;
 	} else {
 		std::cout << "VSync enabled (standard mode for consistent frame pacing)\n";
 	}
 
 	// Verify VSync setting
-	int swap_interval = SDL_GL_GetSwapInterval();
+	int swap_interval = 0;
+	SDL_GL_GetSwapInterval(&swap_interval);
 	std::cout << "Current swap interval: " << swap_interval << " (0=off, 1=vsync, -1=adaptive)\n";
 
 	return true;
@@ -123,8 +123,8 @@ bool GuiApplication::initialize_imgui() {
 	RetroTheme::apply_retro_style();
 
 	// Setup Platform/Renderer backends
-	if (!ImGui_ImplSDL2_InitForOpenGL(window_, gl_context_)) {
-		std::cerr << "Failed to initialize ImGui SDL2 backend" << std::endl;
+	if (!ImGui_ImplSDL3_InitForOpenGL(window_, gl_context_)) {
+		std::cerr << "Failed to initialize ImGui SDL3 backend" << std::endl;
 		return false;
 	}
 
@@ -238,13 +238,12 @@ void GuiApplication::handle_events() {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		// Check for window close events FIRST (before any other processing)
-		if (event.type == SDL_QUIT) {
+		if (event.type == SDL_EVENT_QUIT) {
 			running_ = false;
 			continue;
 		}
 
-		if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE &&
-			event.window.windowID == SDL_GetWindowID(window_)) {
+		if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window_)) {
 			running_ = false;
 			continue;
 		}
@@ -255,58 +254,59 @@ void GuiApplication::handle_events() {
 		}
 
 		// Let ImGui process the event
-		ImGui_ImplSDL2_ProcessEvent(&event);
+		ImGui_ImplSDL3_ProcessEvent(&event);
 
 		// Handle hotkeys
-		if (event.type == SDL_KEYDOWN) {
+		if (event.type == SDL_EVENT_KEY_DOWN) {
 			// Debug: Print key press info
-			std::cout << "[KeyPress] Key: " << SDL_GetKeyName(event.key.keysym.sym);
+			std::cout << "[KeyPress] Key: " << SDL_GetKeyName(event.key.key);
 			if (io_) {
 				std::cout << " | ImGui WantCapture: " << (io_->WantCaptureKeyboard ? "YES" : "NO");
 			}
 			std::cout << std::endl;
 
 			// Process hotkeys even if ImGui wants keyboard (for critical functions like fullscreen/exit)
-			bool shift_pressed = (SDL_GetModState() & KMOD_SHIFT) != 0;
-			bool ctrl_pressed = (SDL_GetModState() & KMOD_CTRL) != 0;
-			bool alt_pressed = (SDL_GetModState() & KMOD_ALT) != 0;
+			SDL_Keymod mod_state = SDL_GetModState();
+			bool shift_pressed = (mod_state & SDL_KMOD_SHIFT) != 0;
+			bool ctrl_pressed = (mod_state & SDL_KMOD_CTRL) != 0;
+			bool alt_pressed = (mod_state & SDL_KMOD_ALT) != 0;
 
 			// Fullscreen toggle hotkeys (always process these)
-			if (event.key.keysym.sym == SDLK_F11 && !shift_pressed && !ctrl_pressed && !alt_pressed) {
+			if (event.key.key == SDLK_F11 && !shift_pressed && !ctrl_pressed && !alt_pressed) {
 				std::cout << "[Fullscreen] F11 pressed - toggling" << std::endl;
 				toggle_fullscreen();
 			}
 			// Alt+Enter for fullscreen (alternate)
-			else if (event.key.keysym.sym == SDLK_RETURN && alt_pressed && !shift_pressed && !ctrl_pressed) {
+			else if (event.key.key == SDLK_RETURN && alt_pressed && !shift_pressed && !ctrl_pressed) {
 				std::cout << "[Fullscreen] Alt+Enter pressed - toggling" << std::endl;
 				toggle_fullscreen();
 			}
 			// Escape to exit fullscreen
-			else if (event.key.keysym.sym == SDLK_ESCAPE && fullscreen_mode_) {
+			else if (event.key.key == SDLK_ESCAPE && fullscreen_mode_) {
 				std::cout << "[Fullscreen] Escape pressed - exiting fullscreen" << std::endl;
 				toggle_fullscreen();
 			}
 			// Save state hotkeys (F1-F9) - always process these
-			else if (!shift_pressed && !ctrl_pressed && !alt_pressed && event.key.keysym.sym >= SDLK_F1 &&
-					 event.key.keysym.sym <= SDLK_F9) {
-				int slot = event.key.keysym.sym - SDLK_F1 + 1;
+			else if (!shift_pressed && !ctrl_pressed && !alt_pressed && event.key.key >= SDLK_F1 &&
+					 event.key.key <= SDLK_F9) {
+				int slot = event.key.key - SDLK_F1 + 1;
 				std::cout << "[SaveState] Saving to slot " << slot << std::endl;
 				save_state_to_slot(slot);
 			}
 			// Load state hotkeys (Shift+F1-F9) - always process these
-			else if (shift_pressed && !ctrl_pressed && !alt_pressed && event.key.keysym.sym >= SDLK_F1 &&
-					 event.key.keysym.sym <= SDLK_F9) {
-				int slot = event.key.keysym.sym - SDLK_F1 + 1;
+			else if (shift_pressed && !ctrl_pressed && !alt_pressed && event.key.key >= SDLK_F1 &&
+					 event.key.key <= SDLK_F9) {
+				int slot = event.key.key - SDLK_F1 + 1;
 				std::cout << "[SaveState] Loading from slot " << slot << std::endl;
 				load_state_from_slot(slot);
 			}
 			// Quick save (Ctrl+F5) - always process this
-			else if (ctrl_pressed && !shift_pressed && !alt_pressed && event.key.keysym.sym == SDLK_F5) {
+			else if (ctrl_pressed && !shift_pressed && !alt_pressed && event.key.key == SDLK_F5) {
 				std::cout << "[SaveState] Quick save" << std::endl;
 				quick_save();
 			}
 			// Quick load (Ctrl+F8) - always process this
-			else if (ctrl_pressed && !shift_pressed && !alt_pressed && event.key.keysym.sym == SDLK_F8) {
+			else if (ctrl_pressed && !shift_pressed && !alt_pressed && event.key.key == SDLK_F8) {
 				std::cout << "[SaveState] Quick load" << std::endl;
 				quick_load();
 			}
@@ -316,7 +316,7 @@ void GuiApplication::handle_events() {
 void GuiApplication::render_frame() {
 	// Start the Dear ImGui frame
 	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplSDL2_NewFrame();
+	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 
 	// Fullscreen mode: render only the NES display
@@ -689,10 +689,10 @@ void GuiApplication::shutdown() {
 void GuiApplication::cleanup() {
 	if (gl_context_) {
 		ImGui_ImplOpenGL3_Shutdown();
-		ImGui_ImplSDL2_Shutdown();
+		ImGui_ImplSDL3_Shutdown();
 		ImGui::DestroyContext();
 
-		SDL_GL_DeleteContext(gl_context_);
+		SDL_GL_DestroyContext(gl_context_);
 		gl_context_ = nullptr;
 	}
 
@@ -1029,24 +1029,30 @@ void GuiApplication::toggle_fullscreen() {
 
 	if (fullscreen_mode_) {
 		// Enter borderless fullscreen
-		SDL_SetWindowFullscreen(window_, SDL_WINDOW_FULLSCREEN_DESKTOP);
+		SDL_SetWindowFullscreen(window_, true);
 		calculate_fullscreen_layout();
 		std::cout << "[Fullscreen] Enabled - Scale: " << fullscreen_scale_ << "x (" << (256 * fullscreen_scale_) << "x"
 				  << (240 * fullscreen_scale_) << ")" << std::endl;
 	} else {
 		// Exit fullscreen - return to windowed mode
-		SDL_SetWindowFullscreen(window_, 0);
+		SDL_SetWindowFullscreen(window_, false);
 		std::cout << "[Fullscreen] Disabled" << std::endl;
 	}
 }
 
 void GuiApplication::calculate_fullscreen_layout() {
 	// Get current display dimensions
-	SDL_DisplayMode display_mode;
-	SDL_GetCurrentDisplayMode(0, &display_mode);
+	SDL_DisplayID display_id = SDL_GetPrimaryDisplay();
+	const SDL_DisplayMode *display_mode = SDL_GetCurrentDisplayMode(display_id);
+	if (!display_mode) {
+		fullscreen_scale_ = 1;
+		fullscreen_offset_x_ = 0;
+		fullscreen_offset_y_ = 0;
+		return;
+	}
 
-	const int screen_width = display_mode.w;
-	const int screen_height = display_mode.h;
+	const int screen_width = display_mode->w;
+	const int screen_height = display_mode->h;
 
 	// NES native resolution
 	const int nes_width = 256;

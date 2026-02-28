@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <atomic>
 #include <cstddef>
 #include <mutex>
@@ -9,12 +9,12 @@
 namespace nes {
 
 /**
- * AudioBackend - SDL2 audio output interface
+ * AudioBackend - SDL3 audio output interface
  *
  * Manages audio device initialization, sample buffering, and playback.
  * Operates at 44.1kHz stereo output with configurable buffer size.
  *
- * Thread-safe: Audio callback runs on SDL's audio thread, so all sample
+ * Thread-safe: Audio stream callback runs on SDL's audio thread, so all sample
  * queuing operations use mutexes to prevent data races.
  */
 class AudioBackend {
@@ -108,7 +108,7 @@ class AudioBackend {
 
   private:
 	SDL_AudioDeviceID device_id_;
-	SDL_AudioSpec audio_spec_;
+	SDL_AudioStream *stream_;
 
 	// Audio state
 	std::atomic<bool> is_initialized_;
@@ -123,8 +123,9 @@ class AudioBackend {
 	int sample_rate_;
 	int buffer_size_;
 
-	// SDL audio callback (static - called from SDL's audio thread)
-	static void audio_callback(void *userdata, Uint8 *stream, int len);
+	// SDL3 audio stream callback (called from SDL's audio thread)
+	static void SDLCALL audio_stream_callback(void *userdata, SDL_AudioStream *stream, int additional_amount,
+											  int total_amount);
 
 	// Instance audio callback
 	void fill_audio_buffer(float *stream, int sample_count);

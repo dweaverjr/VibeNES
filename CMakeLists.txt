@@ -7,29 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# ─── Find SDL2 via vcpkg ─────────────────────────────────────────────────────
-find_package(SDL2 CONFIG REQUIRED)
-
-# ─── ImGui static library ────────────────────────────────────────────────────
-add_library(imgui STATIC
-    third_party/imgui/imgui.cpp
-    third_party/imgui/imgui_draw.cpp
-    third_party/imgui/imgui_tables.cpp
-    third_party/imgui/imgui_widgets.cpp
-    third_party/imgui/backends/imgui_impl_sdl2.cpp
-    third_party/imgui/backends/imgui_impl_opengl3.cpp
-)
-target_include_directories(imgui PUBLIC
-    third_party/imgui
-    third_party/imgui/backends
-)
-target_link_libraries(imgui PUBLIC SDL2::SDL2)
-# Suppress warnings in third-party code
+# Enable exception handling globally (MSVC needs this explicitly)
 if(MSVC)
-    target_compile_options(imgui PRIVATE /W0)
-else()
-    target_compile_options(imgui PRIVATE -w)
+    add_compile_options(/EHsc)
 endif()
+
+# ─── Find SDL3 and ImGui via vcpkg ───────────────────────────────────────────
+find_package(SDL3 CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 # ─── Core emulation library ──────────────────────────────────────────────────
 add_library(vibes_core STATIC
@@ -62,9 +47,9 @@ add_library(vibes_core STATIC
     src/system/save_state.cpp
 )
 target_include_directories(vibes_core PUBLIC include)
-target_link_libraries(vibes_core PUBLIC SDL2::SDL2)
+target_link_libraries(vibes_core PUBLIC SDL3::SDL3)
 # ImGui headers needed for NESPalette::get_imgui_color (ImVec4)
-target_include_directories(vibes_core PRIVATE third_party/imgui)
+target_link_libraries(vibes_core PRIVATE imgui::imgui)
 if(MSVC)
     target_compile_options(vibes_core PRIVATE
         /W4 /permissive- /Zc:__cplusplus
@@ -93,7 +78,7 @@ add_executable(VibeNES_GUI
     src/gui/style/retro_theme.cpp
 )
 target_compile_definitions(VibeNES_GUI PRIVATE NES_GUI_ENABLED)
-target_link_libraries(VibeNES_GUI PRIVATE vibes_core imgui opengl32)
+target_link_libraries(VibeNES_GUI PRIVATE vibes_core imgui::imgui opengl32)
 if(MSVC)
     target_compile_options(VibeNES_GUI PRIVATE
         /W4 /permissive- /Zc:__cplusplus
@@ -116,12 +101,12 @@ else()
     )
 endif()
 
-# Copy SDL2.dll next to executable after build
+# Copy SDL3.dll next to executable after build
 add_custom_command(TARGET VibeNES_GUI POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:SDL2::SDL2>
+        $<TARGET_FILE:SDL3::SDL3>
         $<TARGET_FILE_DIR:VibeNES_GUI>
-    COMMENT "Copying SDL2.dll to output directory"
+    COMMENT "Copying SDL3.dll to output directory"
 )
 
 # ─── Tests executable ────────────────────────────────────────────────────────

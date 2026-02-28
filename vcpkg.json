@@ -3,7 +3,14 @@
     "version-string": "0.1.0",
     "description": "Cycle-accurate NES emulator",
     "dependencies": [
-        "sdl2",
-        "catch2"
+        "sdl3",
+        "catch2",
+        {
+            "name": "imgui",
+            "features": [
+                "sdl3-binding",
+                "opengl3-binding"
+            ]
+        }
     ]
 }

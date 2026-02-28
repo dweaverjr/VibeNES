@@ -6,14 +6,21 @@
 namespace nes {
 
 AudioBackend::AudioBackend()
-	: device_id_(0), audio_spec_{}, is_initialized_(false), is_playing_(false), volume_(1.0f), sample_rate_(44100),
+	: device_id_(0), stream_(nullptr), is_initialized_(false), is_playing_(false), volume_(1.0f), sample_rate_(44100),
 	  buffer_size_(1024) {
 }
 
 AudioBackend::~AudioBackend() {
 	if (is_initialized_.load()) {
 		stop();
-		SDL_CloseAudioDevice(device_id_);
+		if (stream_) {
+			SDL_DestroyAudioStream(stream_);
+			stream_ = nullptr;
+		}
+		if (device_id_) {
+			SDL_CloseAudioDevice(device_id_);
+			device_id_ = 0;
+		}
 	}
 }
 
@@ -25,38 +32,55 @@ bool AudioBackend::initialize(int sample_rate, int buffer_size) {
 
 	buffer_size_ = buffer_size;
 
-	// Configure desired audio specification
-	SDL_AudioSpec desired_spec{};
-	desired_spec.freq = sample_rate;
-	desired_spec.format = AUDIO_F32SYS;						 // 32-bit float, system byte order
-	desired_spec.channels = 2;								 // Stereo
-	desired_spec.samples = static_cast<Uint16>(buffer_size); // Buffer size in sample frames
-	desired_spec.callback = audio_callback;
-	desired_spec.userdata = this;
+	// SDL3 audio spec: stereo float32
+	SDL_AudioSpec spec{};
+	spec.freq = sample_rate;
+	spec.format = SDL_AUDIO_F32;
+	spec.channels = 2;
 
-	// Open audio device
-	device_id_ = SDL_OpenAudioDevice(nullptr, // Default device
-									 0,		  // Playback (not capture)
-									 &desired_spec, &audio_spec_,
-									 SDL_AUDIO_ALLOW_FREQUENCY_CHANGE); // Allow frequency changes if needed
-
+	// Open an audio device with desired spec
+	device_id_ = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
 	if (device_id_ == 0) {
 		std::cerr << "AudioBackend: Failed to open audio device: " << SDL_GetError() << std::endl;
 		return false;
 	}
 
-	// Store the ACTUAL sample rate SDL is using, not the requested one
-	sample_rate_ = audio_spec_.freq;
-
-	// Check if we got what we requested
-	if (audio_spec_.format != AUDIO_F32SYS) {
-		std::cerr << "AudioBackend: Warning - got different audio format than requested" << std::endl;
+	// Create audio stream with callback for pull-based audio
+	stream_ = SDL_CreateAudioStream(&spec, &spec);
+	if (!stream_) {
+		std::cerr << "AudioBackend: Failed to create audio stream: " << SDL_GetError() << std::endl;
+		SDL_CloseAudioDevice(device_id_);
+		device_id_ = 0;
+		return false;
 	}
 
+	// Set the get callback so SDL pulls data from us
+	if (!SDL_SetAudioStreamGetCallback(stream_, audio_stream_callback, this)) {
+		std::cerr << "AudioBackend: Failed to set audio stream callback: " << SDL_GetError() << std::endl;
+		SDL_DestroyAudioStream(stream_);
+		stream_ = nullptr;
+		SDL_CloseAudioDevice(device_id_);
+		device_id_ = 0;
+		return false;
+	}
+
+	// Bind stream to the audio device
+	if (!SDL_BindAudioStream(device_id_, stream_)) {
+		std::cerr << "AudioBackend: Failed to bind audio stream: " << SDL_GetError() << std::endl;
+		SDL_DestroyAudioStream(stream_);
+		stream_ = nullptr;
+		SDL_CloseAudioDevice(device_id_);
+		device_id_ = 0;
+		return false;
+	}
+
+	// Store the actual sample rate
+	sample_rate_ = sample_rate;
+
 	std::cout << "AudioBackend: Initialized successfully" << std::endl;
-	std::cout << "  Sample rate: " << audio_spec_.freq << " Hz" << std::endl;
-	std::cout << "  Channels: " << (int)audio_spec_.channels << std::endl;
-	std::cout << "  Buffer size: " << audio_spec_.samples << " samples" << std::endl;
+	std::cout << "  Sample rate: " << sample_rate << " Hz" << std::endl;
+	std::cout << "  Channels: 2" << std::endl;
+	std::cout << "  Buffer size: " << buffer_size << " samples" << std::endl;
 
 	// Pre-allocate buffer (4096 samples = ~93ms at 44.1kHz)
 	sample_buffer_.reserve(8192);
@@ -71,7 +95,7 @@ void AudioBackend::start() {
 		return;
 	}
 
-	SDL_PauseAudioDevice(device_id_, 0); // 0 = unpause
+	SDL_ResumeAudioDevice(device_id_);
 	is_playing_.store(true);
 	std::cout << "AudioBackend: Started" << std::endl;
 }
@@ -81,7 +105,7 @@ void AudioBackend::stop() {
 		return;
 	}
 
-	SDL_PauseAudioDevice(device_id_, 1); // 1 = pause
+	SDL_PauseAudioDevice(device_id_);
 	is_playing_.store(false);
 	clear_buffer();
 	std::cout << "AudioBackend: Stopped" << std::endl;
@@ -89,14 +113,14 @@ void AudioBackend::stop() {
 
 void AudioBackend::pause() {
 	if (is_initialized_.load() && is_playing_.load()) {
-		SDL_PauseAudioDevice(device_id_, 1);
+		SDL_PauseAudioDevice(device_id_);
 		is_playing_.store(false);
 	}
 }
 
 void AudioBackend::resume() {
 	if (is_initialized_.load() && !is_playing_.load()) {
-		SDL_PauseAudioDevice(device_id_, 0);
+		SDL_ResumeAudioDevice(device_id_);
 		is_playing_.store(true);
 	}
 }
@@ -150,12 +174,16 @@ void AudioBackend::clear_buffer() {
 	sample_buffer_.clear();
 }
 
-void AudioBackend::audio_callback(void *userdata, Uint8 *stream, int len) {
+void AudioBackend::audio_stream_callback(void *userdata, SDL_AudioStream *stream, int additional_amount,
+										 int /*total_amount*/) {
 	auto *backend = static_cast<AudioBackend *>(userdata);
-	auto *float_stream = reinterpret_cast<float *>(stream);
-	int sample_count = len / sizeof(float);
+	if (additional_amount <= 0)
+		return;
 
-	backend->fill_audio_buffer(float_stream, sample_count);
+	int sample_count = additional_amount / static_cast<int>(sizeof(float));
+	std::vector<float> temp(sample_count, 0.0f);
+	backend->fill_audio_buffer(temp.data(), sample_count);
+	SDL_PutAudioStreamData(stream, temp.data(), additional_amount);
 }
 
 void AudioBackend::fill_audio_buffer(float *stream, int sample_count) {

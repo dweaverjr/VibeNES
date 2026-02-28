@@ -107,44 +107,44 @@ Byte Controller::read_gamepad_state(int player_index) const noexcept {
 
 	// Button mapping: Modern controller -> NES controller
 	// A button (Xbox A, PS Cross)
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_A) ||
-		gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_B)) {
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_SOUTH) ||
+		gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_EAST)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::A));
 	}
 
 	// B button (Xbox B, PS Circle) OR X button
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_X) ||
-		gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_Y)) {
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_WEST) ||
+		gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_NORTH)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::B));
 	}
 
 	// Select
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_BACK)) {
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_BACK)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::SELECT));
 	}
 
 	// Start
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_START)) {
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_START)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::START));
 	}
 
 	// D-pad Up
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_DPAD_UP)) {
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_DPAD_UP)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::UP));
 	}
 
 	// D-pad Down
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) {
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_DPAD_DOWN)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::DOWN));
 	}
 
 	// D-pad Left
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) {
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_DPAD_LEFT)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::LEFT));
 	}
 
 	// D-pad Right
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) {
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::RIGHT));
 	}
 

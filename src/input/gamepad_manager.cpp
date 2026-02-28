@@ -17,9 +17,9 @@ bool GamepadManager::initialize() {
 		return true;
 	}
 
-	// Initialize SDL gamepad subsystem if not already initialized
-	if (SDL_WasInit(SDL_INIT_GAMECONTROLLER) == 0) {
-		if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0) {
+	// SDL3: gamepad subsystem is part of SDL_INIT_GAMEPAD (initialized externally)
+	if (!SDL_WasInit(SDL_INIT_GAMEPAD)) {
+		if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
 			std::cerr << "Failed to initialize SDL gamepad subsystem: " << SDL_GetError() << std::endl;
 			return false;
 		}
@@ -41,9 +41,9 @@ void GamepadManager::shutdown() {
 
 	// Close all open controllers
 	for (auto &info : controllers_) {
-		if (info.controller) {
-			SDL_GameControllerClose(info.controller);
-			info.controller = nullptr;
+		if (info.gamepad) {
+			SDL_CloseGamepad(info.gamepad);
+			info.gamepad = nullptr;
 			info.connected = false;
 		}
 	}
@@ -64,12 +64,12 @@ bool GamepadManager::handle_sdl_event(const SDL_Event &event) {
 	}
 
 	switch (event.type) {
-	case SDL_CONTROLLERDEVICEADDED:
-		add_controller(event.cdevice.which);
+	case SDL_EVENT_GAMEPAD_ADDED:
+		add_controller(event.gdevice.which);
 		return true;
 
-	case SDL_CONTROLLERDEVICEREMOVED:
-		remove_controller(event.cdevice.which);
+	case SDL_EVENT_GAMEPAD_REMOVED:
+		remove_controller(event.gdevice.which);
 		return true;
 
 	default:
@@ -88,15 +88,15 @@ const char *GamepadManager::get_controller_name(int player_index) const {
 	if (!is_controller_connected(player_index)) {
 		return "";
 	}
-	return SDL_GameControllerName(controllers_[player_index].controller);
+	return SDL_GetGamepadName(controllers_[player_index].gamepad);
 }
 
-bool GamepadManager::is_button_pressed(int player_index, SDL_GameControllerButton button) const {
+bool GamepadManager::is_button_pressed(int player_index, SDL_GamepadButton button) const {
 	if (!is_controller_connected(player_index)) {
 		return false;
 	}
 
-	return SDL_GameControllerGetButton(controllers_[player_index].controller, button) == 1;
+	return SDL_GetGamepadButton(controllers_[player_index].gamepad, button);
 }
 
 int GamepadManager::get_connected_count() const {
@@ -110,17 +110,19 @@ int GamepadManager::get_connected_count() const {
 }
 
 void GamepadManager::scan_for_controllers() {
-	int num_joysticks = SDL_NumJoysticks();
-	std::cout << "Scanning for controllers... Found " << num_joysticks << " joystick(s)" << std::endl;
+	int num_gamepads = 0;
+	SDL_JoystickID *gamepads = SDL_GetGamepads(&num_gamepads);
+	std::cout << "Scanning for controllers... Found " << num_gamepads << " gamepad(s)" << std::endl;
 
-	for (int i = 0; i < num_joysticks; i++) {
-		if (SDL_IsGameController(i)) {
-			add_controller(i);
+	if (gamepads) {
+		for (int i = 0; i < num_gamepads; i++) {
+			add_controller(gamepads[i]);
 		}
+		SDL_free(gamepads);
 	}
 }
 
-void GamepadManager::add_controller(int device_index) {
+void GamepadManager::add_controller(SDL_JoystickID instance_id) {
 	// Find first available slot
 	int slot = -1;
 	for (size_t i = 0; i < controllers_.size(); i++) {
@@ -135,26 +137,26 @@ void GamepadManager::add_controller(int device_index) {
 		return;
 	}
 
-	SDL_GameController *controller = SDL_GameControllerOpen(device_index);
-	if (!controller) {
-		std::cerr << "Failed to open game controller " << device_index << ": " << SDL_GetError() << std::endl;
+	SDL_Gamepad *gamepad = SDL_OpenGamepad(instance_id);
+	if (!gamepad) {
+		std::cerr << "Failed to open gamepad " << instance_id << ": " << SDL_GetError() << std::endl;
 		return;
 	}
 
-	controllers_[slot].controller = controller;
-	controllers_[slot].joystick_id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller));
+	controllers_[slot].gamepad = gamepad;
+	controllers_[slot].instance_id = instance_id;
 	controllers_[slot].connected = true;
 
-	std::cout << "Controller connected in slot " << slot << ": " << SDL_GameControllerName(controller) << std::endl;
+	std::cout << "Controller connected in slot " << slot << ": " << SDL_GetGamepadName(gamepad) << std::endl;
 }
 
-void GamepadManager::remove_controller(SDL_JoystickID joystick_id) {
+void GamepadManager::remove_controller(SDL_JoystickID instance_id) {
 	for (auto &info : controllers_) {
-		if (info.connected && info.joystick_id == joystick_id) {
-			std::cout << "Controller disconnected: " << SDL_GameControllerName(info.controller) << std::endl;
-			SDL_GameControllerClose(info.controller);
-			info.controller = nullptr;
-			info.joystick_id = -1;
+		if (info.connected && info.instance_id == instance_id) {
+			std::cout << "Controller disconnected: " << SDL_GetGamepadName(info.gamepad) << std::endl;
+			SDL_CloseGamepad(info.gamepad);
+			info.gamepad = nullptr;
+			info.instance_id = 0;
 			info.connected = false;
 			break;
 		}

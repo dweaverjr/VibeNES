@@ -6,6 +6,7 @@
 #include "core/types.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
+#include <SDL3/SDL_main.h>
 #include <iostream>
 #include <memory>
 

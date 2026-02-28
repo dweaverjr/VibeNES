@@ -1,13 +1,13 @@
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <cstdint>
 #include <vector>
 
 namespace nes {
 
 /**
- * GamepadManager - SDL2 gamepad detection and management
+ * GamepadManager - SDL3 gamepad detection and management
  *
  * Handles:
  * - Automatic detection of connected game controllers
@@ -67,10 +67,10 @@ class GamepadManager {
 	/**
 	 * Check if a button is currently pressed
 	 * @param player_index 0 for Player 1, 1 for Player 2
-	 * @param button SDL button code
+	 * @param button SDL gamepad button code
 	 * @return true if button is pressed
 	 */
-	bool is_button_pressed(int player_index, SDL_GameControllerButton button) const;
+	bool is_button_pressed(int player_index, SDL_GamepadButton button) const;
 
 	/**
 	 * Get number of connected controllers
@@ -79,8 +79,8 @@ class GamepadManager {
 
   private:
 	struct ControllerInfo {
-		SDL_GameController *controller = nullptr;
-		SDL_JoystickID joystick_id = -1;
+		SDL_Gamepad *gamepad = nullptr;
+		SDL_JoystickID instance_id = 0;
 		bool connected = false;
 	};
 
@@ -89,8 +89,8 @@ class GamepadManager {
 
 	// Helper methods
 	void scan_for_controllers();
-	void add_controller(int device_index);
-	void remove_controller(SDL_JoystickID joystick_id);
+	void add_controller(SDL_JoystickID instance_id);
+	void remove_controller(SDL_JoystickID instance_id);
 };
 
 } // namespace nes
