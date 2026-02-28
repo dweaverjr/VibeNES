@@ -1,126 +1,94 @@
 {
+    "version": "2.0.0",
+    "options": {
+        "shell": {
+            "executable": "cmd.exe",
+            "args": [
+                "/d",
+                "/c"
+            ]
+        },
+        "env": {
+            "VCVARS": "\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat\" amd64",
+            "CMAKE": "\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe\""
+        }
+    },
     "tasks": [
         {
+            "label": "Build Debug",
             "type": "shell",
-            "label": "Debug Build",
-            "command": "powershell",
-            "args": [
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                "${workspaceFolder}/build_scripts/compile_debug.ps1"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "detail": "Debug build with GUI support - auto-discovers all source files"
-        },
-        {
-            "type": "shell",
-            "label": "Release Build",
-            "command": "powershell",
-            "args": [
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                "${workspaceFolder}/build_scripts/compile_release.ps1"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
+            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug",
             "group": "build",
-            "detail": "Optimized release build - auto-discovers all source files"
-        },
-        {
-            "type": "shell",
-            "label": "Build Tests",
-            "command": "powershell",
-            "args": [
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                "${workspaceFolder}/build_scripts/compile_tests.ps1"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
             "problemMatcher": [
-                "$gcc"
+                "$msCompile"
             ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
+            "presentation": {
+                "reveal": "always",
+                "clear": true
             },
-            "detail": "Build all unit tests - auto-discovers test and source files"
+            "detail": "Configure + build debug (MSVC + Ninja)"
         },
         {
+            "label": "Build Release",
             "type": "shell",
-            "label": "Create Build Directories",
-            "command": "powershell",
-            "args": [
-                "-Command",
-                "New-Item -ItemType Directory -Force -Path '${workspaceFolder}/build/debug', '${workspaceFolder}/build/release'"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
+            "command": "%VCVARS% && %CMAKE% --preset release && %CMAKE% --build --preset release",
             "group": "build",
-            "detail": "Create necessary build directories"
-        },
-        {
-            "type": "shell",
-            "label": "Run Debug",
-            "command": "${workspaceFolder}/build/debug/VibeNES_GUI.exe",
-            "group": "test",
-            "dependsOn": "Debug Build",
-            "detail": "Build and run debug version with GUI"
-        },
-        {
-            "type": "shell",
-            "label": "Run Debug (No Build)",
-            "command": "${workspaceFolder}/build/debug/VibeNES_GUI.exe",
-            "group": "test",
-            "detail": "Run debug version with GUI without building"
-        },
-        {
-            "type": "shell",
-            "label": "Build Tests",
-            "command": "powershell",
-            "args": [
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                "${workspaceFolder}/build_scripts/compile_tests.ps1"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
             "problemMatcher": [
-                "$gcc"
+                "$msCompile"
             ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
+            "presentation": {
+                "reveal": "always",
+                "clear": true
             },
-            "detail": "Build all unit tests - auto-discovers test and source files"
+            "detail": "Configure + build release (MSVC + Ninja)"
         },
         {
-            "type": "shell",
             "label": "Run Tests",
-            "command": "${workspaceFolder}/build/debug/VibeNES_All_Tests.exe",
-            "group": "test",
-            "detail": "Run all unit tests"
+            "type": "shell",
+            "command": "%VCVARS% && %CMAKE% --build --preset debug && %CMAKE% -E chdir build/debug ctest --output-on-failure",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "clear": true
+            },
+            "detail": "Build + run all tests (debug)"
+        },
+        {
+            "label": "Run VibeNES (Debug)",
+            "type": "shell",
+            "command": "%VCVARS% && %CMAKE% --build --preset debug && .\\build\\debug\\VibeNES_GUI.exe",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always"
+            },
+            "detail": "Build + run debug executable"
+        },
+        {
+            "label": "Run VibeNES (Release)",
+            "type": "shell",
+            "command": "%VCVARS% && %CMAKE% --build --preset release && .\\build\\release\\VibeNES_GUI.exe",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always"
+            },
+            "detail": "Build + run release executable"
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "if exist build\\debug rmdir /s /q build\\debug && if exist build\\release rmdir /s /q build\\release",
+            "presentation": {
+                "reveal": "always"
+            },
+            "detail": "Remove all build directories"
         }
-    ],
-    "version": "2.0.0"
+    ]
 }

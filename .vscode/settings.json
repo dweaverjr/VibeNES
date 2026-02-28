@@ -14,9 +14,10 @@
   },
   "files.insertFinalNewline": true,
   "files.trimTrailingWhitespace": true,
-  "C_Cpp.default.compilerPath": "C:\\msys64\\ucrt64\\bin\\g++.exe",
   "C_Cpp.default.cppStandard": "c++23",
-  "C_Cpp.default.intelliSenseMode": "windows-gcc-x64",
+  "C_Cpp.default.intelliSenseMode": "windows-msvc-x64",
+  "C_Cpp.default.compilerPath": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
   "C_Cpp.clang_format_style": "{ BasedOnStyle: LLVM, UseTab: Always, IndentWidth: 4, TabWidth: 4, ColumnLimit: 120, AllowShortFunctionsOnASingleLine: None, AllowShortIfStatementsOnASingleLine: Never, AllowShortLoopsOnASingleLine: false }",
   "C_Cpp.errorSquiggles": "enabled",
   "C_Cpp.inlayHints.autoDeclarationTypes.enabled": true,
@@ -33,6 +34,33 @@
   "search.exclude": {
     "**/*.exe": true,
     "**/*.o": true,
-    "**/*.obj": true
+    "**/*.obj": true,
+    "vcpkg/**": true,
+    "build/**": true
+  },
+  // ── CMake Tools (IntelliSense + preset-driven builds via tasks.json) ──
+  "cmake.cmakePath": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
+  "cmake.configureOnOpen": true,
+  "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}",
+  "cmake.useCMakePresets": "always",
+  // Disable CMake Tools' own build/debug buttons so they don't conflict with tasks
+  "cmake.buildBeforeRun": false,
+  "cmake.setBuildTypeOnMultiConfig": "never",
+  // Hide auto-detected CMake template tasks from Ctrl+Shift+B
+  "cmake.buildTask": false,
+  // ── Developer Command Prompt terminal profile ──
+  "terminal.integrated.profiles.windows": {
+    "MSVC Developer CMD": {
+      "path": "cmd.exe",
+      "args": [
+        "/k",
+        "\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat\" amd64"
+      ],
+      "icon": "terminal"
+    },
+    "PowerShell": {
+      "source": "PowerShell",
+      "icon": "terminal-powershell"
+    }
   }
 }
