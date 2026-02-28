@@ -415,35 +415,43 @@ TEST_CASE("Interrupt priority and precedence", "[cpu][interrupts]") {
 		cpu.set_stack_pointer(0xFF);
 		cpu.set_interrupt_flag(false);
 
-		// CLI at the NMI handler so the I flag is cleared before the next
-		// execute_instruction() call, allowing the pending IRQ to fire.
+		// CLI at the NMI handler, then a NOP so IRQ has one instruction in
+		// which its penultimate-cycle poll can detect I=0.
 		bus->write(0x8000, 0x58); // CLI at NMI handler
+		bus->write(0x8001, 0xEA); // NOP — IRQ detected on its penultimate cycle
 
 		// Queue multiple interrupts
 		cpu.trigger_irq();
 		cpu.trigger_nmi();
 		cpu.trigger_reset();
 
-		// execute_instruction() checks pending interrupts BEFORE fetching
-		// the instruction at the current PC.  Interrupts are processed in
-		// priority order: RESET > NMI > IRQ.
+		// Interrupts are serviced at instruction boundaries based on
+		// penultimate-cycle polling.  Priority: RESET > NMI > IRQ.
+		// IRQ additionally requires I=0 on the penultimate cycle.
 
-		// 1) Process RESET (highest priority)
+		// 1) Process RESET (highest priority, always immediate)
 		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x8100);
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::NMI);
 
-		// 2) NMI fires immediately (before the instruction at $8100 runs)
+		// 2) NMI fires (detected during reset handler's penultimate cycle)
 		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x8000);
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::IRQ);
 
-		// 3) IRQ is masked (I=1 after NMI), so CPU executes CLI at $8000
+		// 3) IRQ is masked (I=1 after NMI handler), so CPU executes CLI at $8000.
+		//    On CLI's penultimate cycle the I flag is still 1, so IRQ is NOT
+		//    detected yet — this is the "CLI delay" property of real 6502.
 		(void)cpu.execute_instruction(); // CLI → I=0, PC=$8001
 		REQUIRE(cpu.get_program_counter() == 0x8001);
 		REQUIRE_FALSE(cpu.get_interrupt_flag()); // I cleared by CLI
 
-		// 4) Now IRQ fires (I=0)
+		// 4) NOP at $8001 executes.  Now I=0, and on NOP's penultimate cycle
+		//    the IRQ line is detected with I clear → IRQ queued for next boundary.
+		(void)cpu.execute_instruction(); // NOP → PC=$8002
+		REQUIRE(cpu.get_program_counter() == 0x8002);
+
+		// 5) IRQ fires (detected on NOP's penultimate cycle with I=0)
 		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x8200);
 
@@ -508,4 +516,107 @@ TEST_CASE("BRK instruction vs IRQ handling", "[cpu][interrupts]") {
 		Byte brk_status = peek_stack(*bus, 0xFC);
 		REQUIRE((brk_status & 0x10) != 0); // B flag set for BRK
 	}
+}
+
+// =============================================================================
+// Penultimate-cycle interrupt polling tests
+// =============================================================================
+// On real 6502, interrupt lines are sampled on the penultimate (second-to-last)
+// cycle of each instruction.  The I flag state at that moment determines whether
+// IRQ is taken — not the I flag after the instruction completes.
+
+TEST_CASE("CLI does not allow immediate IRQ (penultimate-cycle polling)", "[cpu][interrupts][timing]") {
+	// On real 6502: CLI is 2 cycles.  I is cleared on the last cycle (cycle 2).
+	// On the penultimate cycle (cycle 1 = opcode fetch), I is still 1.
+	// Therefore IRQ is NOT detected until the instruction AFTER CLI.
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	setup_interrupt_vectors(*bus);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+	cpu.set_stack_pointer(0xFF);
+	cpu.set_interrupt_flag(true); // Start with I=1
+
+	// CLI at $0200, NOP at $0201
+	bus->write(0x0200, 0x58); // CLI
+	bus->write(0x0201, 0xEA); // NOP
+
+	// Assert IRQ line before CLI runs
+	cpu.trigger_irq();
+
+	// execute_instruction #1: IRQ is pending but I=1 → prev_irq_signal_ is false
+	// (because trigger_irq saw I=1 when it set the latches).
+	// So CLI runs: I becomes 0, PC=$0201.
+	(void)cpu.execute_instruction();
+	REQUIRE(cpu.get_program_counter() == 0x0201); // CLI ran, not IRQ
+	REQUIRE_FALSE(cpu.get_interrupt_flag());	  // I is now 0
+
+	// execute_instruction #2: NOP at $0201.
+	// CLI's penultimate cycle had I=1, so IRQ was NOT detected after CLI.
+	// NOP's penultimate cycle (cycle 1) now has I=0 and IRQ asserted → detected.
+	(void)cpu.execute_instruction();
+	REQUIRE(cpu.get_program_counter() == 0x0202); // NOP ran
+
+	// execute_instruction #3: IRQ fires (detected on NOP's penultimate cycle)
+	(void)cpu.execute_instruction();
+	REQUIRE(cpu.get_program_counter() == 0x8200); // IRQ handler
+}
+
+TEST_CASE("SEI allows one more IRQ through (penultimate-cycle polling)", "[cpu][interrupts][timing]") {
+	// On real 6502: SEI is 2 cycles.  I is set on the last cycle (cycle 2).
+	// On the penultimate cycle (cycle 1 = opcode fetch), I is still 0.
+	// Therefore IRQ IS detected on SEI's penultimate cycle, and fires after SEI.
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	setup_interrupt_vectors(*bus);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+	cpu.set_stack_pointer(0xFF);
+	cpu.set_interrupt_flag(false); // Start with I=0
+
+	bus->write(0x0200, 0x78); // SEI
+
+	// Assert IRQ line — with I=0 this is immediately visible via latches
+	cpu.trigger_irq();
+
+	// execute_instruction #1: IRQ is pending + prev_irq_signal_ reflects I=0.
+	// So IRQ fires before SEI has a chance to execute.
+	(void)cpu.execute_instruction();
+	REQUIRE(cpu.get_program_counter() == 0x8200); // IRQ handler fired
+
+	// Verify I was set by the IRQ handler
+	REQUIRE(cpu.get_interrupt_flag());
+}
+
+TEST_CASE("IRQ not re-entered after handler sets I flag", "[cpu][interrupts][timing]") {
+	// After the IRQ handler sets I=1, the IRQ line is still asserted but should
+	// not be re-entered because the penultimate-cycle polling sees I=1.
+	auto bus = std::make_unique<SystemBus>();
+	auto ram = std::make_shared<Ram>();
+	bus->connect_ram(ram);
+	setup_interrupt_vectors(*bus);
+
+	CPU6502 cpu(bus.get());
+	cpu.set_program_counter(0x0200);
+	cpu.set_stack_pointer(0xFF);
+	cpu.set_interrupt_flag(false); // I=0 — IRQs enabled
+
+	bus->write(0x0200, 0xEA); // NOP at starting address
+	bus->write(0x8200, 0xEA); // NOP at IRQ handler
+
+	cpu.trigger_irq();
+
+	// IRQ fires (prev_irq from trigger_irq with I=0)
+	(void)cpu.execute_instruction();
+	REQUIRE(cpu.get_program_counter() == 0x8200); // IRQ handler
+
+	// IRQ handler set I=1.  IRQ line is still asserted, but handler's
+	// penultimate cycle had I=1 → prev_irq_signal_ = false.
+	// So the next instruction at the handler should run, not re-enter IRQ.
+	(void)cpu.execute_instruction();			  // NOP at $8200
+	REQUIRE(cpu.get_program_counter() == 0x8201); // NOP ran, no re-entry
 }

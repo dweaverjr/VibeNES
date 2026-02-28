@@ -48,17 +48,18 @@ class APU : public Component {
 		dmc_irq_flag_ = false;
 	}
 
-	// DMC DMA cycle stealing
-	bool is_dmc_dma_active() const {
-		return dmc_dma_in_progress_;
+	// DMC DMA cycle stealing — when the DMC sample buffer empties, the APU
+	// requests a DMA fetch.  The CPU must stall for ~4 cycles and perform
+	// the read, then deliver the byte via complete_dmc_dma().
+	[[nodiscard]] bool is_dmc_dma_pending() const noexcept {
+		return dmc_dma_pending_;
 	}
-	uint8_t get_dmc_stall_cycles() const {
-		return dmc_stall_cycles_;
+	[[nodiscard]] uint16_t get_dmc_dma_address() const noexcept {
+		return dmc_dma_address_;
 	}
-	void clear_dmc_stall() {
-		dmc_dma_in_progress_ = false;
-		dmc_stall_cycles_ = 0;
-	}
+	/// Called by the CPU after it performs the DMA read.  Delivers the
+	/// fetched byte into the DMC sample buffer.
+	void complete_dmc_dma(uint8_t data);
 
 	// Audio output (future implementation)
 	float get_audio_sample();
@@ -211,9 +212,8 @@ class APU : public Component {
 		bool loop_flag;
 		bool enabled;
 
-		void clock_timer(SystemBus *bus);
+		void clock_timer();
 		void start_sample();
-		void load_sample_byte(SystemBus *bus);
 		uint8_t get_output();
 	};
 
@@ -230,9 +230,9 @@ class APU : public Component {
 	bool dmc_irq_flag_;
 	bool prev_irq_line_state_; // Track previous IRQ line state for edge detection
 
-	// DMC DMA tracking
-	bool dmc_dma_in_progress_;
-	uint8_t dmc_stall_cycles_;
+	// DMC DMA tracking — the APU requests a fetch; the CPU fulfils it.
+	bool dmc_dma_pending_ = false; // true while waiting for CPU to deliver byte
+	uint16_t dmc_dma_address_ = 0; // address the CPU should read
 
 	// Cycle counter
 	uint64_t cycle_count_;

@@ -110,6 +110,10 @@ class CPU6502 final : public Component {
 	}
 	void set_interrupt_flag(bool value) noexcept {
 		status_.flags.interrupt_flag_ = value;
+		// Update IRQ polling latch to match the new I flag state.
+		// Important for tests that set I directly before triggering IRQ.
+		curr_irq_signal_ = irq_line_ && !value;
+		prev_irq_signal_ = curr_irq_signal_;
 	}
 	void set_decimal_flag(bool value) noexcept {
 		status_.flags.decimal_flag_ = value;
@@ -169,6 +173,16 @@ class CPU6502 final : public Component {
 	bool irq_line_ = false; // External IRQ line state (for level-triggered IRQ)
 	bool nmi_line_ = false; // External NMI line state (for edge-triggered NMI)
 
+	// Penultimate-cycle interrupt polling state
+	// On real 6502, interrupt lines are sampled on the penultimate (second-to-last)
+	// cycle of each instruction.  After an instruction completes, prev_* holds the sample
+	// from the penultimate cycle; curr_* from the last cycle.  The prev_* values are
+	// checked at the next instruction boundary to decide whether to vector to an ISR.
+	bool curr_nmi_pending_ = false; // NMI pending sampled on the current cycle
+	bool prev_nmi_pending_ = false; // NMI pending sampled on the previous cycle
+	bool curr_irq_signal_ = false;	// IRQ line asserted AND I flag clear this cycle
+	bool prev_irq_signal_ = false;	// IRQ line asserted AND I flag clear previous cycle
+
 	// Memory access methods
 	[[nodiscard]] Byte read_byte(Address address);
 	void write_byte(Address address, Byte value);
@@ -197,10 +211,9 @@ class CPU6502 final : public Component {
 	void consume_cycles(int count);
 
 	// Interrupt handling
-	void handle_nmi();		   ///< Handle Non-Maskable Interrupt
-	void handle_irq();		   ///< Handle Maskable Interrupt (IRQ/BRK)
-	void handle_reset();	   ///< Handle Reset interrupt
-	void process_interrupts(); ///< Check and process pending interrupts
+	void handle_nmi();	 ///< Handle Non-Maskable Interrupt
+	void handle_irq();	 ///< Handle Maskable Interrupt (IRQ/BRK)
+	void handle_reset(); ///< Handle Reset interrupt
 
 	// OAM DMA — CPU halts for 513-514 cycles while DMA controller
 	// reads from CPU bus and writes to PPU OAM.

@@ -33,8 +33,8 @@ const uint16_t APU::DMC_RATE_TABLE[16] = {428, 380, 340, 320, 286, 254, 226, 214
 
 APU::APU()
 	: frame_counter_{}, pulse1_{}, pulse2_{}, triangle_{}, noise_{}, dmc_{}, frame_irq_flag_(false),
-	  dmc_irq_flag_(false), prev_irq_line_state_(false), dmc_dma_in_progress_(false), dmc_stall_cycles_(0),
-	  cycle_count_(0), cpu_(nullptr), bus_(nullptr), audio_backend_(nullptr),
+	  dmc_irq_flag_(false), prev_irq_line_state_(false), dmc_dma_pending_(false), dmc_dma_address_(0), cycle_count_(0),
+	  cpu_(nullptr), bus_(nullptr), audio_backend_(nullptr),
 	  sample_rate_converter_(static_cast<float>(CPU_CLOCK_NTSC), 44100.0f), audio_enabled_(false),
 	  hp_filter_prev_input_(0.0f), hp_filter_prev_output_(0.0f) {
 }
@@ -62,6 +62,8 @@ void APU::reset() {
 	frame_irq_flag_ = false;
 	dmc_irq_flag_ = false;
 	prev_irq_line_state_ = false;
+	dmc_dma_pending_ = false;
+	dmc_dma_address_ = 0;
 	cycle_count_ = 0;
 
 	// Reset high-pass filter state
@@ -95,7 +97,16 @@ void APU::tick(CpuCycle cycles) {
 
 		// DMC clocks at CPU rate when enabled
 		if (dmc_.enabled) {
-			dmc_.clock_timer(bus_);
+			dmc_.clock_timer();
+		}
+
+		// After clocking the DMC, check if it needs a new sample byte.
+		// If the sample buffer is empty and there are bytes remaining to
+		// read, request a DMA fetch.  The CPU will stall and deliver the
+		// byte via complete_dmc_dma() on a subsequent cycle.
+		if (dmc_.enabled && dmc_.sample_buffer_empty && dmc_.bytes_remaining > 0 && !dmc_dma_pending_) {
+			dmc_dma_pending_ = true;
+			dmc_dma_address_ = dmc_.current_address;
 		}
 
 		// Generate audio sample every CPU cycle
@@ -341,8 +352,11 @@ void APU::write(uint16_t address, uint8_t value) {
 			dmc_.bytes_remaining = 0;
 		} else if (dmc_.bytes_remaining == 0) {
 			dmc_.start_sample();
-			if (bus_) {
-				dmc_.load_sample_byte(bus_);
+			// Request DMA fetch for the first byte of the restarted sample.
+			// The CPU will fulfil this on a subsequent cycle.
+			if (dmc_.bytes_remaining > 0 && !dmc_dma_pending_) {
+				dmc_dma_pending_ = true;
+				dmc_dma_address_ = dmc_.current_address;
 			}
 		}
 
@@ -701,7 +715,7 @@ uint8_t APU::NoiseChannel::get_output() {
 }
 
 // DMC Channel methods
-void APU::DMCChannel::clock_timer(SystemBus *bus) {
+void APU::DMCChannel::clock_timer() {
 	if (timer == 0) {
 		timer = timer_period;
 
@@ -732,11 +746,8 @@ void APU::DMCChannel::clock_timer(SystemBus *bus) {
 				silence = false;
 				shift_register = sample_buffer;
 				sample_buffer_empty = true;
-
-				// Load next sample byte from memory (if available)
-				if (bus && bytes_remaining > 0) {
-					load_sample_byte(bus);
-				}
+				// Note: the actual DMA fetch for the NEXT byte is requested
+				// below; it will be fulfilled by the CPU on a subsequent cycle.
 			}
 		}
 	} else {
@@ -750,33 +761,27 @@ void APU::DMCChannel::start_sample() {
 	sample_buffer_empty = true;
 }
 
-void APU::DMCChannel::load_sample_byte(SystemBus *bus) {
-	if (!bus || bytes_remaining == 0) {
-		return;
+// Called by the CPU after it performs the DMA read on behalf of the DMC.
+void APU::complete_dmc_dma(uint8_t data) {
+	dmc_dma_pending_ = false;
+
+	dmc_.sample_buffer = data;
+	dmc_.sample_buffer_empty = false;
+
+	// Advance the DMC address pointer (wraps from $FFFF → $8000)
+	dmc_.current_address++;
+	if (dmc_.current_address == 0x0000) {
+		dmc_.current_address = 0x8000;
 	}
 
-	// Note: In real hardware, this memory read steals CPU cycles
-	// The APU class handles signaling this to the CPU via DMA flags
-
-	// Read sample byte from memory
-	sample_buffer = bus->read(current_address);
-	sample_buffer_empty = false;
-
-	// Increment address with wrapping
-	// DMC samples wrap from $FFFF to $8000
-	current_address++;
-	if (current_address == 0x0000) {
-		current_address = 0x8000;
-	}
-
-	bytes_remaining--;
+	dmc_.bytes_remaining--;
 
 	// Handle loop or IRQ when sample completes
-	if (bytes_remaining == 0) {
-		if (loop_flag) {
-			start_sample(); // Restart sample
-		} else if (irq_enabled) {
-			// IRQ flag set in APU class (dmc_irq_flag_)
+	if (dmc_.bytes_remaining == 0) {
+		if (dmc_.loop_flag) {
+			dmc_.start_sample(); // Restart sample
+		} else if (dmc_.irq_enabled) {
+			dmc_irq_flag_ = true;
 		}
 	}
 }
@@ -909,8 +914,9 @@ void APU::serialize_state(std::vector<uint8_t> &buffer) const {
 	buffer.push_back(prev_irq_line_state_ ? 1 : 0);
 
 	// DMC DMA tracking
-	buffer.push_back(dmc_dma_in_progress_ ? 1 : 0);
-	buffer.push_back(dmc_stall_cycles_);
+	buffer.push_back(dmc_dma_pending_ ? 1 : 0);
+	buffer.push_back(static_cast<uint8_t>(dmc_dma_address_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((dmc_dma_address_ >> 8) & 0xFF));
 
 	// Cycle counter (64-bit)
 	for (int i = 0; i < 8; ++i) {
@@ -1035,8 +1041,9 @@ void APU::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) 
 	prev_irq_line_state_ = buffer[offset++] != 0;
 
 	// DMC DMA tracking
-	dmc_dma_in_progress_ = buffer[offset++] != 0;
-	dmc_stall_cycles_ = buffer[offset++];
+	dmc_dma_pending_ = buffer[offset++] != 0;
+	dmc_dma_address_ = buffer[offset++];
+	dmc_dma_address_ |= static_cast<uint16_t>(buffer[offset++]) << 8;
 
 	// Cycle counter (64-bit)
 	cycle_count_ = 0;

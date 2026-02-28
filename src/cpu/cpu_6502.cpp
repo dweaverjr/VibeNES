@@ -85,6 +85,11 @@ void CPU6502::trigger_nmi() noexcept {
 	if (!nmi_line_) {
 		interrupt_state_.nmi_pending = true;
 		nmi_line_ = true;
+		// Update polling latches so NMI is visible at the next instruction boundary.
+		// When triggered externally (between instructions), this represents a
+		// pre-existing condition that the next instruction should service.
+		curr_nmi_pending_ = true;
+		prev_nmi_pending_ = true;
 	}
 }
 
@@ -96,11 +101,18 @@ void CPU6502::trigger_irq() noexcept {
 	// IRQ line is now asserted
 	irq_line_ = true;
 	interrupt_state_.irq_pending = true;
+	// Update polling latches so IRQ is visible at the next instruction boundary
+	// when triggered externally (between instructions).
+	curr_irq_signal_ = !status_.flags.interrupt_flag_;
+	prev_irq_signal_ = curr_irq_signal_;
 }
 
 void CPU6502::clear_irq_line() noexcept {
 	irq_line_ = false;
 	interrupt_state_.irq_pending = false;
+	// Clear polling latches
+	curr_irq_signal_ = false;
+	prev_irq_signal_ = false;
 }
 
 void CPU6502::trigger_reset() noexcept {
@@ -113,36 +125,6 @@ bool CPU6502::has_pending_interrupt() const noexcept {
 
 InterruptType CPU6502::get_pending_interrupt() const noexcept {
 	return interrupt_state_.get_pending_interrupt();
-}
-
-void CPU6502::process_interrupts() {
-	InterruptType pending = interrupt_state_.get_pending_interrupt();
-
-	switch (pending) {
-	case InterruptType::RESET:
-		handle_reset();
-		interrupt_state_.clear_interrupt(InterruptType::RESET);
-		break;
-
-	case InterruptType::NMI:
-		handle_nmi();
-		interrupt_state_.clear_interrupt(InterruptType::NMI);
-		break;
-
-	case InterruptType::IRQ:
-		// Process IRQ only if interrupts are currently enabled (I flag is clear)
-		if (!get_interrupt_flag()) {
-			handle_irq();
-			// NOTE: Do NOT clear irq_pending here - IRQ is level-triggered
-			// The IRQ line stays asserted until software clears the source
-			// (e.g., reading $4015 for APU frame IRQ)
-		}
-		break;
-
-	case InterruptType::NONE:
-		// No interrupt to process
-		break;
-	}
 }
 
 void CPU6502::handle_reset() {
@@ -225,30 +207,47 @@ int CPU6502::execute_instruction() {
 		return execute_oam_dma();
 	}
 
-	// Check for pending interrupts before instruction fetch
-	if (has_pending_interrupt()) {
-		InterruptType pending = interrupt_state_.get_pending_interrupt();
+	// =========================================================================
+	// Interrupt servicing at instruction boundary (penultimate-cycle polling)
+	// =========================================================================
+	// On real 6502, interrupt lines are sampled on the penultimate cycle of
+	// each instruction.  The polling result (stored in prev_nmi_pending_ /
+	// prev_irq_signal_) determines whether the CPU vectors to an ISR at the
+	// next instruction boundary.  This correctly models:
+	//   - CLI delay: after CLI, IRQ isn't taken until the NEXT instruction
+	//     (because I was still 1 on CLI's penultimate cycle)
+	//   - SEI window: after SEI, one more IRQ sneaks through (because I was
+	//     still 0 on SEI's penultimate cycle)
+	//   - NMI last-cycle deferral: NMI arriving on the very last cycle of an
+	//     instruction is not serviced until after the following instruction
 
-		// Only process interrupts that will actually be handled
-		bool should_process = false;
-		switch (pending) {
-		case InterruptType::RESET:
-		case InterruptType::NMI:
-			should_process = true; // Always processed
-			break;
-		case InterruptType::IRQ:
-			// Process IRQ only if interrupts are currently enabled (I flag is clear)
-			should_process = !get_interrupt_flag();
-			break;
-		case InterruptType::NONE:
-			should_process = false;
-			break;
-		}
-		if (should_process) {
-			process_interrupts();
-			// Return cycles consumed by interrupt processing
-			return cycles_consumed_;
-		}
+	// RESET is always handled immediately (highest priority, not gated by polling)
+	if (interrupt_state_.reset_pending) {
+		handle_reset();
+		interrupt_state_.clear_interrupt(InterruptType::RESET);
+		return cycles_consumed_;
+	}
+
+	// NMI: edge-triggered, non-maskable — check penultimate-cycle latch
+	if (prev_nmi_pending_) {
+		// Clear pending flag BEFORE running the handler so the handler's own
+		// consume_cycle() calls don't re-sample the stale nmi_pending flag.
+		interrupt_state_.clear_interrupt(InterruptType::NMI);
+		prev_nmi_pending_ = false;
+		curr_nmi_pending_ = false;
+		handle_nmi();
+		return cycles_consumed_;
+	}
+
+	// IRQ: level-triggered — check penultimate-cycle latch (includes I flag check)
+	if (prev_irq_signal_) {
+		prev_irq_signal_ = false;
+		curr_irq_signal_ = false;
+		handle_irq();
+		// NOTE: Do NOT clear irq_pending — IRQ is level-triggered.
+		// The IRQ line stays asserted until software clears the source
+		// (e.g., reading $4015 for APU frame IRQ).
+		return cycles_consumed_;
 	}
 
 	// Fetch opcode
@@ -1206,10 +1205,50 @@ int CPU6502::execute_oam_dma() {
 // cycle, and checks mapper IRQs. This gives cycle-accurate interleaving
 // without rewriting instruction logic — every read_byte/write_byte/
 // consume_cycle call site remains unchanged.
+//
+// Additionally, interrupt lines are sampled each cycle for penultimate-cycle
+// polling.  After an instruction ends, prev_*_signal_ holds the sample from
+// the penultimate cycle, and curr_*_signal_ from the last cycle.
 void CPU6502::consume_cycle() {
 	cycles_remaining_ -= CpuCycle{1};
 	cycles_consumed_++;
-	bus_->tick_single_cpu_cycle();
+	bus_->tick_single_cpu_cycle(); // advance PPU 3 dots, APU 1 cycle, check mapper IRQ
+
+	// =========================================================================
+	// DMC DMA cycle stealing
+	// =========================================================================
+	// When the APU's DMC channel needs a new sample byte, it signals a DMA
+	// request.  The CPU must stall while the DMA unit performs the read.
+	// On real hardware the stall is 1–4 cycles depending on write-cycle
+	// alignment.  We model this as ~4 cycles: 2 dummy/halt cycles, then the
+	// read cycle, then 1 alignment cycle.  Each stall cycle still advances
+	// PPU/APU so the rest of the system stays in sync.
+	if (bus_->is_dmc_dma_pending()) {
+		// Stall cycles: halt + alignment (the read itself is one more cycle)
+		// Total steal ≈ 4 CPU cycles.  We burn 3 dummy cycles, then the bus
+		// performs the actual read on the 4th.
+		for (int s = 0; s < 3; ++s) {
+			cycles_remaining_ -= CpuCycle{1};
+			cycles_consumed_++;
+			bus_->tick_single_cpu_cycle();
+		}
+		// Perform the DMA read (also consumes 1 CPU cycle for the bus read)
+		cycles_remaining_ -= CpuCycle{1};
+		cycles_consumed_++;
+		bus_->service_dmc_dma();
+		bus_->tick_single_cpu_cycle();
+	}
+
+	// Penultimate-cycle polling: shift current sample into "previous".
+	// After the last consume_cycle of an instruction, prev_ holds the
+	// penultimate-cycle sample — exactly what real hardware uses to decide
+	// whether to vector to an ISR at the next instruction boundary.
+	prev_nmi_pending_ = curr_nmi_pending_;
+	prev_irq_signal_ = curr_irq_signal_;
+
+	// Sample current interrupt state
+	curr_nmi_pending_ = interrupt_state_.nmi_pending;
+	curr_irq_signal_ = irq_line_ && !status_.flags.interrupt_flag_;
 }
 
 void CPU6502::consume_cycles(int count) {

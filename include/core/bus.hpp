@@ -59,6 +59,10 @@ class SystemBus final : public Component {
 	void clear_oam_dma_pending() noexcept;
 	void write_oam_direct(uint8_t offset, uint8_t value);
 
+	// DMC DMA cycle stealing interface
+	[[nodiscard]] bool is_dmc_dma_pending() const noexcept;
+	void service_dmc_dma();
+
 	// Audio control
 	bool initialize_audio(int sample_rate = 44100, int buffer_size = 1024);
 	void start_audio();

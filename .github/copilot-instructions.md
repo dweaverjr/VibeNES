@@ -43,7 +43,7 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 | Input | ✅ Complete | Controller + gamepad manager |
 | GUI | ✅ Complete | SDL2 + ImGui, 7 panels (CPU, disassembler, memory, ROM, PPU, timing, audio), retro theme |
 | Disassembler | ✅ Complete | All 256 opcodes with addressing modes |
-| Tests | ⚠️ Partial | 3 CPU + 18 PPU + 2 core + 1 memory test files (186 tests, all passing). Zero tests for APU, mappers, save states, cartridge, input |
+| Tests | ⚠️ Partial | 3 CPU + 18 PPU + 2 core + 1 memory test files (189 tests, all passing). Zero tests for APU, mappers, save states, cartridge, input |
 
 ## Known Bugs (Priority Order)
 
@@ -64,14 +64,14 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 
 ### P2 — Moderate Issues (Remaining)
 10. **APU uses edge-triggered IRQ** — `apu.cpp` uses edge detection; NES APU IRQ is level-triggered.
-11. **DMC DMA cycle stealing not implemented** — Fields exist but never activated.
+11. ~~**DMC DMA cycle stealing not implemented**~~ — **FIXED (Phase 4)**: `load_sample_byte()` replaced with a signal-based DMA request.  When the DMC sample buffer empties, `APU::tick()` sets `dmc_dma_pending_` + `dmc_dma_address_`.  CPU’s `consume_cycle()` detects the pending DMA, stalls for ~4 cycles (3 dummy + 1 read) while continuing PPU/APU interleaving, then calls `bus_->service_dmc_dma()` which reads the byte and delivers it via `APU::complete_dmc_dma()`.
 12. ~~**`step_frame()` only runs 1000 cycles**~~ — Fixed: `gui_application.cpp` now runs 29,781 cycles per frame.
-14. **Frame 0 hack** — `ppu.cpp` clears fine_y/fine_x on frame 0 as a workaround for init timing.
+14. ~~**Frame 0 hack**~~ — **FIXED (Phase 4)**: Removed workaround that cleared fine_x/fine_y on frame 0.  PPU now honours whatever scroll/VRAM state software has configured from the very first frame.
 
 ## Architecture Notes
 
 ### Current Synchronization Model
-Cycle-level interleaving via "fat `consume_cycle()`". Each `consume_cycle()` call inside CPU instructions calls `bus_->tick_single_cpu_cycle()`, which advances PPU by 3 dots, APU by 1 cycle, and checks mapper IRQs. The main loop (`gui_application.cpp`) calls `execute_instruction()` which returns the consumed cycle count (tracked via `cycles_consumed_` counter); no separate `bus_->tick()` is needed. `cycles_remaining_` is still decremented for the `CPU6502::tick()` budget loop used by tests.
+Cycle-level interleaving via “fat `consume_cycle()`”. Each `consume_cycle()` call inside CPU instructions calls `bus_->tick_single_cpu_cycle()`, which advances PPU by 3 dots, APU by 1 cycle, and checks mapper IRQs.  Additionally, each `consume_cycle()` performs **penultimate-cycle interrupt polling**: it shifts current NMI/IRQ samples into `prev_*` and re-samples `curr_*`, so `prev_nmi_pending_`/`prev_irq_signal_` hold the penultimate-cycle state at instruction boundaries.  `consume_cycle()` also checks for pending **DMC DMA** requests from the APU and stalls ~4 CPU cycles to perform the sample byte read.  The main loop (`gui_application.cpp`) calls `execute_instruction()` which returns the consumed cycle count (tracked via `cycles_consumed_` counter); no separate `bus_->tick()` is needed. `cycles_remaining_` is still decremented for the `CPU6502::tick()` budget loop used by tests.
 
 ### Mapper Factory
 `MapperFactory::create_mapper()` dispatches by mapper number. Mapper base class defines CPU/PPU memory access, mirroring control, and reset. Bus conflict emulation in Mapper 2.
@@ -88,10 +88,12 @@ Cycle-level interleaving via "fat `consume_cycle()`". Each `consume_cycle()` cal
 ✅ **DONE** — Migrated from MSYS2/GCC PowerShell scripts to MSVC + CMake + vcpkg + Ninja. All MSYS2/GCC references purged from the entire project. CMakeLists.txt defines `vibes_core`, `VibeNES_GUI`, `VibeNES_Tests`, and `imgui` targets. CMakePresets.json provides debug/release presets. Both `VibeNES_GUI.exe` and `VibeNES_Tests.exe` build successfully. `.vscode/c_cpp_properties.json` deleted (CMake Tools provides IntelliSense).
 
 ### Phase 4: Cycle-Level CPU/PPU/APU Interleaving
-⚠️ **IN PROGRESS** — Fat `consume_cycle()` implemented (bug #5 fixed). Each `consume_cycle()` now calls `bus_->tick_single_cpu_cycle()`, providing per-cycle CPU/PPU/APU interleaving. Interrupt handler cycle counts corrected (NMI/IRQ: 2 internal + 5 memory ops = 7 total; RESET: 5 internal/suppressed + 2 reads = 7 total). Main loop `bus_->tick()` calls removed. All 186 tests pass.
+✅ **DONE** — Fat `consume_cycle()` implemented (bug #5 fixed). Each `consume_cycle()` now calls `bus_->tick_single_cpu_cycle()`, providing per-cycle CPU/PPU/APU interleaving. Interrupt handler cycle counts corrected (NMI/IRQ: 2 internal + 5 memory ops = 7 total; RESET: 5 internal/suppressed + 2 reads = 7 total). Main loop `bus_->tick()` calls removed. All 189 tests pass.
 OAM DMA halt implemented (bug #7 fixed). DMA moved from PPU-driven to CPU-driven: `execute_oam_dma()` burns 513 cycles (1 dummy + 256×(read+write)) via `consume_cycle()`, properly interleaving PPU/APU. CPU PC does not advance during DMA.
 MMC3 A12 IRQ fixed (bug #8 fixed). Replaced once-per-scanline clamp with A12 low-time filter (≥15 PPU dots). Monotonic `ppu_dot_counter_` tracks time since A12 was last high.
-**Remaining**: cycle-accurate interrupt polling (penultimate cycle), DMC cycle stealing (bug #11), remove frame 0 hack (bug #14).
+Penultimate-cycle interrupt polling implemented. `consume_cycle()` samples NMI/IRQ lines each cycle; `execute_instruction()` checks `prev_nmi_pending_`/`prev_irq_signal_` (the penultimate-cycle sample) at instruction boundaries. This correctly models CLI delay (IRQ not taken until instruction after CLI) and SEI window (one IRQ sneaks through after SEI). 3 new timing tests added.
+DMC DMA cycle stealing implemented (bug #11 fixed). APU signals `dmc_dma_pending_` when sample buffer empties; CPU’s `consume_cycle()` stalls ~4 cycles and performs the DMA read via `bus_->service_dmc_dma()` → `APU::complete_dmc_dma()`.
+Frame 0 hack removed (bug #14 fixed). PPU honours initial scroll/VRAM state from the first frame.
 
 ### Phase 5: Documentation and Test Coverage
 Update README.md to match reality. Add tests for APU, mappers, save states. Add mapper/APU test ROM infrastructure.
@@ -127,7 +129,7 @@ PPU: $0000-$1FFF pattern tables | $2000-$2FFF nametables | $3F00-$3F1F palette R
 - Exact cycle counts in assertions
 - Separate instruction and data addresses
 - If tests fail with "unknown opcode" — check memory address ranges first, not instruction logic
-- All 186 tests pass. Catch2 v3 via vcpkg with `catch_discover_tests()` for per-TEST_CASE CTest entries
+- All 189 tests pass. Catch2 v3 via vcpkg with `catch_discover_tests()` for per-TEST_CASE CTest entries
 
 ### Test Example
 ```cpp
@@ -197,9 +199,9 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 - No `c_cpp_properties.json` — CMake Tools provides IntelliSense via `compile_commands.json`.
 
 ## Current State (as of Feb 28, 2026)
-- **Phases 1-3 complete**. Debug and release builds green, **zero warnings**. MSYS2 fully removed from machine.
-- **Phase 4 in progress** — Fat `consume_cycle()` implemented: per-cycle CPU/PPU/APU interleaving is live. Interrupt handler cycle counts corrected (were double-counting). Main loop `bus_->tick()` eliminated. OAM DMA halt implemented: CPU-driven, 513 cycles via `consume_cycle()`. MMC3 A12 IRQ counter now uses proper low-time filter instead of once-per-scanline clamp.
-- **All 186 tests pass** (0 failures). Catch2 v3 via vcpkg with `catch_discover_tests()`. Previous 14 test failures fixed (interrupt handling, palette mirroring, fine_x scroll, pattern table ctrl bits, OAM DMA, timing, sprite overflow).
+- **Phases 1-4 complete**. Debug and release builds green, **zero warnings**. MSYS2 fully removed from machine.
+- **All 189 tests pass** (0 failures). Catch2 v3 via vcpkg with `catch_discover_tests()`. 3 new penultimate-cycle interrupt polling tests added.
+- **Phase 4 highlights**: Fat `consume_cycle()` with per-cycle CPU/PPU/APU interleaving. Penultimate-cycle interrupt polling (CLI delay, SEI window). DMC DMA cycle stealing (~4 CPU stall cycles per sample byte). OAM DMA halt (513 cycles). MMC3 A12 IRQ low-time filter. Frame 0 hack removed.
 - **Games tested**: Super Mario Bros. (NROM/Mapper 0) — background + all sprites render correctly. Crystalis (MMC1/Mapper 1) — boots and runs.
 - **Dependencies**: SDL2 + Catch2 via vcpkg. ImGui vendored (vcpkg port lacks sdl2-binding feature).
-- **Next step**: Continue Phase 4 — cycle-accurate interrupt polling, DMC cycle stealing (bug #11), remove frame 0 hack (bug #14).
+- **Next step**: Phase 5 — Documentation and test coverage. Fix remaining bug #10 (APU edge-triggered IRQ should be level-triggered).

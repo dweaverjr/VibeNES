@@ -421,6 +421,20 @@ void SystemBus::write_oam_direct(uint8_t offset, uint8_t value) {
 	}
 }
 
+bool SystemBus::is_dmc_dma_pending() const noexcept {
+	return apu_ && apu_->is_dmc_dma_pending();
+}
+
+void SystemBus::service_dmc_dma() {
+	if (!apu_ || !apu_->is_dmc_dma_pending()) {
+		return;
+	}
+	// Read the sample byte from the address the APU requested
+	uint16_t addr = apu_->get_dmc_dma_address();
+	uint8_t data = read(addr);
+	apu_->complete_dmc_dma(data);
+}
+
 // Audio control implementation
 bool SystemBus::initialize_audio(int sample_rate, int buffer_size) {
 	if (!audio_backend_) {
