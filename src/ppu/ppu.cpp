@@ -102,8 +102,9 @@ void PPU::power_on() {
 	ppu_data_bus_ = 0;
 	io_db_ = 0;
 	vram_address_corruption_pending_ = false;
-	last_a12_state_ = false;			// Initialize A12 tracking for MMC3
-	a12_clocked_this_scanline_ = false; // Initialize scanline clock flag
+	last_a12_state_ = false; // Initialize A12 tracking for MMC3
+	ppu_dot_counter_ = 0;
+	a12_last_high_dot_ = 0;
 
 	// Initialize sprite evaluation state
 	sprite_eval_state_ = SpriteEvalState::ReadY;
@@ -146,8 +147,9 @@ void PPU::reset() {
 	vram_wrap_latched_value_ = 0;
 	sprite_0_hit_detected_ = false;
 	sprite_0_hit_delay_ = 0;
-	last_a12_state_ = false;			// Reset A12 tracking for MMC3
-	a12_clocked_this_scanline_ = false; // Reset scanline clock flag
+	last_a12_state_ = false; // Reset A12 tracking for MMC3
+	ppu_dot_counter_ = 0;
+	a12_last_high_dot_ = 0;
 
 	// Memory state is preserved
 	memory_.reset();
@@ -224,6 +226,7 @@ void PPU::tick_internal() {
 
 	// Advance cycle counter
 	current_cycle_++;
+	ppu_dot_counter_++; // Monotonic counter for A12 low-time filter
 
 	// Handle VBlank timing AFTER cycle increment for correct timing
 	handle_vblank_timing();
@@ -241,8 +244,6 @@ void PPU::tick_internal() {
 
 		current_cycle_ = 0;
 		current_scanline_++;
-		a12_clocked_this_scanline_ = false; // Reset A12 clock flag for new scanline
-
 		// Check for end of frame
 		if (current_scanline_ >= PPUTiming::TOTAL_SCANLINES) {
 			current_scanline_ = 0;
@@ -1145,35 +1146,36 @@ uint8_t PPU::fetch_sprite_pattern_data_raw(uint8_t tile_index, uint8_t fine_y, b
 }
 
 void PPU::track_a12_line(uint16_t address) {
-	// MMC3 IRQ counter is triggered by A12 rising edges (0→1 transitions)
-	// A12 is the 13th bit (bit 12, zero-indexed) of the PPU address
-	// Pattern table 0: $0000-$0FFF (A12=0)
-	// Pattern table 1: $1000-$1FFF (A12=1)
-	// Nametables:      $2000-$2FFF (A12=0)
-	// NT Mirrors:      $3000-$3FFF (A12=1)
+	// MMC3 IRQ counter is clocked on rising edges of PPU address bus A12
+	// (bit 12) only when A12 has been low for at least ~15 PPU cycles.
+	// This "low-time filter" prevents spurious clocks from rapid A12
+	// transitions during consecutive pattern-table fetches.
+	//
+	// A12 states for different address ranges:
+	//   Pattern table 0 ($0000-$0FFF): A12 = 0
+	//   Pattern table 1 ($1000-$1FFF): A12 = 1
+	//   Nametables      ($2000-$2FFF): A12 = 0
+	//   NT mirrors      ($3000-$3FFF): A12 = 1
 
-	// CRITICAL: Only clock the MMC3 counter ONCE per scanline!
-	// The hardware counts scanlines, not individual pattern fetches
+	bool current_a12 = (address & 0x1000) != 0;
 
-	bool current_a12 = (address & 0x1000) != 0; // Test bit 12 specifically
-
-	// Always update last_a12_state for proper edge detection
-	bool edge_detected = current_a12 && !last_a12_state_;
-	last_a12_state_ = current_a12;
-
-	// Skip if we already clocked this scanline
-	if (a12_clocked_this_scanline_) {
-		return; // Already clocked this scanline, skip
-	}
-
-	// Detect rising edge (0→1 transition)
-	if (edge_detected) {
-		// Rising edge detected - notify cartridge/mapper
-		if (cartridge_ && cartridge_->is_loaded()) {
-			cartridge_->ppu_a12_toggle();
-			a12_clocked_this_scanline_ = true; // Mark as clocked for this scanline
+	if (current_a12) {
+		// A12 is high
+		if (!last_a12_state_) {
+			// Rising edge (0 → 1) detected.
+			// Only clock the counter if A12 was low long enough.
+			uint32_t low_duration = ppu_dot_counter_ - a12_last_high_dot_;
+			if (low_duration >= A12_FILTER_THRESHOLD) {
+				if (cartridge_ && cartridge_->is_loaded()) {
+					cartridge_->ppu_a12_toggle();
+				}
+			}
 		}
+		// Record the most recent dot when A12 was high
+		a12_last_high_dot_ = ppu_dot_counter_;
 	}
+
+	last_a12_state_ = current_a12;
 }
 
 bool PPU::check_sprite_0_hit(uint8_t bg_pixel, uint8_t sprite_pixel, uint8_t x_pos) {

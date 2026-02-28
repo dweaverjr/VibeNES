@@ -193,8 +193,12 @@ class PPU : public Component {
 	bool vram_address_corruption_pending_; // VRAM address corruption flag
 
 	// MMC3 A12 line tracking for IRQ counter
-	bool last_a12_state_;			 // Previous state of A12 line (for edge detection)
-	bool a12_clocked_this_scanline_; // Prevent multiple clocks per scanline
+	// Real hardware clocks the IRQ counter on a rising edge of A12 only
+	// when A12 has been low for at least ~15 PPU cycles (low-time filter).
+	bool last_a12_state_;								 // Previous state of A12 line (for edge detection)
+	uint32_t ppu_dot_counter_;							 // Monotonic PPU dot counter (wraps, used for deltas)
+	uint32_t a12_last_high_dot_;						 // ppu_dot_counter_ value when A12 was last high
+	static constexpr uint32_t A12_FILTER_THRESHOLD = 15; // PPU cycles A12 must be low
 
 	// Memory management
 	PPUMemory memory_;

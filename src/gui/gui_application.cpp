@@ -701,6 +701,16 @@ void GuiApplication::cleanup() {
 		window_ = nullptr;
 	}
 
+	// Release emulation components BEFORE SDL_Quit() so that their
+	// destructors (e.g. AudioBackend -> SDL_DestroyAudioStream) can
+	// still access the SDL subsystem safely.
+	cpu_.reset();
+	bus_.reset();
+	ppu_.reset();
+	cartridge_.reset();
+	controllers_.reset();
+	gamepad_manager_.reset();
+
 	SDL_Quit();
 }
 

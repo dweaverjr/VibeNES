@@ -176,18 +176,8 @@ void Mapper004::ppu_a12_toggle() {
 		return;
 	}
 
-	// MMC3 IRQ counter clocks on A12 rising edge (0→1 transition)
-	// The PPU's A12 line goes high when accessing pattern table 1 ($1000-$1FFF)
-	// and low when accessing pattern table 0 ($0000-$0FFF)
-
-	// During rendering, the PPU alternates between pattern tables:
-	// - Background tiles may use either table
-	// - Sprite tiles use the table specified by PPUCTRL bit 3
-	// This creates regular A12 transitions, typically once per scanline
-
-	// Simple implementation: clock the counter on each toggle
-	// A more accurate implementation would track A12 state and only clock on rising edges
-	// For now, we clock on every call which approximates scanline counting
+	// Called by PPU on A12 rising edge after the low-time filter has passed.
+	// Each call represents one validated scanline-counter clock.
 	clock_irq_counter();
 }
 
