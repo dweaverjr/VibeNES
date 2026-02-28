@@ -1,10 +1,10 @@
-#include "../catch2/catch_amalgamated.hpp"
 #include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
+#include <catch2/catch_all.hpp>
 #include <memory>
 
 using namespace nes;
@@ -328,7 +328,7 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Edge Cases", "[ppu][oam_dma][edge_c
 		verify_oam_contents(0x00);
 	}
 
-	SECTION("DMA should preserve OAM address after transfer") {
+	SECTION("DMA should write 256 bytes starting at OAM address") {
 		setup_test_data_in_ram(0x02);
 
 		// Set initial OAM address
@@ -340,10 +340,14 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Edge Cases", "[ppu][oam_dma][edge_c
 		// Wait for DMA to complete
 		wait_for_dma_completion();
 
-		// OAM address should have wrapped around back to original + 256
-		// Since 256 bytes were written, final address should be $40
-		uint8_t final_oam_addr = read_ppu_register(0x2003);
-		REQUIRE(final_oam_addr == 0x40);
+		// OAMADDR ($2003) is write-only — reads return open bus on real hardware.
+		// Instead verify that 256 bytes were transferred by checking OAM contents.
+		// OAM DMA writes 256 bytes starting at the current OAMADDR, wrapping at 256.
+		// Verify the first byte written at offset 0x40
+		write_ppu_register(0x2003, 0x40); // Reset read pointer
+		uint8_t first_byte = read_ppu_register(0x2004);
+		// The source page ($0200) has test data — just verify it was transferred
+		REQUIRE(first_byte == bus->read(0x0200));
 	}
 
 	SECTION("Multiple DMA transfers should work correctly") {

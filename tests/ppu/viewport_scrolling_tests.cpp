@@ -1,4 +1,4 @@
-#include <catch2/catch_amalgamated.hpp>
+#include <catch2/catch_all.hpp>
 
 #include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"

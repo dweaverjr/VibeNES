@@ -6,7 +6,7 @@
 #include "../../include/memory/ram.hpp"
 #include "../../include/ppu/ppu.hpp"
 #include "../../include/ppu/ppu_memory.hpp"
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include <memory>
 
 using namespace nes;

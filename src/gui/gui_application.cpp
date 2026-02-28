@@ -711,9 +711,12 @@ void GuiApplication::step_emulation() {
 	static int step_count = 0;
 	step_count++;
 
-	// Execute exactly one CPU instruction
-	// PPU/APU synchronization happens automatically inside consume_cycle()
-	(void)cpu_->execute_instruction();
+	// Execute exactly one CPU instruction and get the cycles it consumed
+	int cycles_consumed = cpu_->execute_instruction();
+
+	// Advance PPU and other components by the exact number of cycles the CPU used
+	// This maintains synchronization between CPU and PPU
+	bus_->tick(cpu_cycles(cycles_consumed));
 }
 
 void GuiApplication::step_frame() {
@@ -729,7 +732,7 @@ void GuiApplication::step_frame() {
 		int consumed = cpu_->execute_instruction();
 		if (consumed <= 0)
 			break;
-		// No bus_->tick() needed — synchronization happens inside consume_cycle()
+		bus_->tick(cpu_cycles(consumed));
 		executed += consumed;
 	}
 }
@@ -787,6 +790,7 @@ void GuiApplication::process_continuous_emulation(double delta_seconds) {
 						  << std::endl;
 				break;
 			}
+			bus_->tick(cpu_cycles(consumed));
 			executed_cycles += consumed;
 			instruction_count++;
 
@@ -831,6 +835,7 @@ void GuiApplication::process_continuous_emulation(double delta_seconds) {
 					  << std::endl;
 			break;
 		}
+		bus_->tick(cpu_cycles(consumed));
 		executed_cycles += consumed;
 		instruction_count++;
 

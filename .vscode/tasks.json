@@ -45,7 +45,7 @@
         {
             "label": "Run Tests",
             "type": "shell",
-            "command": "%VCVARS% && %CMAKE% --build --preset debug && %CMAKE% -E chdir build/debug ctest --output-on-failure",
+            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug && %CMAKE% -E chdir build/debug ctest --output-on-failure",
             "group": {
                 "kind": "test",
                 "isDefault": true
@@ -57,7 +57,49 @@
                 "reveal": "always",
                 "clear": true
             },
-            "detail": "Build + run all tests (debug)"
+            "detail": "Build + run all CTest suites (debug)"
+        },
+        {
+            "label": "Run Tests: CPU",
+            "type": "shell",
+            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug && %CMAKE% -E chdir build/debug ctest -R CPU --output-on-failure",
+            "group": "test",
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "clear": true
+            },
+            "detail": "Build + run CPU tests only"
+        },
+        {
+            "label": "Run Tests: PPU",
+            "type": "shell",
+            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug && %CMAKE% -E chdir build/debug ctest -R PPU --output-on-failure",
+            "group": "test",
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "clear": true
+            },
+            "detail": "Build + run PPU tests only"
+        },
+        {
+            "label": "Run Tests: by name...",
+            "type": "shell",
+            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug && .\\build\\debug\\VibeNES_Tests.exe \"${input:testFilter}\" --order rand",
+            "group": "test",
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "clear": true
+            },
+            "detail": "Build + run tests matching a Catch2 name/tag filter"
         },
         {
             "label": "Run VibeNES (Debug)",
@@ -89,6 +131,14 @@
                 "reveal": "always"
             },
             "detail": "Remove all build directories"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "testFilter",
+            "description": "Catch2 test name or tag filter (e.g. [ppu], [palette], \"Sprite 0*\")",
+            "type": "promptString",
+            "default": "[ppu]"
         }
     ]
 }

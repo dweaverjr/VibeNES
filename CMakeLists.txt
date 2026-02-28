@@ -125,6 +125,8 @@ add_custom_command(TARGET VibeNES_GUI POST_BUILD
 )
 
 # ─── Tests executable ────────────────────────────────────────────────────────
+find_package(Catch2 3 REQUIRED)
+
 file(GLOB_RECURSE TEST_SOURCES
     tests/core/*.cpp
     tests/cpu/*.cpp
@@ -134,13 +136,9 @@ file(GLOB_RECURSE TEST_SOURCES
 # Exclude unity-build files that #include other .cpp files
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_ppu_main\\.cpp$")
 
-add_executable(VibeNES_Tests
-    tests/test_main.cpp
-    tests/catch2/catch_amalgamated.cpp
-    ${TEST_SOURCES}
-)
+add_executable(VibeNES_Tests ${TEST_SOURCES})
 target_include_directories(VibeNES_Tests PRIVATE tests)
-target_link_libraries(VibeNES_Tests PRIVATE vibes_core)
+target_link_libraries(VibeNES_Tests PRIVATE vibes_core Catch2::Catch2WithMain)
 if(MSVC)
     target_compile_options(VibeNES_Tests PRIVATE
         /W3 /permissive- /Zc:__cplusplus
@@ -156,6 +154,8 @@ else()
     )
 endif()
 
-# Register with CTest
-enable_testing()
-add_test(NAME AllTests COMMAND VibeNES_Tests)
+# ─── CTest ────────────────────────────────────────────────────────────────────
+# catch_discover_tests registers each TEST_CASE as its own CTest entry.
+include(CTest)
+include(Catch)
+catch_discover_tests(VibeNES_Tests)

@@ -1,10 +1,10 @@
-#include "../catch2/catch_amalgamated.hpp"
 #include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
+#include <catch2/catch_all.hpp>
 #include <memory>
 
 using namespace nes;
@@ -213,15 +213,15 @@ TEST_CASE_METHOD(PatternTableTestFixture, "Background Pattern Table Selection", 
 	SECTION("PPUCTRL bit 4 should control background pattern table") {
 		enable_background();
 
-		// Test pattern table 0 selection
+		// PPUCTRL ($2000) is write-only — reads return open bus.
+		// Verify internal state via debug/peek instead.
 		set_background_pattern_table(false);
-		uint8_t ctrl = read_ppu_register(0x2000);
-		REQUIRE((ctrl & 0x10) == 0x00);
+		uint8_t ctrl0 = ppu->peek_register(0x2000);
+		REQUIRE((ctrl0 & 0x10) == 0x00);
 
-		// Test pattern table 1 selection
 		set_background_pattern_table(true);
-		ctrl = read_ppu_register(0x2000);
-		REQUIRE((ctrl & 0x10) == 0x10);
+		uint8_t ctrl1 = ppu->peek_register(0x2000);
+		REQUIRE((ctrl1 & 0x10) == 0x10);
 	}
 
 	SECTION("Background rendering should use correct pattern table") {
@@ -246,15 +246,15 @@ TEST_CASE_METHOD(PatternTableTestFixture, "Sprite Pattern Table Selection", "[pp
 	SECTION("PPUCTRL bit 3 should control sprite pattern table for 8x8 sprites") {
 		enable_sprites();
 
-		// Test pattern table 0 selection
+		// PPUCTRL ($2000) is write-only — reads return open bus.
+		// Verify internal state via debug/peek instead.
 		set_sprite_pattern_table(false);
-		uint8_t ctrl = read_ppu_register(0x2000);
-		REQUIRE((ctrl & 0x08) == 0x00);
+		uint8_t ctrl0 = ppu->peek_register(0x2000);
+		REQUIRE((ctrl0 & 0x08) == 0x00);
 
-		// Test pattern table 1 selection
 		set_sprite_pattern_table(true);
-		ctrl = read_ppu_register(0x2000);
-		REQUIRE((ctrl & 0x08) == 0x08);
+		uint8_t ctrl1 = ppu->peek_register(0x2000);
+		REQUIRE((ctrl1 & 0x08) == 0x08);
 	}
 
 	SECTION("8x8 sprites should use selected pattern table") {

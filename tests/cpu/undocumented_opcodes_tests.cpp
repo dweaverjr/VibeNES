@@ -5,7 +5,7 @@
 #include "../../include/core/bus.hpp"
 #include "../../include/cpu/cpu_6502.hpp"
 #include "../../include/memory/ram.hpp"
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include <memory>
 
 using namespace nes;

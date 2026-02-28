@@ -2,7 +2,7 @@
 // PPU Test Suite Main Entry Point
 // Comprehensive testing for PPU hardware accuracy
 
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 
 // Include all PPU test files
 #include "memory_mapping_tests.cpp"

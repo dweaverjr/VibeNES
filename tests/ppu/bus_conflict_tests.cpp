@@ -9,9 +9,9 @@
 #include "../../include/memory/ram.hpp"
 #include "../../include/ppu/ppu.hpp"
 #include "../../include/ppu/ppu_memory.hpp"
-#include "../catch2/catch_amalgamated.hpp"
 #include "ppu_trace_harness.hpp"
 #include "test_chr_data.hpp"
+#include <catch2/catch_all.hpp>
 #include <iomanip>
 #include <memory>
 #include <sstream>
@@ -197,28 +197,33 @@ TEST_CASE_METHOD(BusConflictTestFixture, "VBlank Flag Race Conditions", "[ppu][b
 	}
 
 	SECTION("VBlank clear race condition") {
-		// Set VBlank flag first
+		// Advance to VBlank (scanline 241, cycle 1 sets VBlank flag)
 		advance_to_scanline(241);
 		advance_to_cycle(1);
 
+		// Confirm VBlank is set (reading clears it, but we can verify it was set)
 		uint8_t status_set = read_ppu_register(0x2002);
 		REQUIRE((status_set & 0x80) != 0);
 
-		// Restore VBlank flag for test
+		// After the read above, VBlank is now cleared.
+		// Advance through the full frame back to scanline 241 cycle 1
+		// to get VBlank set again in the NEXT frame.
+		// (advance_to_scanline only goes forward, so this wraps through a frame)
+		advance_ppu_cycles(341 * 262); // Full frame
 		advance_to_scanline(241);
 		advance_to_cycle(1);
 
-		// Now test clearing race
+		// VBlank should be set again in this new frame
+		// Read directly from status register without clearing (peek)
+		uint8_t raw_status = ppu->get_status_register();
+		REQUIRE((raw_status & 0x80) != 0);
+
+		// Advance to pre-render scanline — VBlank flag should be cleared at dot 1
 		advance_to_scanline(261);
-		advance_to_cycle(0);
-
-		// Reading just before clear
-		uint8_t status_before_clear = read_ppu_register(0x2002);
-		REQUIRE((status_before_clear & 0x80) != 0);
-
-		// Flag should be cleared by hardware on next cycle
 		advance_to_cycle(1);
-		uint8_t status_after_clear = read_ppu_register(0x2002);
+
+		// After pre-render dot 1, VBlank should be cleared by hardware
+		uint8_t status_after_clear = ppu->get_status_register();
 		REQUIRE((status_after_clear & 0x80) == 0);
 	}
 }
@@ -418,10 +423,12 @@ TEST_CASE_METHOD(BusConflictTestFixture, "Sprite 0 Hit Edge Cases", "[ppu][bus_c
 		// Sprite 0 hit should be detected
 		REQUIRE((status & 0x40) != 0);
 
-		// Reading again should clear the flag
+		// NOTE: Sprite 0 hit is NOT cleared by reading PPUSTATUS.
+		// Only bit 7 (VBlank) is cleared on read.  Sprite 0 hit persists
+		// until dot 1 of the pre-render scanline.
 		uint8_t status2 = read_ppu_register(0x2002);
 		INFO(std::string("Second PPUSTATUS read value: ") + format_byte(status2));
-		REQUIRE((status2 & 0x40) == 0);
+		REQUIRE((status2 & 0x40) != 0); // Still set
 	}
 
 	SECTION("Sprite 0 hit with rendering disabled") {

@@ -25,9 +25,15 @@ out/
 # vcpkg (cloned locally, not committed)
 vcpkg/
 
+# CMake user-local presets (CMakePresets.json IS committed)
+CMakeUserPresets.json
+
 # VS Code caches
 .vscode/ipch/
 .cache/
+
+# Visual Studio (if opened with full VS instead of VS Code)
+.vs/
 
 # IDE files we don't need in repo
 imgui.ini

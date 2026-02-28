@@ -3,6 +3,7 @@
     "version-string": "0.1.0",
     "description": "Cycle-accurate NES emulator",
     "dependencies": [
-        "sdl2"
+        "sdl2",
+        "catch2"
     ]
 }

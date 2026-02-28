@@ -2,7 +2,7 @@
 #include "../../include/cpu/cpu_6502.hpp"
 #include "../../include/cpu/interrupts.hpp"
 #include "../../include/memory/ram.hpp"
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include <memory>
 
 using namespace nes;
@@ -257,7 +257,14 @@ TEST_CASE("IRQ interrupt handling", "[cpu][interrupts]") {
 		REQUIRE((pushed_status & 0x02) != 0); // Zero flag preserved
 		REQUIRE((pushed_status & 0x80) != 0); // Negative flag preserved
 
-		// Verify IRQ is no longer pending
+		// IRQ is level-triggered: the pending flag stays asserted until the
+		// source is acknowledged (e.g. reading $4015).  After processing,
+		// the I flag is set so the CPU won't re-enter the ISR, but the
+		// line itself remains asserted.
+		REQUIRE(cpu.has_pending_interrupt());
+
+		// Explicitly acknowledge to clear the pending state
+		cpu.clear_irq_line();
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
 	}
 
@@ -270,7 +277,7 @@ TEST_CASE("IRQ interrupt handling", "[cpu][interrupts]") {
 
 		// Put a NOP instruction and try to execute
 		cpu.set_program_counter(0x1000);
-		bus->write(0x1000, 0xEA);  // NOP
+		bus->write(0x1000, 0xEA);		 // NOP
 		(void)cpu.execute_instruction(); // Should execute NOP, not IRQ
 
 		// Should have executed NOP (PC incremented)
@@ -286,17 +293,19 @@ TEST_CASE("IRQ interrupt handling", "[cpu][interrupts]") {
 
 		// Put a NOP instruction
 		cpu.set_program_counter(0x1000);
-		bus->write(0x1000, 0xEA);  // NOP
+		bus->write(0x1000, 0xEA);		 // NOP
 		(void)cpu.execute_instruction(); // Should execute NOP since IRQ is masked
 
 		REQUIRE(cpu.has_pending_interrupt());
 		REQUIRE(cpu.get_program_counter() == 0x1001); // NOP executed
 
-		cpu.set_interrupt_flag(false); // Enable interrupts
-		(void)cpu.execute_instruction();	   // Should now process IRQ
+		cpu.set_interrupt_flag(false);	 // Enable interrupts
+		(void)cpu.execute_instruction(); // Should now process IRQ
 
-		REQUIRE_FALSE(cpu.has_pending_interrupt());
+		// IRQ was processed (PC at handler), but line is still asserted (level-triggered)
 		REQUIRE(cpu.get_program_counter() == 0x8200);
+		cpu.clear_irq_line();
+		REQUIRE_FALSE(cpu.has_pending_interrupt());
 	}
 }
 
@@ -406,24 +415,40 @@ TEST_CASE("Interrupt priority and precedence", "[cpu][interrupts]") {
 		cpu.set_stack_pointer(0xFF);
 		cpu.set_interrupt_flag(false);
 
+		// CLI at the NMI handler so the I flag is cleared before the next
+		// execute_instruction() call, allowing the pending IRQ to fire.
+		bus->write(0x8000, 0x58); // CLI at NMI handler
+
 		// Queue multiple interrupts
 		cpu.trigger_irq();
 		cpu.trigger_nmi();
 		cpu.trigger_reset();
 
-		// Process reset first
+		// execute_instruction() checks pending interrupts BEFORE fetching
+		// the instruction at the current PC.  Interrupts are processed in
+		// priority order: RESET > NMI > IRQ.
+
+		// 1) Process RESET (highest priority)
 		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x8100);
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::NMI);
 
-		// Process NMI second
+		// 2) NMI fires immediately (before the instruction at $8100 runs)
 		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x8000);
 		REQUIRE(cpu.get_pending_interrupt() == InterruptType::IRQ);
 
-		// Process IRQ last
+		// 3) IRQ is masked (I=1 after NMI), so CPU executes CLI at $8000
+		(void)cpu.execute_instruction(); // CLI → I=0, PC=$8001
+		REQUIRE(cpu.get_program_counter() == 0x8001);
+		REQUIRE_FALSE(cpu.get_interrupt_flag()); // I cleared by CLI
+
+		// 4) Now IRQ fires (I=0)
 		(void)cpu.execute_instruction();
 		REQUIRE(cpu.get_program_counter() == 0x8200);
+
+		// Acknowledge IRQ (level-triggered — stays pending until source clears)
+		cpu.clear_irq_line();
 		REQUIRE_FALSE(cpu.has_pending_interrupt());
 	}
 }

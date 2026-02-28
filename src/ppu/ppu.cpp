@@ -421,14 +421,16 @@ void PPU::process_visible_scanline() {
 				load_shift_registers();
 			}
 		}
-	}
 
-	// HBLANK period: VRAM address updates and tile fetching for next scanline
-	else if (current_cycle_ >= 256 && current_cycle_ < 341 && is_rendering_enabled()) {
-		// At cycle 256: Increment fine Y (move to next row)
+		// At cycle 256: Increment fine Y (move to next tile row)
+		// NES hardware renders the last pixel AND increments fine Y on the same dot
 		if (current_cycle_ == 256) {
 			increment_fine_y();
 		}
+	}
+
+	// HBLANK period: VRAM address updates and tile fetching for next scanline
+	else if (current_cycle_ >= 257 && current_cycle_ < 341 && is_rendering_enabled()) {
 
 		// At cycle 257: Copy horizontal scroll from temp to current
 		if (current_cycle_ == 257) {
@@ -559,13 +561,12 @@ void PPU::process_pre_render_scanline() {
 		// This happens after sprite preparation (cycles 257-320) completes
 		// CRITICAL: Clear shift registers to prevent garbage artifacts
 		if (current_cycle_ == 320) {
-			clear_shift_registers(); // CRITICAL FIX: On the very first frame (frame 0), ensure fine Y is 0
-			// Games don't expect scroll offset on the initial frame before any writes to PPUSCROLL
-			// This fixes the 1-2 pixel vertical offset on the leftmost tiles at power-on
-			if (frame_counter_ == 0) {
-				vram_address_ &= ~0x7000; // Clear fine Y bits (12-14)
-				fine_x_scroll_ = 0;		  // Clear fine X scroll to fix horizontal alignment
-			}
+			clear_shift_registers();
+			// Bug #14 frame 0 hack removed — the PPU should honour whatever
+			// scroll/VRAM state software has configured, even on the very
+			// first frame.  The previous workaround zeroed fine_x/fine_y
+			// here, which broke tests and any game that sets scroll before
+			// the first rendered frame.
 		}
 		// Continue fetching during HBLANK (cycles 320-337) to prepare first two tiles
 		// These tiles will be in the shift registers ready for scanline 0

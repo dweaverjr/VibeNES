@@ -9,7 +9,7 @@
 #include "../../include/memory/ram.hpp"
 #include "../../include/ppu/ppu.hpp"
 #include "../../include/ppu/ppu_memory.hpp"
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include <memory>
 
 using namespace nes;
@@ -483,8 +483,11 @@ TEST_CASE_METHOD(HardwareQuirksTestFixture, "Undocumented Register Behavior", "[
 		uint8_t status1 = read_ppu_register(0x2002);
 		REQUIRE((status1 & 0x20) != 0); // Overflow set
 
+		// NOTE: Sprite overflow is NOT cleared by reading PPUSTATUS.
+		// Only bit 7 (VBlank) is cleared on read.  Overflow persists
+		// until dot 1 of the pre-render scanline.
 		uint8_t status2 = read_ppu_register(0x2002);
-		REQUIRE((status2 & 0x20) == 0); // Cleared by read
+		REQUIRE((status2 & 0x20) != 0); // Still set
 	}
 
 	SECTION("OAMDATA read during rendering") {

@@ -1,7 +1,7 @@
 // Test file to reproduce Super Mario Bros horizontal scrolling bug
 // This simulates the actual scrolling behavior seen in the game
 
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"

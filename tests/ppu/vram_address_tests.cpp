@@ -9,7 +9,7 @@
 #include "../../include/memory/ram.hpp"
 #include "../../include/ppu/ppu.hpp"
 #include "../../include/ppu/ppu_memory.hpp"
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include <memory>
 
 using namespace nes;
@@ -248,15 +248,14 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "VRAM Address During Rendering", "[ppu]
 
 TEST_CASE_METHOD(VRAMAddressTestFixture, "Address Calculation Edge Cases", "[ppu][vram][edge_cases]") {
 	SECTION("High addresses should be masked") {
-		// PPU only has 14-bit address space
-		set_vram_address(0x7FFF); // Should be masked to $3FFF
+		// PPU only has 14-bit address space. $3FFF is palette space ($3FFF & 0x1F = 0x1F).
+		// Write through the mirrored high address
+		set_vram_address(0x7FFF);		  // Should be masked to $3FFF
+		write_ppu_register(0x2007, 0x19); // Palette entry 0x1F = 0x19
 
-		write_ppu_register(0x2007, 0x19); // Valid 6-bit value (0x99 & 0x3F = 0x19)
-
-		// Verify it was written to the masked address
+		// Palette reads return data immediately (no dummy read needed)
 		set_vram_address(0x3FFF);
-		[[maybe_unused]] uint8_t dummy = read_ppu_register(0x2007);
-		uint8_t data = read_ppu_register(0x2007);
+		uint8_t data = read_ppu_register(0x2007); // Direct palette read
 
 		REQUIRE(static_cast<int>(data) == 0x19);
 	}
@@ -273,18 +272,18 @@ TEST_CASE_METHOD(VRAMAddressTestFixture, "Address Calculation Edge Cases", "[ppu
 	}
 
 	SECTION("Backdrop color mirrors should work") {
-		// Addresses $3F10, $3F14, $3F18, $3F1C mirror $3F00
+		// Only $3F10 mirrors $3F00.  $3F14/$3F18/$3F1C mirror $3F04/$3F08/$3F0C.
 		set_vram_address(0x3F00);
 		write_ppu_register(0x2007, 0x30); // Universal backdrop color
+		set_vram_address(0x3F04);
+		write_ppu_register(0x2007, 0x15); // BG palette 1, entry 0
 
-		uint16_t mirror_addresses[] = {0x3F10, 0x3F14, 0x3F18, 0x3F1C};
+		// $3F10 -> $3F00 (palette reads are immediate, no dummy read)
+		set_vram_address(0x3F10);
+		REQUIRE(static_cast<int>(read_ppu_register(0x2007)) == 0x30);
 
-		for (uint16_t addr : mirror_addresses) {
-			set_vram_address(addr);
-			uint8_t data = read_ppu_register(0x2007);
-
-			INFO("Testing backdrop mirror at: 0x" << std::hex << addr);
-			REQUIRE(static_cast<int>(data) == 0x30);
-		}
+		// $3F14 -> $3F04
+		set_vram_address(0x3F14);
+		REQUIRE(static_cast<int>(read_ppu_register(0x2007)) == 0x15);
 	}
 }

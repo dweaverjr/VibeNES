@@ -3,7 +3,7 @@
 // Tests for type system, timing types, and utility functions
 
 #include "../../include/core/types.hpp"
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include <limits>
 
 using namespace nes;

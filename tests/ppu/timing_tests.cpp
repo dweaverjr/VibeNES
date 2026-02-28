@@ -8,7 +8,7 @@
 #include "../../include/cpu/cpu_6502.hpp"
 #include "../../include/memory/ram.hpp"
 #include "../../include/ppu/ppu.hpp"
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include <iostream>
 #include <memory>
 
@@ -313,8 +313,10 @@ TEST_CASE_METHOD(TimingTestFixture, "Rendering Cycles", "[ppu][timing][rendering
 }
 
 TEST_CASE_METHOD(TimingTestFixture, "Memory Access Timing", "[ppu][timing][memory]") {
-	SECTION("VRAM reads should take 1 cycle") {
-		// Set VRAM address
+	SECTION("VRAM reads should not advance PPU cycle counter") {
+		// PPU register reads happen on the CPU bus; the PPU cycle counter
+		// only advances when the PPU is ticked. Register access does NOT
+		// consume PPU dots.
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
@@ -322,11 +324,10 @@ TEST_CASE_METHOD(TimingTestFixture, "Memory Access Timing", "[ppu][timing][memor
 		[[maybe_unused]] uint8_t data = read_ppu_register(0x2007);
 		int end_cycle = ppu->get_current_cycle();
 
-		// VRAM read should take exactly 1 PPU cycle
-		REQUIRE(end_cycle - start_cycle == 1);
+		REQUIRE(end_cycle - start_cycle == 0);
 	}
 
-	SECTION("VRAM writes should take 1 cycle") {
+	SECTION("VRAM writes should not advance PPU cycle counter") {
 		write_ppu_register(0x2006, 0x20);
 		write_ppu_register(0x2006, 0x00);
 
@@ -334,7 +335,7 @@ TEST_CASE_METHOD(TimingTestFixture, "Memory Access Timing", "[ppu][timing][memor
 		write_ppu_register(0x2007, 0x42);
 		int end_cycle = ppu->get_current_cycle();
 
-		REQUIRE(end_cycle - start_cycle == 1);
+		REQUIRE(end_cycle - start_cycle == 0);
 	}
 
 	SECTION("VRAM access during rendering should be restricted") {

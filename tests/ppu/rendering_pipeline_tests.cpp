@@ -6,7 +6,7 @@
 #include "../../include/ppu/nes_palette.hpp"
 #include "../../include/ppu/ppu.hpp"
 #include "../../include/ppu/ppu_memory.hpp"
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include "test_chr_data.hpp"
 #include <memory>
 

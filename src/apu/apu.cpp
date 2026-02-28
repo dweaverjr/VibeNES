@@ -199,16 +199,19 @@ void APU::clock_half_frame() {
 
 void APU::update_irq_line() {
 	if (cpu_) {
-		// NES APU IRQ is level-triggered: the IRQ line stays asserted
-		// as long as any IRQ flag is set, and deasserts when all flags
-		// are cleared (e.g., by reading $4015 or writing $4017).
+		// Determine current IRQ line state
 		bool current_irq_line = (frame_irq_flag_ || dmc_irq_flag_);
 
-		if (current_irq_line) {
+		// Edge detection: only trigger on rising edge (0 -> 1 transition)
+		if (current_irq_line && !prev_irq_line_state_) {
 			cpu_->trigger_irq();
-		} else {
+		}
+		// Falling edge: clear IRQ line when both flags are clear
+		else if (!current_irq_line && prev_irq_line_state_) {
 			cpu_->clear_irq_line();
 		}
+
+		prev_irq_line_state_ = current_irq_line;
 	}
 }
 

@@ -1,4 +1,4 @@
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include "ppu_trace_harness.hpp"
 #include <sstream>
 

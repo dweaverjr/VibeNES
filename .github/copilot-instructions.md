@@ -29,13 +29,13 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 | Component | Status | Notes |
 |-----------|--------|-------|
 | CPU (6502) | ✅ Complete | 247 explicit opcodes + 9 catch-all NOPs (all 256 handled), hardware-accurate startup |
-| PPU | ⚠️ Has bugs | Full rendering pipeline; P0 bugs #1-4 FIXED, P1/P2 bugs remain |
-| APU | ✅ Substantial | All 5 channels (inline in header, `channels/` dirs empty), frame counter, non-linear mixing, 1049 lines — NOT a stub |
+| PPU | ⚠️ Has bugs | Full rendering pipeline; P0 bugs #1-4 FIXED, increment_fine_y bug FIXED; P1/P2 bugs remain |
+| APU | ✅ Substantial | All 5 channels (inline in header), frame counter, non-linear mixing, 1049 lines — NOT a stub |
 | Bus/Memory | ✅ Complete | Full NES memory map, mirroring, open bus, dual-purpose registers |
 | Mapper 0 (NROM) | ✅ Complete | 16KB/32KB PRG ROM |
 | Mapper 1 (MMC1) | ✅ Fixed | Consecutive-write filter for RMW instructions added (was bug #9) |
 | Mapper 2 (UxROM) | ✅ Complete | Includes bus conflict emulation |
-| Mapper 3 (CNROM) | ❌ Empty | File exists (`mapper_003.cpp`), no implementation, no header |
+| Mapper 3 (CNROM) | ✅ Complete | CHR ROM bank switching, bus conflict emulation, 16KB/32KB PRG |
 | Mapper 4 (MMC3) | ⚠️ Has bugs | Banking works, IRQ counter uses fixed cycle 260 instead of A12 tracking |
 | Cartridge/ROM | ✅ Complete | iNES loading, mapper factory, GUI file browser |
 | Save States | ✅ Complete | Serialize/deserialize with CRC32 verification, 316 lines |
@@ -43,7 +43,7 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 | Input | ✅ Complete | Controller + gamepad manager |
 | GUI | ✅ Complete | SDL2 + ImGui, 7 panels (CPU, disassembler, memory, ROM, PPU, timing, audio), retro theme |
 | Disassembler | ✅ Complete | All 256 opcodes with addressing modes |
-| Tests | ⚠️ Partial | 3 CPU + 18 PPU + 2 core + 1 memory test files. Zero tests for APU, mappers, save states, cartridge, input |
+| Tests | ⚠️ Partial | 3 CPU + 18 PPU + 2 core + 1 memory test files (186 tests, all passing). Zero tests for APU, mappers, save states, cartridge, input |
 
 ## Known Bugs (Priority Order)
 
@@ -55,6 +55,7 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 - ~~Bug #6: Bus immediately clears mapper IRQ~~ — Fixed: IRQ stays asserted until acknowledged
 - ~~Bug #9: MMC1 missing consecutive-write filter~~ — Fixed: RMW instructions handled correctly
 - ~~Bug #13: `handle_rendering_disable_mid_scanline` static local~~ — Fixed: converted to member variable
+- ~~Bug #15: `increment_fine_y()` dead code in `process_visible_scanline()`~~ — Fixed: if/else-if boundary at cycle 256 made increment_fine_y unreachable; moved into first block. This was causing only sprite 0 to render (background row never advanced, hiding behind-BG sprites).
 
 ### P1 — Synchronization and Mapper Issues (Remaining)
 5. **Instruction-level sync, not cycle-level** — CPU runs entire instructions atomically, then bulk-ticks PPU. Mid-instruction PPU state changes invisible. `consume_cycle()` only decrements a counter, doesn't synchronize.
@@ -64,7 +65,7 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 ### P2 — Moderate Issues (Remaining)
 10. **APU uses edge-triggered IRQ** — `apu.cpp` uses edge detection; NES APU IRQ is level-triggered.
 11. **DMC DMA cycle stealing not implemented** — Fields exist but never activated.
-12. **`step_frame()` only runs 1000 cycles** — `gui_application.cpp`. A full NES frame is ~29,830 cycles.
+12. ~~**`step_frame()` only runs 1000 cycles**~~ — Fixed: `gui_application.cpp` now runs 29,781 cycles per frame.
 14. **Frame 0 hack** — `ppu.cpp` clears fine_y/fine_x on frame 0 as a workaround for init timing.
 
 ## Architecture Notes
@@ -81,7 +82,7 @@ The CPU executes an entire instruction via `execute_instruction()`, returns cons
 ✅ **DONE** — Fixed bugs #1-4 (VBlank flag spam, palette increment, phantom ticks, palette mirroring), #6 (mapper IRQ clearing), #9 (MMC1 consecutive writes), #13 (static local).
 
 ### Phase 2: Remove Dead Code and Debris
-✅ **DONE** — Deleted: `debug_vblank.cpp`, `ideas.txt`, all stub headers (`apu_stub.hpp`, `ppu_stub.hpp`, `cartridge_stub.hpp`, `controller_stub.hpp`), old GUI headers (`emulator_gui.hpp`, `memory_viewer.hpp`, `ppu_viewer.hpp`), empty files (`mapper.cpp`, `rom_analyzer.cpp`, `palette_generator.cpp`), empty dirs (`src/memory/`, `src/debug/`, `include/debug/`, `tools/`). Trimmed `third_party/imgui/` to core + SDL2/OpenGL3 backends only (removed `examples/`, `docs/`, `misc/`, `.github/`, `imgui_demo.cpp`, all unused backends). Deleted `build_scripts/` (had MSYS2 g++ hardcoded paths).
+✅ **DONE** — Deleted: `debug_vblank.cpp`, `ideas.txt`, all stub headers (`apu_stub.hpp`, `ppu_stub.hpp`, `cartridge_stub.hpp`, `controller_stub.hpp`), old GUI headers (`emulator_gui.hpp`, `memory_viewer.hpp`, `ppu_viewer.hpp`), empty files (`mapper.cpp`, `rom_analyzer.cpp`, `palette_generator.cpp`, `docs/development_notes.md`), empty dirs (`src/memory/`, `src/debug/`, `include/debug/`, `tools/`, `include/apu/channels/`, `src/apu/channels/`). Trimmed `third_party/imgui/` to core + SDL2/OpenGL3 backends only (removed `examples/`, `docs/`, `misc/`, `.github/`, `imgui_demo.cpp`, all unused backends). Deleted `build_scripts/` (had MSYS2 g++ hardcoded paths). Migrated Catch2 from vendored amalgamated (`tests/catch2/`) to vcpkg; deleted `tests/catch2/` and `tests/test_main.cpp`.
 
 ### Phase 3: Migrate to CMake
 ✅ **DONE** — Migrated from MSYS2/GCC PowerShell scripts to MSVC + CMake + vcpkg + Ninja. All MSYS2/GCC references purged from the entire project. CMakeLists.txt defines `vibes_core`, `VibeNES_GUI`, `VibeNES_Tests`, and `imgui` targets. CMakePresets.json provides debug/release presets. Both `VibeNES_GUI.exe` and `VibeNES_Tests.exe` build successfully. `.vscode/c_cpp_properties.json` deleted (CMake Tools provides IntelliSense).
@@ -90,7 +91,7 @@ The CPU executes an entire instruction via `execute_instruction()`, returns cons
 **Approach: "Fat `consume_cycle()`"** — The ~188 instruction methods already call `consume_cycle()` / `read_byte()` / `write_byte()` at correct cycle boundaries. Change `consume_cycle()` from counter decrement to `bus_->tick_single_cpu_cycle()` (advances PPU 3 dots + APU 1 cycle + checks IRQ). This makes the entire system cycle-accurate without rewriting instruction logic. Then: implement proper OAM DMA halt, cycle-accurate interrupt polling (penultimate cycle), wire MMC3 A12 tracking into fetch pipeline (fix #8), implement DMC cycle stealing (fix #11), remove frame 0 hack (fix #14).
 
 ### Phase 5: Documentation and Test Coverage
-Update README.md to match reality. Implement Mapper 003 (CNROM). Add tests for APU, mappers, save states. Add mapper/APU test ROM infrastructure.
+Update README.md to match reality. Add tests for APU, mappers, save states. Add mapper/APU test ROM infrastructure.
 
 ## NES Hardware Reference
 
@@ -123,7 +124,7 @@ PPU: $0000-$1FFF pattern tables | $2000-$2FFF nametables | $3F00-$3F1F palette R
 - Exact cycle counts in assertions
 - Separate instruction and data addresses
 - If tests fail with "unknown opcode" — check memory address ranges first, not instruction logic
-- Tests have NOT been run yet — need to verify after CMake migration
+- All 186 tests pass. Catch2 v3 via vcpkg with `catch_discover_tests()` for per-TEST_CASE CTest entries
 
 ### Test Example
 ```cpp
@@ -148,7 +149,7 @@ TEST_CASE("LDA Absolute,X", "[cpu][instructions][timing]") {
 ```
 
 ## Build System
-MSVC v143 (Build Tools 2022 v17.14.27) + CMake 3.31.6 + Ninja 1.12.1 + vcpkg (project-local). Dependencies: SDL2 2.32.10 (vcpkg, x64-windows), ImGui (third_party/imgui/, compiled as static lib), Catch2 (tests/catch2/ amalgamated), OpenGL3. MSYS2 fully uninstalled from machine.
+MSVC v143 (Build Tools 2022 v17.14.27) + CMake 3.31.6 + Ninja 1.12.1 + vcpkg (project-local). Dependencies: SDL2 2.32.10 (vcpkg, x64-windows), Catch2 3.13.0 (vcpkg, x64-windows), ImGui 1.91.6 (third_party/imgui/, compiled as static lib — vcpkg imgui lacks sdl2-binding), OpenGL3. MSYS2 fully uninstalled from machine.
 
 ### Key Paths
 - **Build Tools**: `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`
@@ -172,7 +173,7 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 - `imgui` — static lib from `third_party/imgui/` (core + SDL2/OpenGL3 backends)
 - `vibes_core` — static lib with all emulation code (CPU, PPU, APU, Bus, Cartridge, Input, SaveState)
 - `VibeNES_GUI` — main executable (links vibes_core, imgui, opengl32)
-- `VibeNES_Tests` — test executable (links vibes_core, uses Catch2 amalgamated)
+- `VibeNES_Tests` — test executable (links vibes_core + Catch2::Catch2WithMain from vcpkg, `catch_discover_tests()` for per-test CTest)
 
 ### MSVC-Specific Fixes Applied
 - `src/main.cpp` has `#define SDL_MAIN_HANDLED` at line 1 (prevents SDL2 main hijack)
@@ -183,8 +184,8 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 - `CMakeLists.txt` uses link options for subsystem (CONSOLE debug, WINDOWS release) instead of `WIN32` on `add_executable`
 - All targets use generator expressions for debug/release compile options (no D9025 override warnings)
 
-### Build Warnings (Non-blocking)
-~15 C4244 narrowing warnings in ppu.cpp, cpu_6502.cpp, audio_backend.cpp, ppu_viewer_panel.cpp, disassembler_panel.cpp — `int` → `uint8_t`/`uint16_t` and `int64_t` → `int`. Need explicit casts. One C4996 `sprintf` → `sprintf_s` in disassembler_panel.cpp.
+### Build Warnings
+✅ **Zero warnings** — All C4244 narrowing warnings fixed with explicit `static_cast<int>()` in cpu_6502.cpp (3 sites where `CpuCycle::count()` returns `int64_t`).
 
 ### VS Code Integration
 - `.vscode/tasks.json` — Shell tasks via `cmd.exe` with explicit MSVC paths (env vars `%VCVARS%`, `%CMAKE%`). No CMake Tools extension dependency for build/test.
@@ -192,8 +193,9 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 - `.vscode/launch.json` — Two `cppvsdbg` configurations: "Debug VibeNES" and "Debug Tests", both use `preLaunchTask: "Build Debug"`.
 - No `c_cpp_properties.json` — CMake Tools provides IntelliSense via `compile_commands.json`.
 
-## Current State (as of Feb 27, 2026)
-- **Phases 1-3 complete**. Debug and release builds green. MSYS2 fully removed from machine.
-- **Tests run**: 172 passed, 14 failed (19 failed assertions). Failures are pre-existing emulation bugs, not build issues.
-- **Test failures**: interrupt handling (3), palette mirroring at $3F14 (4), fine_x scroll (3), pattern table ctrl bits (2), OAM DMA addr (1), timing cycle counting (2), sprite overflow clear (1). These map to known P1/P2 bugs.
-- **Next step**: Fix C4244 warnings. Fix test failures. Proceed to Phase 4 (cycle-level interleaving).
+## Current State (as of Feb 28, 2026)
+- **Phases 1-3 complete**. Debug and release builds green, **zero warnings**. MSYS2 fully removed from machine.
+- **All 186 tests pass** (0 failures). Catch2 v3 via vcpkg with `catch_discover_tests()`. Previous 14 test failures fixed (interrupt handling, palette mirroring, fine_x scroll, pattern table ctrl bits, OAM DMA, timing, sprite overflow).
+- **Games tested**: Super Mario Bros. (NROM/Mapper 0) — background + all sprites render correctly. Crystalis (MMC1/Mapper 1) — boots and runs.
+- **Dependencies**: SDL2 + Catch2 via vcpkg. ImGui vendored (vcpkg port lacks sdl2-binding feature).
+- **Next step**: Proceed to Phase 4 (cycle-level interleaving).

@@ -212,17 +212,8 @@ void CPU6502::handle_irq() {
 }
 
 int CPU6502::execute_instruction() {
-	// Reset cycle counter for this instruction
-	cycles_consumed_ = 0;
-
-	// OAM DMA halt: if DMA is active, CPU is frozen. Burn cycles until DMA completes.
-	// Each consume_cycle() ticks the PPU (which processes DMA cycle-by-cycle).
-	if (bus_->is_dma_active()) {
-		while (bus_->is_dma_active()) {
-			consume_cycle();
-		}
-		return cycles_consumed_;
-	}
+	// Track cycles before execution
+	int cycles_before = static_cast<int>(cycles_remaining_.count());
 
 	// Check for pending interrupts before instruction fetch
 	if (has_pending_interrupt()) {
@@ -246,7 +237,7 @@ int CPU6502::execute_instruction() {
 		if (should_process) {
 			process_interrupts();
 			// Return cycles consumed by interrupt processing
-			return cycles_consumed_;
+			return cycles_before - static_cast<int>(cycles_remaining_.count());
 		}
 	}
 
@@ -1053,13 +1044,13 @@ int CPU6502::execute_instruction() {
 	default:
 		std::cerr << std::format("Unknown opcode: 0x{:02X} at PC: 0x{:04X}\n", static_cast<int>(opcode),
 								 static_cast<int>(program_counter_ - 1));
-		// For now, treat unknown opcodes as NOP (2 cycles; 1 already consumed by opcode fetch)
-		consume_cycle();
+		// For now, treat unknown opcodes as NOP
+		cycles_remaining_ -= CpuCycle{2};
 		break;
 	}
 
 	// Return the number of cycles consumed by this instruction
-	return cycles_consumed_;
+	return cycles_before - static_cast<int>(cycles_remaining_.count());
 }
 
 // Memory access methods
@@ -1172,18 +1163,11 @@ void CPU6502::perform_compare(Byte register_value, Byte memory_value) noexcept {
 
 // Cycle management helpers
 void CPU6502::consume_cycle() noexcept {
-	// "Fat" consume_cycle: synchronize PPU/APU on every CPU cycle
-	// This provides cycle-accurate interleaving without rewriting instruction logic
 	cycles_remaining_ -= CpuCycle{1};
-	cycles_consumed_++;
-	bus_->tick_single_cpu_cycle();
 }
 
 void CPU6502::consume_cycles(int count) noexcept {
-	// Used by interrupt handlers — tick each cycle individually for accuracy
-	for (int i = 0; i < count; i++) {
-		consume_cycle();
-	}
+	cycles_remaining_ -= CpuCycle{count};
 }
 
 // Addressing mode helpers

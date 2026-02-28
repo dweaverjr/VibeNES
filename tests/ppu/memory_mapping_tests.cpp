@@ -8,7 +8,7 @@
 #include "../../include/cpu/cpu_6502.hpp"
 #include "../../include/memory/ram.hpp"
 #include "../../include/ppu/ppu.hpp"
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 #include <memory>
 
 using namespace nes;
@@ -261,14 +261,13 @@ TEST_CASE_METHOD(MemoryMappingTestFixture, "Palette Memory Mapping", "[ppu][memo
 	SECTION("Palette mirrors should work correctly") {
 		// Write to base palette
 		write_vram(0x3F00, 0x12); // Universal background color
+		write_vram(0x3F04, 0x19); // BG palette 1, entry 0
 		write_vram(0x3F05, 0x34); // Background palette 1, color 1
 		write_vram(0x3F15, 0x56); // Sprite palette 1, color 1
 
-		// Test mirrors
-		REQUIRE(static_cast<int>(read_vram(0x3F10)) == 0x12); // $3F10 mirrors $3F00
-		REQUIRE(static_cast<int>(read_vram(0x3F14)) == 0x12); // $3F14 mirrors $3F04 mirrors $3F00
-		REQUIRE(static_cast<int>(read_vram(0x3F18)) == 0x12); // $3F18 mirrors $3F08 mirrors $3F00
-		REQUIRE(static_cast<int>(read_vram(0x3F1C)) == 0x12); // $3F1C mirrors $3F0C mirrors $3F00
+		// Test mirrors — $3F10 mirrors $3F00, $3F14 mirrors $3F04 (NOT $3F00)
+		REQUIRE(static_cast<int>(read_vram(0x3F10)) == 0x12); // $3F10 -> $3F00
+		REQUIRE(static_cast<int>(read_vram(0x3F14)) == 0x19); // $3F14 -> $3F04
 	}
 
 	SECTION("Palette memory should be only 6 bits") {

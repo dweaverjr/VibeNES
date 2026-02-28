@@ -1,10 +1,10 @@
-#include "../catch2/catch_amalgamated.hpp"
 #include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
+#include <catch2/catch_all.hpp>
 #include <memory>
 
 using namespace nes;
@@ -214,32 +214,46 @@ TEST_CASE_METHOD(PaletteTestFixture, "Palette Memory Layout", "[ppu][palette][la
 }
 
 TEST_CASE_METHOD(PaletteTestFixture, "Universal Background Color Mirroring", "[ppu][palette][universal_bg]") {
-	SECTION("Sprite palette universal colors should mirror to background") {
+	SECTION("$3F10 mirrors $3F00 (backdrop color)") {
 		clear_all_palettes();
 
 		// Write to background universal color
 		write_palette(0x3F00, 0x25);
 
-		// Sprite palette universal colors should read the same value
-		REQUIRE(read_palette(0x3F10) == 0x25); // Sprite palette 0
-		REQUIRE(read_palette(0x3F14) == 0x25); // Sprite palette 1
-		REQUIRE(read_palette(0x3F18) == 0x25); // Sprite palette 2
-		REQUIRE(read_palette(0x3F1C) == 0x25); // Sprite palette 3
+		// Only $3F10 mirrors $3F00.  $3F14/$3F18/$3F1C mirror $3F04/$3F08/$3F0C
+		// (which are independent palette entries, still 0 after clear).
+		REQUIRE(read_palette(0x3F10) == 0x25); // $3F10 -> $3F00
+		REQUIRE(read_palette(0x3F14) == 0x00); // $3F14 -> $3F04 (cleared)
+		REQUIRE(read_palette(0x3F18) == 0x00); // $3F18 -> $3F08 (cleared)
+		REQUIRE(read_palette(0x3F1C) == 0x00); // $3F1C -> $3F0C (cleared)
+	}
+
+	SECTION("$3F14/$3F18/$3F1C mirror $3F04/$3F08/$3F0C respectively") {
+		clear_all_palettes();
+
+		// Write to the background palette entry-0 addresses
+		write_palette(0x3F04, 0x11);
+		write_palette(0x3F08, 0x22);
+		write_palette(0x3F0C, 0x33);
+
+		REQUIRE(read_palette(0x3F14) == 0x11); // $3F14 -> $3F04
+		REQUIRE(read_palette(0x3F18) == 0x22); // $3F18 -> $3F08
+		REQUIRE(read_palette(0x3F1C) == 0x33); // $3F1C -> $3F0C
 	}
 
 	SECTION("Writing to sprite universal colors should affect background") {
 		clear_all_palettes();
 
-		// Write to sprite palette universal color
+		// Write through the sprite mirror address
 		write_palette(0x3F10, 0x17);
 
-		// Background universal color should reflect the change
+		// $3F10 redirects to $3F00
 		REQUIRE(read_palette(0x3F00) == 0x17);
 
-		// All sprite universal colors should match
-		REQUIRE(read_palette(0x3F14) == 0x17);
-		REQUIRE(read_palette(0x3F18) == 0x17);
-		REQUIRE(read_palette(0x3F1C) == 0x17);
+		// $3F14/$3F18/$3F1C are NOT mirrors of $3F00
+		REQUIRE(read_palette(0x3F14) == 0x00); // $3F14 -> $3F04 (unwritten)
+		REQUIRE(read_palette(0x3F18) == 0x00); // $3F18 -> $3F08 (unwritten)
+		REQUIRE(read_palette(0x3F1C) == 0x00); // $3F1C -> $3F0C (unwritten)
 	}
 
 	SECTION("Non-universal colors should not mirror") {
