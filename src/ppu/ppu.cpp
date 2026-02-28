@@ -186,10 +186,8 @@ void PPU::tick_single_dot() {
 }
 
 void PPU::tick_internal() {
-	// Handle OAM DMA if active
-	if (oam_dma_active_ || oam_dma_pending_) {
-		perform_oam_dma_cycle();
-	}
+	// NOTE: OAM DMA is now driven by the CPU (execute_oam_dma) with per-cycle
+	// interleaving via consume_cycle(). PPU continues normal rendering here.
 
 	// Handle delayed sprite 0 hit latching
 	if (sprite_0_hit_delay_ > 0) {
@@ -1342,18 +1340,17 @@ uint16_t PPU::get_current_nametable_address() {
 // =============================================================================
 
 void PPU::write_oam_dma(uint8_t page) {
-	// Hardware behavior: Ignore OAM DMA writes if DMA is already active
-	if (oam_dma_active_ || oam_dma_pending_) {
-		return;
-	}
+	// Legacy interface — DMA is now driven by CPU (execute_oam_dma).
+	// Kept for API compatibility but no longer sets PPU-internal DMA state.
+	(void)page;
+}
 
-	// Start OAM DMA transfer from CPU memory page to OAM
-	oam_dma_address_ = static_cast<uint16_t>(page) << 8;
-	oam_dma_cycle_ = 0;
-	oam_dma_subcycle_ = 0;
-	oam_dma_data_latch_ = 0;
-	// Mark DMA as pending so CPU halts immediately but transfer starts on next PPU tick
-	oam_dma_pending_ = true;
+void PPU::write_oam_direct(uint8_t offset, uint8_t value) {
+	// Direct OAM write used by CPU-driven DMA transfer.
+	// Writes to (oam_address_ + offset) & 0xFF, matching real hardware
+	// where DMA starts at the current OAMADDR.
+	uint8_t addr = static_cast<uint8_t>((oam_address_ + offset) & 0xFF);
+	oam_memory_[addr] = value;
 }
 
 void PPU::perform_oam_dma_cycle() {

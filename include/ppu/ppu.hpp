@@ -48,6 +48,7 @@ class PPU : public Component {
 
 	// OAM DMA interface ($4014)
 	void write_oam_dma(uint8_t page);
+	void write_oam_direct(uint8_t offset, uint8_t value);
 	bool is_oam_dma_active() const {
 		return oam_dma_active_ || oam_dma_pending_;
 	}

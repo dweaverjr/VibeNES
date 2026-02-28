@@ -19,16 +19,10 @@ CPU6502::CPU6502(SystemBus *bus)
 void CPU6502::tick(CpuCycle cycles) {
 	cycles_remaining_ += cycles;
 
-	// Execute instructions while we have cycles
+	// Execute instructions while we have cycles.
+	// OAM DMA is handled inside execute_instruction() — no special case needed.
 	while (cycles_remaining_.count() > 0) {
-		// Check if DMA is active - CPU should be halted during OAM DMA
-		if (bus_->is_dma_active()) {
-			// CPU is halted during DMA - consume one cycle and wait
-			cycles_remaining_ -= CpuCycle{1};
-		} else {
-			// Normal instruction execution
-			(void)execute_instruction(); // Discard return value in tick context
-		}
+		(void)execute_instruction();
 	}
 }
 void CPU6502::reset() {
@@ -225,6 +219,11 @@ void CPU6502::handle_irq() {
 int CPU6502::execute_instruction() {
 	// Reset per-instruction cycle counter (fat consume_cycle tracks this)
 	cycles_consumed_ = 0;
+
+	// OAM DMA takes priority — CPU is halted for the entire transfer
+	if (bus_->is_oam_dma_pending()) {
+		return execute_oam_dma();
+	}
 
 	// Check for pending interrupts before instruction fetch
 	if (has_pending_interrupt()) {
@@ -1170,6 +1169,36 @@ void CPU6502::perform_compare(Byte register_value, Byte memory_value) noexcept {
 	status_.flags.negative_flag_ = (result & 0x80) != 0;
 
 	// Note: Compare instructions do NOT affect the overflow flag
+}
+
+// =============================================================================
+// OAM DMA — CPU halts while DMA controller transfers 256 bytes
+// =============================================================================
+
+int CPU6502::execute_oam_dma() {
+	// Acknowledge and clear the pending flag
+	Byte page = bus_->get_oam_dma_page();
+	bus_->clear_oam_dma_pending();
+
+	// Cycle 1: Dummy cycle for write-cycle alignment
+	consume_cycle();
+
+	// TODO: On real hardware, if the DMA starts on an odd CPU cycle there is
+	// an additional alignment dummy cycle (514 total instead of 513).
+
+	// 256 read+write pairs = 512 cycles
+	for (int i = 0; i < 256; i++) {
+		// Read cycle: fetch byte from CPU address space ($XX00 + i)
+		Address src = (static_cast<Address>(page) << 8) | static_cast<Address>(i);
+		Byte data = read_byte(src); // 1 cycle via consume_cycle()
+
+		// Write cycle: store byte into PPU OAM at (OAMADDR + i) & 0xFF
+		consume_cycle(); // 1 cycle
+		bus_->write_oam_direct(static_cast<uint8_t>(i), data);
+	}
+
+	// Total: 1 dummy + 256×2 = 513 CPU cycles
+	return cycles_consumed_;
 }
 
 // Cycle management helpers

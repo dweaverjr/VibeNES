@@ -46,6 +46,10 @@ class OAMDMATestFixture {
 		// Reset takes 7 cycles to complete
 		cpu->tick(CpuCycle{10}); // Give extra cycles to ensure reset completes
 
+		// Zero out any cycle debt left by instruction overshooting the budget
+		// so subsequent tick() calls have exact cycle accounting.
+		cpu->reset_cycle_budget();
+
 		// Clear OAM
 		clear_oam();
 	}
@@ -92,26 +96,11 @@ class OAMDMATestFixture {
 	}
 
 	void wait_for_dma_completion() {
-		// Wait for DMA to complete by advancing cycles
-		int cycles_waited = 0;
-		const int MAX_DMA_CYCLES = 600; // Safety limit
-
-		while (bus->is_dma_active() && cycles_waited < MAX_DMA_CYCLES) {
-			ppu->tick(CpuCycle{1}); // Advance PPU to process DMA
-			cycles_waited++;
+		// DMA executes inside execute_instruction() when CPU runs.
+		// Give CPU exactly the DMA budget so no spurious instructions run.
+		if (bus->is_dma_active()) {
+			cpu->tick(CpuCycle{513}); // DMA takes exactly 513 CPU cycles
 		}
-
-		// Add a few extra cycles to ensure completion
-		for (int i = 0; i < 10; i++) {
-			ppu->tick(CpuCycle{1});
-		}
-	}
-
-	uint64_t get_cpu_cycle_count() {
-		// For testing purposes, we'll use a simple cycle counter
-		// In real implementation, this would track actual CPU cycles
-		static uint64_t test_cycle_counter = 0;
-		return test_cycle_counter++;
 	}
 
 	void trigger_oam_dma(uint8_t page) {
@@ -199,50 +188,19 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Timing", "[ppu][oam_dma][timing]") 
 		// Trigger DMA - this should halt the CPU
 		trigger_oam_dma(0x02);
 
-		// At this point, DMA should be active and CPU should be halted
+		// DMA is pending in the bus
 		REQUIRE(bus->is_dma_active() == true);
 
-		// Try to tick the CPU while DMA is active - it should remain halted
-		cpu->tick(CpuCycle{1});
-		REQUIRE(cpu->get_program_counter() == initial_pc); // PC shouldn't advance
+		// Give CPU exactly 513 cycles — all consumed by DMA, none for instructions
+		cpu->tick(CpuCycle{513});
 
-		// Continue ticking until DMA completes (should take 513-514 cycles)
-		int dma_cycles = 0;
-		const int MAX_DMA_CYCLES = 600; // Safety limit
-
-		while (bus->is_dma_active() && dma_cycles < MAX_DMA_CYCLES) {
-			[[maybe_unused]] uint16_t pc_before_ticks = cpu->get_program_counter();
-
-			ppu->tick(CpuCycle{1}); // Tick PPU to process DMA
-
-			// Check if DMA completed during this PPU tick
-			bool dma_still_active = bus->is_dma_active();
-
-			cpu->tick(CpuCycle{1}); // CPU should remain halted OR resume if DMA just completed
-			dma_cycles++;
-
-			// PC should not advance during DMA, but may advance if DMA just completed
-			if (dma_still_active) {
-				// DMA still active - CPU should remain halted
-				REQUIRE(cpu->get_program_counter() == initial_pc);
-			} else {
-				// DMA just completed - CPU may execute one instruction and advance PC
-				// This is expected behavior when DMA finishes
-			}
-		}
-
-		// DMA should complete within expected cycle count
-		REQUIRE(dma_cycles >= 513);
-		REQUIRE(dma_cycles <= 514);
 		REQUIRE(bus->is_dma_active() == false);
 
+		// PC should not have changed during DMA
+		REQUIRE(cpu->get_program_counter() == initial_pc);
+
 		// After DMA completes, CPU should be able to execute normally
-		// Note: PC may have already advanced during the loop when DMA completed
-		if (cpu->get_program_counter() == initial_pc) {
-			// PC hasn't advanced yet - execute one more instruction
-			cpu->tick(CpuCycle{1});
-		}
-		// PC should now be past the initial instruction
+		cpu->tick(CpuCycle{2}); // NOP takes 2 cycles
 		REQUIRE(cpu->get_program_counter() > initial_pc);
 	}
 
@@ -250,7 +208,6 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Timing", "[ppu][oam_dma][timing]") 
 		setup_test_data_in_ram(0x02);
 
 		// Set up a program that would normally execute multiple instructions
-		// Use different address to avoid interference with first section
 		write_cpu_memory(0x8100, 0xA9); // LDA #$42
 		write_cpu_memory(0x8101, 0x42);
 		write_cpu_memory(0x8102, 0xAA); // TAX
@@ -259,50 +216,20 @@ TEST_CASE_METHOD(OAMDMATestFixture, "OAM DMA Timing", "[ppu][oam_dma][timing]") 
 
 		// Set PC to start of program
 		cpu->set_program_counter(0x8100);
-		uint8_t initial_accumulator = cpu->get_accumulator();
-		uint8_t initial_x = cpu->get_x_register();
 
 		// Trigger DMA
 		trigger_oam_dma(0x02);
-
-		// CPU should be halted - registers shouldn't change during DMA
 		REQUIRE(bus->is_dma_active() == true);
 
-		// Tick CPU multiple times while DMA is active
-		for (int i = 0; i < 600; i++) { // Increased from 100 to 600 to handle full DMA duration (513+ cycles)
-			[[maybe_unused]] uint16_t pc_before_ticks = cpu->get_program_counter();
-			[[maybe_unused]] uint8_t acc_before_ticks = cpu->get_accumulator();
-			[[maybe_unused]] uint8_t x_before_ticks = cpu->get_x_register();
+		// Give CPU exactly 513 cycles — all consumed by DMA
+		cpu->tick(CpuCycle{513});
 
-			cpu->tick(CpuCycle{1});
-
-			// Process PPU DMA
-			ppu->tick(CpuCycle{1});
-
-			// Check if DMA completed during this PPU tick
-			bool dma_still_active = bus->is_dma_active();
-
-			if (dma_still_active) {
-				// DMA still active - CPU should remain halted
-				REQUIRE(cpu->get_program_counter() == 0x8100);
-				REQUIRE(cpu->get_accumulator() == initial_accumulator);
-				REQUIRE(cpu->get_x_register() == initial_x);
-			} else {
-				// DMA just completed - CPU may have executed instructions
-				// This is expected behavior when DMA finishes
-				break;
-			}
-		}
-
-		// DMA should eventually complete
+		REQUIRE(cpu->get_program_counter() == 0x8100); // PC unchanged during DMA
 		REQUIRE(bus->is_dma_active() == false);
 
-		// Now CPU should be able to execute normally
-		// Execute enough cycles to complete all instructions regardless of timing
+		// Now CPU should execute normally
 		// LDA #$42 (2 cycles) + TAX (2 cycles) + INX (2 cycles) + NOP (2 cycles) = 8 cycles total
-		while (cpu->get_program_counter() < 0x8105) {
-			cpu->tick(CpuCycle{1});
-		}
+		cpu->tick(CpuCycle{8});
 
 		// Verify instructions executed correctly after DMA
 		REQUIRE(cpu->get_accumulator() == 0x42);
@@ -467,21 +394,13 @@ TEST_CASE_METHOD(OAMDMATestFixture, "DMA Hardware Accuracy", "[ppu][oam_dma][har
 		// Start DMA
 		bus->write(0x4014, 0x02);
 
-		// Check DMA is active immediately after write
+		// Check DMA is pending immediately after write
 		REQUIRE(bus->is_dma_active() == true);
 
-		// Tick through most of the transfer
-		for (int i = 0; i < 500; i++) {
-			ppu->tick(CpuCycle{1});
-			REQUIRE(bus->is_dma_active() == true);
-		}
+		// DMA runs atomically inside execute_instruction() via tick()
+		cpu->tick(CpuCycle{513});
 
-		// Complete the transfer
-		for (int i = 0; i < 20; i++) {
-			ppu->tick(CpuCycle{1});
-		}
-
-		// DMA should be complete
+		// DMA should consume 513 CPU cycles and complete
 		REQUIRE(bus->is_dma_active() == false);
 	}
 
@@ -497,13 +416,9 @@ TEST_CASE_METHOD(OAMDMATestFixture, "DMA Hardware Accuracy", "[ppu][oam_dma][har
 			write_ppu_register(0x2004, 0x00);
 		}
 
-		// Start DMA
+		// Start DMA and let CPU process it
 		bus->write(0x4014, 0x02);
-
-		// Allow DMA to complete
-		while (bus->is_dma_active()) {
-			ppu->tick(CpuCycle{1});
-		}
+		cpu->tick(CpuCycle{513}); // Processes DMA
 
 		// Verify all 256 bytes transferred correctly
 		for (int i = 0; i < 256; i++) {

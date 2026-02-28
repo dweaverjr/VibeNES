@@ -59,7 +59,7 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 
 ### P1 — Synchronization and Mapper Issues (Remaining)
 5. ~~**Instruction-level sync, not cycle-level**~~ — **FIXED (Phase 4)**: `consume_cycle()` now calls `bus_->tick_single_cpu_cycle()` which advances PPU 3 dots + APU 1 cycle + checks mapper IRQs. Every `read_byte()`/`write_byte()`/`consume_cycle()` call interleaves correctly. Main loop no longer calls `bus_->tick()` post-instruction. Interrupt handler cycle counts fixed (were double-counting memory operation cycles).
-7. **OAM DMA doesn't halt CPU** — Main loop calls `execute_instruction()` directly, bypassing `tick()` which has DMA check. CPU keeps running during DMA.
+7. ~~**OAM DMA doesn't halt CPU**~~ — **FIXED (Phase 4)**: DMA moved from PPU-driven (per PPU dot, 3× too fast) to CPU-driven. `execute_instruction()` checks `bus_->is_oam_dma_pending()` and calls `execute_oam_dma()`, which burns 513 CPU cycles (1 dummy + 256×(read+write)) via `consume_cycle()`, properly interleaving PPU/APU. CPU PC does not advance during DMA.
 8. **MMC3 A12 IRQ at fixed cycle 260** — `ppu.cpp` hardcodes toggle instead of tracking actual A12 transitions. `track_a12_line()` exists but is never called.
 
 ### P2 — Moderate Issues (Remaining)
@@ -89,7 +89,8 @@ Cycle-level interleaving via "fat `consume_cycle()`". Each `consume_cycle()` cal
 
 ### Phase 4: Cycle-Level CPU/PPU/APU Interleaving
 ⚠️ **IN PROGRESS** — Fat `consume_cycle()` implemented (bug #5 fixed). Each `consume_cycle()` now calls `bus_->tick_single_cpu_cycle()`, providing per-cycle CPU/PPU/APU interleaving. Interrupt handler cycle counts corrected (NMI/IRQ: 2 internal + 5 memory ops = 7 total; RESET: 5 internal/suppressed + 2 reads = 7 total). Main loop `bus_->tick()` calls removed. All 186 tests pass.
-**Remaining**: OAM DMA halt (bug #7), MMC3 A12 IRQ tracking (bug #8), cycle-accurate interrupt polling (penultimate cycle), DMC cycle stealing (bug #11), remove frame 0 hack (bug #14).
+OAM DMA halt implemented (bug #7 fixed). DMA moved from PPU-driven to CPU-driven: `execute_oam_dma()` burns 513 cycles (1 dummy + 256×(read+write)) via `consume_cycle()`, properly interleaving PPU/APU. CPU PC does not advance during DMA.
+**Remaining**: MMC3 A12 IRQ tracking (bug #8), cycle-accurate interrupt polling (penultimate cycle), DMC cycle stealing (bug #11), remove frame 0 hack (bug #14).
 
 ### Phase 5: Documentation and Test Coverage
 Update README.md to match reality. Add tests for APU, mappers, save states. Add mapper/APU test ROM infrastructure.
@@ -196,8 +197,8 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 
 ## Current State (as of Feb 28, 2026)
 - **Phases 1-3 complete**. Debug and release builds green, **zero warnings**. MSYS2 fully removed from machine.
-- **Phase 4 in progress** — Fat `consume_cycle()` implemented: per-cycle CPU/PPU/APU interleaving is live. Interrupt handler cycle counts corrected (were double-counting). Main loop `bus_->tick()` eliminated.
+- **Phase 4 in progress** — Fat `consume_cycle()` implemented: per-cycle CPU/PPU/APU interleaving is live. Interrupt handler cycle counts corrected (were double-counting). Main loop `bus_->tick()` eliminated. OAM DMA halt implemented: CPU-driven, 513 cycles via `consume_cycle()`.
 - **All 186 tests pass** (0 failures). Catch2 v3 via vcpkg with `catch_discover_tests()`. Previous 14 test failures fixed (interrupt handling, palette mirroring, fine_x scroll, pattern table ctrl bits, OAM DMA, timing, sprite overflow).
 - **Games tested**: Super Mario Bros. (NROM/Mapper 0) — background + all sprites render correctly. Crystalis (MMC1/Mapper 1) — boots and runs.
 - **Dependencies**: SDL2 + Catch2 via vcpkg. ImGui vendored (vcpkg port lacks sdl2-binding feature).
-- **Next step**: Continue Phase 4 — OAM DMA halt (bug #7), MMC3 A12 tracking (bug #8), cycle-accurate interrupt polling, DMC cycle stealing (bug #11), remove frame 0 hack (bug #14).
+- **Next step**: Continue Phase 4 — MMC3 A12 tracking (bug #8), cycle-accurate interrupt polling, DMC cycle stealing (bug #11), remove frame 0 hack (bug #14).

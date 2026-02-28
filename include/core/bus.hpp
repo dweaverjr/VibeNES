@@ -54,6 +54,10 @@ class SystemBus final : public Component {
 
 	// DMA interface
 	[[nodiscard]] bool is_dma_active() const noexcept;
+	[[nodiscard]] bool is_oam_dma_pending() const noexcept;
+	[[nodiscard]] Byte get_oam_dma_page() const noexcept;
+	void clear_oam_dma_pending() noexcept;
+	void write_oam_direct(uint8_t offset, uint8_t value);
 
 	// Audio control
 	bool initialize_audio(int sample_rate = 44100, int buffer_size = 1024);
@@ -89,6 +93,8 @@ class SystemBus final : public Component {
 
 	// DMA implementation
 	void perform_oam_dma(Byte page);
+	bool oam_dma_pending_ = false;
+	Byte oam_dma_page_ = 0;
 
 	// Test memory for high addresses (temporary solution for testing)
 	// TODO: Replace with proper cartridge ROM when implemented

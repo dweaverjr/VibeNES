@@ -392,21 +392,33 @@ bool SystemBus::is_cartridge_address(Address address) const noexcept {
 }
 
 void SystemBus::perform_oam_dma(Byte page) {
-	// OAM DMA transfers 256 bytes from page $XX00-$XXFF to PPU OAM
-	// Takes 513 cycles (or 514 if on odd CPU cycle)
-	// Hardware-accurate: CPU is halted and PPU performs cycle-by-cycle transfer
-
-	if (!ppu_) {
-		return;
-	}
-
-	// Start hardware-accurate OAM DMA in the PPU
-	// This will halt the CPU for 513-514 cycles while PPU handles the transfer
-	ppu_->write_oam_dma(page);
+	// Set pending flag — actual transfer is driven by CPU in execute_oam_dma().
+	// CPU will halt for 513-514 cycles, reading from page $XX00-$XXFF and
+	// writing to PPU OAM, with per-cycle PPU/APU interleaving.
+	oam_dma_pending_ = true;
+	oam_dma_page_ = page;
 }
 
 bool SystemBus::is_dma_active() const noexcept {
-	return ppu_ && ppu_->is_oam_dma_active();
+	return oam_dma_pending_;
+}
+
+bool SystemBus::is_oam_dma_pending() const noexcept {
+	return oam_dma_pending_;
+}
+
+Byte SystemBus::get_oam_dma_page() const noexcept {
+	return oam_dma_page_;
+}
+
+void SystemBus::clear_oam_dma_pending() noexcept {
+	oam_dma_pending_ = false;
+}
+
+void SystemBus::write_oam_direct(uint8_t offset, uint8_t value) {
+	if (ppu_) {
+		ppu_->write_oam_direct(offset, value);
+	}
 }
 
 // Audio control implementation

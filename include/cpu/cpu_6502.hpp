@@ -124,6 +124,12 @@ class CPU6502 final : public Component {
 		status_.flags.negative_flag_ = value;
 	}
 
+	// Test support — zero out cycle budget so subsequent tick() calls
+	// have exact accounting (instructions may overshoot a tick budget).
+	void reset_cycle_budget() noexcept {
+		cycles_remaining_ = CpuCycle{0};
+	}
+
 	// Save state serialization
 	void serialize_state(std::vector<uint8_t> &buffer) const;
 	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset);
@@ -195,6 +201,10 @@ class CPU6502 final : public Component {
 	void handle_irq();		   ///< Handle Maskable Interrupt (IRQ/BRK)
 	void handle_reset();	   ///< Handle Reset interrupt
 	void process_interrupts(); ///< Check and process pending interrupts
+
+	// OAM DMA — CPU halts for 513-514 cycles while DMA controller
+	// reads from CPU bus and writes to PPU OAM.
+	int execute_oam_dma();
 
 	// Addressing mode helpers
 	[[nodiscard]] bool crosses_page_boundary(Address base_address, Byte offset) const noexcept;
