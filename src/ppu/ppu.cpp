@@ -451,30 +451,27 @@ void PPU::process_visible_scanline() {
 		if (is_rendering_enabled()) {
 			// Normal rendering: background tile fetching and VRAM updates
 			// Tiles are fetched in 8-cycle groups aligned to cycles 1-8, 9-16, 17-24, etc.
-			if (is_background_enabled()) {
-				perform_tile_fetch_cycle();
-			}
+			// On real hardware, these fetches happen whenever rendering is enabled
+			// (either BG or sprites), not just when BG is specifically enabled.
+			// This is critical for MMC3 A12 scanline counting.
+			perform_tile_fetch_cycle();
 
 			// Render the pixel using shift registers BEFORE shifting
 			// Real hardware outputs pixel, THEN shifts for next cycle
 			render_pixel();
 
 			// Shift registers after rendering (real hardware order)
-			if (is_background_enabled()) {
-				shift_background_registers();
+			shift_background_registers();
+
+			// VRAM address increments happen at the end of each tile fetch (cycles 8, 16, ...)
+			if ((current_cycle_ & 7) == 0) {
+				increment_coarse_x();
 			}
 
-			if (is_background_enabled()) {
-				// VRAM address increments happen at the end of each tile fetch (cycles 8, 16, ...)
-				if ((current_cycle_ & 7) == 0) {
-					increment_coarse_x();
-				}
-
-				// Load shift registers at the end of tile fetch (cycles 8, 16, 24...)
-				// This happens AFTER rendering and shifting
-				if ((current_cycle_ & 7) == 0) {
-					load_shift_registers();
-				}
+			// Load shift registers at the end of tile fetch (cycles 8, 16, 24...)
+			// This happens AFTER rendering and shifting
+			if ((current_cycle_ & 7) == 0) {
+				load_shift_registers();
 			}
 
 			// At cycle 256: Increment fine Y (move to next tile row)
@@ -505,14 +502,22 @@ void PPU::process_visible_scanline() {
 	// HBLANK period: VRAM address updates and tile fetching for next scanline
 	else if (current_cycle_ >= 257 && current_cycle_ < 341 && is_rendering_enabled()) {
 
-		// At cycle 257: Copy horizontal scroll from temp to current
+		// At cycle 257: Copy horizontal scroll and prepare sprite metadata
 		if (current_cycle_ == 257) {
 			copy_horizontal_scroll();
 
-			// Start sprite preparation for next scanline during cycles 257-320
-			if (is_sprites_enabled()) {
-				prepare_scanline_sprites();
-			}
+			// Prepare sprite metadata from secondary OAM (positions, tile IDs)
+			// Pattern data fetches happen per-cycle via perform_sprite_fetch_cycle()
+			prepare_scanline_sprites();
+		}
+
+		// Cycles 257-320: Per-cycle sprite pattern fetches with proper A12 tracking
+		// This happens regardless of is_sprites_enabled() because real hardware
+		// always performs these reads when rendering is enabled (either BG or sprites).
+		// The garbage NT/AT + pattern reads produce the A12 transitions that
+		// MMC3's scanline counter depends on.
+		if (current_cycle_ >= 257 && current_cycle_ < 321) {
+			perform_sprite_fetch_cycle();
 		}
 
 		// At cycle 320: Copy sprite count and prepare shift registers for next scanline
@@ -525,18 +530,13 @@ void PPU::process_visible_scanline() {
 
 		// Continue background tile fetching for next scanline (cycles 320-337)
 		// These are the first two tiles that will be rendered on the next scanline
-		// Cycles 321-328: Fetch tile 0
-		// Cycle 328: Load tile 0 into LOW byte, Increment coarse_x
-		// Cycles 329-336: Fetch tile 1, SHIFT 8 times to move tile 0 to HIGH byte
-		// Cycle 336: Load tile 1 into LOW byte (after shifts), Increment coarse_x
-		if (current_cycle_ >= 320 && current_cycle_ <= 337 && is_background_enabled()) {
+		// Fetches happen whenever rendering is enabled (BG OR sprites) per real hardware.
+		if (current_cycle_ >= 320 && current_cycle_ <= 337) {
 			if (current_cycle_ <= 336) {
 				perform_tile_fetch_cycle();
 			}
 
 			// CRITICAL: Shift BEFORE loading at cycle 336!
-			// Cycles 329-336: Shift 8 times to move tile 0 from LOW to HIGH byte
-			// This must happen BEFORE we load tile 1 at cycle 336
 			if (current_cycle_ >= 329 && current_cycle_ <= 336) {
 				shift_background_registers();
 			}
@@ -547,8 +547,6 @@ void PPU::process_visible_scanline() {
 			}
 
 			// Load shift registers at end of tile fetch (cycles 328, 336)
-			// At cycle 328: Load tile 0 into LOW byte (shift registers are at 0x0000 initially)
-			// At cycle 336: Load tile 1 into LOW byte (after 8 shifts, tile 0 is now in HIGH byte)
 			if ((current_cycle_ & 7) == 0 && current_cycle_ > 320) {
 				load_shift_registers();
 			}
@@ -556,11 +554,12 @@ void PPU::process_visible_scanline() {
 
 		// Additional tile fetch at cycles 336-339 for odd frame timing
 		// (Real hardware behavior for frame synchronization)
-		if (current_cycle_ >= 336 && current_cycle_ < 340 && is_background_enabled()) {
+		if (current_cycle_ >= 336 && current_cycle_ < 340) {
 			// Fetch nametable bytes for timing (results unused)
 			if (current_cycle_ == 337 || current_cycle_ == 339) {
 				uint16_t nt_addr = get_current_nametable_address();
-				memory_.read_vram(nt_addr); // Dummy read for timing
+				track_a12_line(nt_addr); // Track A12 for MMC3
+				memory_.read_vram(nt_addr);
 			}
 		}
 	}
@@ -604,14 +603,17 @@ void PPU::process_pre_render_scanline() {
 			clear_shift_registers();
 		}
 
-		// Copy horizontal scroll
+		// Copy horizontal scroll and prepare sprite metadata
 		if (current_cycle_ == 257) {
 			copy_horizontal_scroll();
 
-			// Start sprite preparation for scanline 0 during cycles 257-320
-			if (is_sprites_enabled()) {
-				prepare_scanline_sprites();
-			}
+			// Prepare sprite metadata for scanline 0 (pattern fetches happen per-cycle)
+			prepare_scanline_sprites();
+		}
+
+		// Cycles 257-320: Per-cycle sprite pattern fetches (same as visible scanlines)
+		if (current_cycle_ >= 257 && current_cycle_ < 321) {
+			perform_sprite_fetch_cycle();
 		}
 
 		// Copy vertical scroll during cycles 280-304
@@ -627,8 +629,9 @@ void PPU::process_pre_render_scanline() {
 
 		// Background tile fetching simulation during pre-render (dummy fetches)
 		// These are timing-only fetches - we don't load the data into shift registers
-		// The real tile data for scanline 0 is loaded during cycles 320-337
-		if (current_cycle_ < 256 && is_background_enabled()) {
+		// Real tile data for scanline 0 is loaded during cycles 320-337
+		// Fetches happen whenever rendering is enabled (BG OR sprites) per real hardware.
+		if (current_cycle_ < 256) {
 			perform_tile_fetch_cycle();
 
 			// Increment coarse X at the end of each tile fetch (cycles 8, 16, 24, etc.)
@@ -653,31 +656,20 @@ void PPU::process_pre_render_scanline() {
 			// the first rendered frame.
 		}
 		// Continue fetching during HBLANK (cycles 320-337) to prepare first two tiles
-		// These tiles will be in the shift registers ready for scanline 0
-		// Cycles 321-328: Fetch tile 0
-		// Cycle 328: Load tile 0 into LOW byte, Increment coarse_x
-		// Cycles 329-336: Fetch tile 1, SHIFT 8 times to move tile 0 to HIGH byte
-		// Cycle 336: Load tile 1 into LOW byte (after shifts), Increment coarse_x
-		if (current_cycle_ >= 320 && current_cycle_ <= 337 && is_background_enabled()) {
+		// Fetches happen whenever rendering is enabled (BG OR sprites) per real hardware.
+		if (current_cycle_ >= 320 && current_cycle_ <= 337) {
 			if (current_cycle_ <= 336) {
 				perform_tile_fetch_cycle();
 			}
 
-			// CRITICAL: Shift BEFORE loading at cycle 336!
-			// Cycles 329-336: Shift 8 times to move tile 0 from LOW to HIGH byte
-			// This must happen BEFORE we load tile 1 at cycle 336
 			if (current_cycle_ >= 329 && current_cycle_ <= 336) {
 				shift_background_registers();
 			}
 
-			// Increment coarse X at end of each tile (cycles 328, 336)
 			if ((current_cycle_ & 7) == 0 && current_cycle_ > 320) {
 				increment_coarse_x();
 			}
 
-			// Load shift registers at end of tile fetch (cycles 328, 336)
-			// At cycle 328: Load tile 0 into LOW byte (shift registers cleared at cycle 320)
-			// At cycle 336: Load tile 1 into LOW byte (after 8 shifts, tile 0 is now in HIGH byte)
 			if ((current_cycle_ & 7) == 0 && current_cycle_ > 320) {
 				load_shift_registers();
 			}
@@ -1696,8 +1688,10 @@ void PPU::handle_sprite_overflow_bug() {
 }
 
 void PPU::prepare_scanline_sprites() {
-	// Convert secondary OAM to scanline sprites with pattern data
-	// This happens during cycles 257-320 in hardware
+	// Phase 1 of sprite preparation: Read secondary OAM and compute sprite
+	// metadata (positions, tile indices, row calculations).  Pattern table
+	// reads are deferred to perform_sprite_fetch_cycle() which spreads them
+	// across cycles 261-320 for correct MMC3 A12 clocking.
 
 	for (uint8_t i = 0; i < sprite_count_next_scanline_ && i < 8; i++) {
 		uint8_t base_addr = i * 4;
@@ -1716,56 +1710,143 @@ void PPU::prepare_scanline_sprites() {
 		scanline_sprite.is_sprite_0 =
 			(scanline_sprite.sprite_index == 0 && sprite_0_on_next_scanline_); // True if OAM sprite 0
 
-		// Calculate sprite row for next scanline (OAM Y is sprite top minus 1)
-		uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
+		// Initialize pattern data to 0 (will be filled by perform_sprite_fetch_cycle)
+		scanline_sprite.pattern_data_low = 0;
+		scanline_sprite.pattern_data_high = 0;
+	}
+}
 
-		// Calculate next scanline with proper wrap from pre-render (261) to scanline 0
-		int16_t next_scanline;
-		if (current_scanline_ == PPUTiming::PRE_RENDER_SCANLINE) {
-			next_scanline = 0; // Pre-render scanline prepares for scanline 0
+void PPU::perform_sprite_fetch_cycle() {
+	// Per-cycle sprite pattern fetch during cycles 257-320.
+	// On real NES hardware, each of the 8 sprite slots takes 8 PPU cycles:
+	//   +0,+1: Garbage nametable byte read (A12=0)
+	//   +2,+3: Garbage attribute byte read (A12=0)
+	//   +4,+5: Sprite pattern table low byte read (A12 depends on pattern table)
+	//   +6,+7: Sprite pattern table high byte read (A12 depends on pattern table)
+	//
+	// These reads happen even if fewer than 8 sprites were found; unused slots
+	// fetch tile $FF pattern data to maintain proper bus timing and A12 edges.
+	// This timing is CRITICAL for MMC3 scanline counting via A12.
+
+	uint16_t sprite_cycle = current_cycle_ - 257;				  // 0-63
+	uint8_t sprite_slot = static_cast<uint8_t>(sprite_cycle / 8); // 0-7
+	uint8_t sub_cycle = static_cast<uint8_t>(sprite_cycle % 8);	  // 0-7
+
+	switch (sub_cycle) {
+	case 0: {
+		// Garbage nametable byte read — produces A12=0 on address bus
+		uint16_t nt_addr = get_current_nametable_address();
+		track_a12_line(nt_addr);
+		break;
+	}
+	case 2: {
+		// Garbage attribute byte read — produces A12=0 on address bus
+		uint16_t attr_addr = get_current_attribute_address();
+		track_a12_line(attr_addr);
+		break;
+	}
+	case 4: {
+		// Sprite pattern low byte read
+		if (sprite_slot < sprite_count_next_scanline_) {
+			ScanlineSprite &ss = scanline_sprites_next_[sprite_slot];
+			const Sprite &sprite = ss.sprite_data;
+			uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
+
+			// Calculate row within sprite
+			int16_t next_scanline;
+			if (current_scanline_ == PPUTiming::PRE_RENDER_SCANLINE) {
+				next_scanline = 0;
+			} else {
+				next_scanline = static_cast<int16_t>(current_scanline_ + 1);
+			}
+			int16_t sprite_top = static_cast<int16_t>(sprite.y_position) + 1;
+			int16_t sprite_row = next_scanline - sprite_top;
+
+			if (sprite_row < 0 || sprite_row >= static_cast<int16_t>(sprite_height)) {
+				// Out of range — fetch transparent pattern for A12 tracking
+				bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
+				uint16_t dummy_addr = (sprite_table ? 0x1000 : 0x0000) + (0xFF * 16);
+				track_a12_line(dummy_addr);
+				break;
+			}
+
+			int16_t fetch_row = sprite.attributes.flip_vertical ? (sprite_height - 1 - sprite_row) : sprite_row;
+			uint8_t row_in_tile = static_cast<uint8_t>(fetch_row & 0x07);
+			bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
+
+			if (sprite_height == 16) {
+				sprite_table = (sprite.tile_index & 0x01) != 0;
+				uint8_t base_tile = sprite.tile_index & 0xFE;
+				bool top_tile = fetch_row < 8;
+				uint8_t tile_number = base_tile + (top_tile ? 0 : 1);
+				ss.pattern_data_low = fetch_sprite_pattern_data_raw(tile_number, row_in_tile, sprite_table);
+			} else {
+				ss.pattern_data_low = fetch_sprite_pattern_data_raw(sprite.tile_index, row_in_tile, sprite_table);
+			}
 		} else {
-			next_scanline = static_cast<int16_t>(current_scanline_ + 1);
+			// Unused sprite slot: fetch tile $FF for proper A12 timing
+			bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
+			uint16_t pattern_base = sprite_table ? 0x1000 : 0x0000;
+			uint16_t pattern_addr = pattern_base + (0xFF * 16);
+			track_a12_line(pattern_addr);
+			// Read but discard (needed for A12 tracking, not data)
+			if (cartridge_ && cartridge_->is_loaded()) {
+				cartridge_->ppu_read(pattern_addr);
+			}
 		}
+		break;
+	}
+	case 6: {
+		// Sprite pattern high byte read
+		if (sprite_slot < sprite_count_next_scanline_) {
+			ScanlineSprite &ss = scanline_sprites_next_[sprite_slot];
+			const Sprite &sprite = ss.sprite_data;
+			uint8_t sprite_height = (control_register_ & PPUConstants::PPUCTRL_SPRITE_SIZE_MASK) ? 16 : 8;
 
-		int16_t sprite_top = static_cast<int16_t>(sprite.y_position) + 1;
-		int16_t sprite_row = next_scanline - sprite_top;
+			int16_t next_scanline;
+			if (current_scanline_ == PPUTiming::PRE_RENDER_SCANLINE) {
+				next_scanline = 0;
+			} else {
+				next_scanline = static_cast<int16_t>(current_scanline_ + 1);
+			}
+			int16_t sprite_top = static_cast<int16_t>(sprite.y_position) + 1;
+			int16_t sprite_row = next_scanline - sprite_top;
 
-		if (sprite_row < 0 || sprite_row >= static_cast<int16_t>(sprite_height)) {
-			// Shouldn't happen (evaluation filters these), but guard against underflow
-			scanline_sprite.pattern_data_low = 0;
-			scanline_sprite.pattern_data_high = 0;
-			continue;
-		}
+			if (sprite_row < 0 || sprite_row >= static_cast<int16_t>(sprite_height)) {
+				bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
+				uint16_t dummy_addr = (sprite_table ? 0x1000 : 0x0000) + (0xFF * 16) + 8;
+				track_a12_line(dummy_addr);
+				break;
+			}
 
-		// Apply vertical flip to determine which pixel row to fetch
-		// For 8x16 sprites: tile selection uses UNFLIPPED sprite_row,
-		// but pixel row within each tile uses FLIPPED fetch_row
-		int16_t fetch_row = sprite.attributes.flip_vertical ? (sprite_height - 1 - sprite_row) : sprite_row;
-		uint8_t row_in_tile = static_cast<uint8_t>(fetch_row & 0x07);
+			int16_t fetch_row = sprite.attributes.flip_vertical ? (sprite_height - 1 - sprite_row) : sprite_row;
+			uint8_t row_in_tile = static_cast<uint8_t>(fetch_row & 0x07);
+			bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
 
-		// Fetch sprite pattern data
-		bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
-
-		if (sprite_height == 16) {
-			// 8x16 sprites - bit 0 of tile_index selects pattern table
-			sprite_table = (sprite.tile_index & 0x01) != 0;
-			uint8_t base_tile = sprite.tile_index & 0xFE;
-
-			// For vertical flip: tiles must swap (top becomes bottom, bottom becomes top)
-			// Use FLIPPED fetch_row to determine which tile to use
-			bool top_tile = fetch_row < 8;
-			uint8_t tile_number = base_tile + (top_tile ? 0 : 1);
-			uint8_t fine_y = row_in_tile;
-
-			scanline_sprite.pattern_data_low = fetch_sprite_pattern_data_raw(tile_number, fine_y, sprite_table);
-			scanline_sprite.pattern_data_high = fetch_sprite_pattern_data_raw(tile_number, fine_y + 8, sprite_table);
+			if (sprite_height == 16) {
+				sprite_table = (sprite.tile_index & 0x01) != 0;
+				uint8_t base_tile = sprite.tile_index & 0xFE;
+				bool top_tile = fetch_row < 8;
+				uint8_t tile_number = base_tile + (top_tile ? 0 : 1);
+				ss.pattern_data_high = fetch_sprite_pattern_data_raw(tile_number, row_in_tile + 8, sprite_table);
+			} else {
+				ss.pattern_data_high = fetch_sprite_pattern_data_raw(sprite.tile_index, row_in_tile + 8, sprite_table);
+			}
 		} else {
-			// 8x8 sprites
-			scanline_sprite.pattern_data_low =
-				fetch_sprite_pattern_data_raw(sprite.tile_index, row_in_tile, sprite_table);
-			scanline_sprite.pattern_data_high =
-				fetch_sprite_pattern_data_raw(sprite.tile_index, row_in_tile + 8, sprite_table);
+			// Unused sprite slot: fetch tile $FF high byte for A12 timing
+			bool sprite_table = (control_register_ & PPUConstants::PPUCTRL_SPRITE_PATTERN_MASK) != 0;
+			uint16_t pattern_base = sprite_table ? 0x1000 : 0x0000;
+			uint16_t pattern_addr = pattern_base + (0xFF * 16) + 8;
+			track_a12_line(pattern_addr);
+			if (cartridge_ && cartridge_->is_loaded()) {
+				cartridge_->ppu_read(pattern_addr);
+			}
 		}
+		break;
+	}
+	default:
+		// Odd sub-cycles (1, 3, 5, 7) are the second half of each access — no address change
+		break;
 	}
 }
 

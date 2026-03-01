@@ -100,12 +100,11 @@ class Mapper004 final : public Mapper {
 	Byte prg_ram_protect_;		// $A001: PRG RAM protection
 
 	// IRQ System
-	Byte irq_latch_;	   // $C000: IRQ counter reload value
-	Byte irq_counter_;	   // Current IRQ counter
-	bool irq_reload_;	   // $C001: IRQ reload flag
-	bool irq_enabled_;	   // $E001: IRQ enable flag
-	bool irq_pending_;	   // Internal IRQ pending flag
-	bool irq_initialized_; // Has the game written to any IRQ register?
+	Byte irq_latch_;   // $C000: IRQ counter reload value
+	Byte irq_counter_; // Current IRQ counter
+	bool irq_reload_;  // $C001: IRQ reload flag
+	bool irq_enabled_; // $E001: IRQ enable flag
+	bool irq_pending_; // Internal IRQ pending flag
 
 	// Helper functions
 	std::size_t get_prg_bank_offset(Address address) const;

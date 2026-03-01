@@ -9,8 +9,7 @@ Mapper004::Mapper004(std::vector<Byte> prg_rom, std::vector<Byte> chr_mem, Mirro
 	: prg_rom_(std::move(prg_rom)), chr_mem_(std::move(chr_mem)), initial_mirroring_(mirroring),
 	  has_prg_ram_(has_prg_ram), chr_is_ram_(chr_is_ram), bank_select_(0), banks_{}, mirroring_(false),
 	  prg_ram_protect_(0x80), // PRG RAM enabled by default
-	  irq_latch_(0), irq_counter_(0), irq_reload_(false), irq_enabled_(false), irq_pending_(false),
-	  irq_initialized_(false) {
+	  irq_latch_(0), irq_counter_(0), irq_reload_(false), irq_enabled_(false), irq_pending_(false) {
 
 	// Initialize PRG RAM if needed (8KB)
 	if (has_prg_ram_) {
@@ -53,7 +52,6 @@ void Mapper004::reset() {
 	irq_reload_ = false;
 	irq_enabled_ = false;
 	irq_pending_ = false;
-	irq_initialized_ = false; // Game must write to IRQ registers first
 
 	// Clear PRG RAM
 	if (has_prg_ram_) {
@@ -118,14 +116,12 @@ void Mapper004::cpu_write(Address address, Byte value) {
 			if ((address & 0x0001) == 0) {
 				// Even addresses: IRQ Latch ($C000)
 				irq_latch_ = value;
-				irq_initialized_ = true; // Mark IRQ system as initialized
 			} else {
 				// Odd addresses: IRQ Reload ($C001)
 				// Writing here clears the counter and sets reload flag
 				// The counter will reload on the NEXT A12 clock
 				irq_counter_ = 0;
 				irq_reload_ = true;
-				irq_initialized_ = true; // Mark IRQ system as initialized
 			}
 		} else {
 			// $E000-$FFFF: IRQ Disable and IRQ Enable
@@ -170,12 +166,6 @@ void Mapper004::ppu_write(Address address, Byte value) {
 }
 
 void Mapper004::ppu_a12_toggle() {
-	// Don't clock the counter until the game has initialized the IRQ system
-	// This prevents the counter from reloading to 0 during boot before the game sets the latch
-	if (!irq_initialized_) {
-		return;
-	}
-
 	// Called by PPU on A12 rising edge after the low-time filter has passed.
 	// Each call represents one validated scanline-counter clock.
 	clock_irq_counter();

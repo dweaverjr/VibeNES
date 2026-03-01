@@ -298,7 +298,8 @@ class PPU : public Component {
 	// OAM operations
 	void clear_secondary_oam();
 	void perform_sprite_evaluation_cycle();
-	void prepare_scanline_sprites(); // Convert secondary OAM to scanline sprites with pattern data
+	void prepare_scanline_sprites();   // Convert secondary OAM to scanline sprites with pattern data
+	void perform_sprite_fetch_cycle(); // Per-cycle sprite pattern fetch during cycles 257-320
 	void handle_sprite_overflow_bug();
 
 	// Hardware timing features

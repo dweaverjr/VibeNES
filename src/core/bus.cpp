@@ -34,11 +34,19 @@ void SystemBus::tick(CpuCycle cycles) {
 		cartridge_->tick(cycles);
 	}
 
-	// Check for mapper IRQs (MMC3, etc.)
-	// IRQ line stays asserted until the game explicitly acknowledges it
-	// (e.g., MMC3 clears on write to $E000). Do NOT clear here.
-	if (cartridge_ && cpu_ && cartridge_->is_irq_pending()) {
-		cpu_->trigger_irq();
+	// Centralized IRQ line management (same logic as tick_single_cpu_cycle)
+	if (cpu_) {
+		bool any_irq = false;
+		if (cartridge_ && cartridge_->is_irq_pending())
+			any_irq = true;
+		if (apu_ && (apu_->is_frame_irq_pending() || apu_->is_dmc_irq_pending()))
+			any_irq = true;
+
+		if (any_irq) {
+			cpu_->trigger_irq();
+		} else {
+			cpu_->clear_irq_line();
+		}
 	}
 }
 
@@ -58,9 +66,22 @@ void SystemBus::tick_single_cpu_cycle() {
 		cartridge_->tick(cpu_cycles(1));
 	}
 
-	// Check for mapper IRQs (MMC3, etc.)
-	if (cartridge_ && cpu_ && cartridge_->is_irq_pending()) {
-		cpu_->trigger_irq();
+	// Centralized IRQ line management: compute OR of all IRQ sources.
+	// The CPU IRQ line must be deasserted when no source is pending,
+	// otherwise the line stays latched high and causes infinite IRQ loops
+	// after the game acknowledges the interrupt (e.g., MMC3 $E000 write).
+	if (cpu_) {
+		bool any_irq = false;
+		if (cartridge_ && cartridge_->is_irq_pending())
+			any_irq = true;
+		if (apu_ && (apu_->is_frame_irq_pending() || apu_->is_dmc_irq_pending()))
+			any_irq = true;
+
+		if (any_irq) {
+			cpu_->trigger_irq();
+		} else {
+			cpu_->clear_irq_line();
+		}
 	}
 }
 
