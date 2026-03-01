@@ -6,8 +6,6 @@
 #include "ppu/nes_palette.hpp"
 #include <algorithm>
 #include <cstring>
-#include <iomanip>
-#include <iostream>
 
 namespace nes {
 
@@ -172,8 +170,6 @@ void PPU::tick(CpuCycle cycles) {
 	// Normal frame = 89342 dots, so 300000 is ~3.3 frames worth (safe upper bound)
 	constexpr std::int64_t MAX_DOTS_PER_TICK = 300000;
 	if (ppu_dot_count > MAX_DOTS_PER_TICK) {
-		std::cerr << "[PPU WARNING] Excessive dot count: " << ppu_dot_count << ". Capping to " << MAX_DOTS_PER_TICK
-				  << " to prevent freeze." << std::endl;
 		ppu_dot_count = MAX_DOTS_PER_TICK;
 	}
 
@@ -249,56 +245,6 @@ void PPU::tick_internal() {
 			current_scanline_ = 0;
 			frame_counter_++;
 			frame_ready_ = true;
-
-			// Auto-triggering diagnostic: detect when vram_address at frame start
-			// has the same coarse_y for many consecutive frames (stuck scroll).
-			// Also log periodic state summary for manual analysis.
-			if (frame_counter_ > 100) {
-				uint16_t cY = (vram_address_ >> 5) & 0x1F;
-				uint16_t prev_cY = (diag_last_frame_vram_ >> 5) & 0x1F;
-
-				if (cY == prev_cY && cY >= 20) {
-					diag_stable_frames_++;
-				} else {
-					diag_stable_frames_ = 0;
-				}
-
-				// Trigger detailed trace if scroll appears stuck at a high Y
-				// (likely status bar area) for 10+ consecutive frames
-				if (diag_stable_frames_ == 10 && !diag_trace_active_) {
-					diag_trace_active_ = true;
-					diag_trace_frames_ = 5;
-					std::cerr << "\n[DIAG] Scroll stuck at cY=" << cY << " for 10 frames (frame " << frame_counter_
-							  << "). Enabling 5-frame trace.\n";
-				}
-
-				// Periodic summary every 300 frames (~5 sec) after frame 600
-				if (frame_counter_ >= 600 && frame_counter_ % 300 == 0) {
-					uint16_t cX = vram_address_ & 0x1F;
-					uint16_t fY = (vram_address_ >> 12) & 7;
-					uint16_t nt = (vram_address_ >> 10) & 3;
-					std::cerr << "[F" << frame_counter_ << "] v=" << std::hex << vram_address_
-							  << " t=" << temp_vram_address_ << std::dec << " cX=" << cX << " cY=" << cY << " fY=" << fY
-							  << " NT=" << nt << " mask=" << std::hex << (int)mask_register_ << std::dec
-							  << " s0=" << sprite_0_hit_detected_ << "\n";
-				}
-
-				diag_last_frame_vram_ = vram_address_;
-
-				// Count down trace frames
-				if (diag_trace_active_) {
-					std::cerr << "[TRACE F" << frame_counter_ << "] v=" << std::hex << vram_address_
-							  << " t=" << temp_vram_address_ << std::dec << " cY=" << cY
-							  << " fY=" << ((vram_address_ >> 12) & 7) << " NT=" << ((vram_address_ >> 10) & 3)
-							  << " mask=" << std::hex << (int)mask_register_ << std::dec
-							  << " rendering=" << is_rendering_enabled() << " s0hit=" << sprite_0_hit_detected_ << "\n";
-					diag_trace_frames_--;
-					if (diag_trace_frames_ <= 0) {
-						diag_trace_active_ = false;
-						std::cerr << "[DIAG] Trace complete.\n\n";
-					}
-				}
-			}
 
 			// Toggle odd frame flag
 			odd_frame_ = !odd_frame_;
@@ -590,12 +536,6 @@ void PPU::process_pre_render_scanline() {
 		perform_sprite_evaluation_cycle();
 	}
 
-	// Diagnostic: warn if rendering is off during the copy_vertical_scroll window
-	if (diag_trace_active_ && current_cycle_ == 280 && !is_rendering_enabled()) {
-		std::cerr << "  *** RENDERING DISABLED at SL=261 C=280! copy_v_scroll SKIPPED. ***"
-				  << " mask=" << std::hex << (int)mask_register_ << std::dec << "\n";
-	}
-
 	// Copy vertical scroll from temp address to current at specific cycles
 	if (is_rendering_enabled()) {
 		// Initialize shift registers at start of pre-render to prepare for next frame
@@ -619,11 +559,6 @@ void PPU::process_pre_render_scanline() {
 		// Copy vertical scroll during cycles 280-304
 		// This is CRITICAL - it copies the nametable selection from PPUCTRL!
 		if (current_cycle_ >= 280 && current_cycle_ <= 304) {
-			if (diag_trace_active_ && current_cycle_ == 280) {
-				std::cerr << "  copy_v_scroll SL=" << current_scanline_ << " C=" << current_cycle_ << " t=" << std::hex
-						  << temp_vram_address_ << " v_before=" << vram_address_ << std::dec
-						  << " render=" << is_rendering_enabled() << "\n";
-			}
 			copy_vertical_scroll();
 		}
 
@@ -698,12 +633,6 @@ uint8_t PPU::read_ppustatus() {
 	// Update I/O bus with the returned value
 	update_io_bus(result);
 
-	if (diag_trace_active_ && ((result & 0x40) || current_scanline_ >= 241)) {
-		std::cerr << "  $2002 SL=" << current_scanline_ << " C=" << current_cycle_ << " val=" << std::hex << (int)result
-				  << std::dec << " vbl=" << ((result >> 7) & 1) << " s0=" << ((result >> 6) & 1)
-				  << " w=" << write_toggle_ << "\n";
-	}
-
 	return result;
 }
 
@@ -762,20 +691,10 @@ void PPU::write_ppuctrl(uint8_t value) {
 	// Update temporary VRAM address nametable bits
 	temp_vram_address_ = (temp_vram_address_ & ~0x0C00) | ((static_cast<uint16_t>(value) & 0x03) << 10);
 
-	if (diag_trace_active_) {
-		std::cerr << "  $2000=" << std::hex << (int)value << std::dec << " SL=" << current_scanline_
-				  << " C=" << current_cycle_ << " t=" << std::hex << temp_vram_address_ << std::dec << "\n";
-	}
-
 	check_nmi();
 }
 
 void PPU::write_ppumask(uint8_t value) {
-	if (diag_trace_active_) {
-		std::cerr << "  $2001=" << std::hex << (int)value << std::dec << " SL=" << current_scanline_
-				  << " C=" << current_cycle_ << " render:" << is_rendering_enabled() << "->" << ((value & 0x18) != 0)
-				  << "\n";
-	}
 	mask_register_ = value;
 }
 
@@ -805,12 +724,6 @@ void PPU::write_ppuscroll(uint8_t value) {
 
 	// Update I/O bus
 	update_io_bus(value);
-
-	if (diag_trace_active_) {
-		std::cerr << "  $2005 w" << (write_toggle_ ? 1 : 2) << "=" << (int)value << " SL=" << current_scanline_
-				  << " C=" << current_cycle_ << " t=" << std::hex << temp_vram_address_ << std::dec
-				  << " fX=" << (int)fine_x_scroll_ << "\n";
-	}
 }
 
 void PPU::write_ppuaddr(uint8_t value) {
@@ -824,12 +737,6 @@ void PPU::write_ppuaddr(uint8_t value) {
 		temp_vram_address_ &= 0x7FFF; // Mask to 15 bits
 		vram_address_ = temp_vram_address_;
 		write_toggle_ = false;
-	}
-
-	if (diag_trace_active_) {
-		std::cerr << "  $2006 w" << (write_toggle_ ? 1 : 2) << "=" << std::hex << (int)value << " v=" << vram_address_
-				  << " t=" << temp_vram_address_ << std::dec << " SL=" << current_scanline_ << " C=" << current_cycle_
-				  << "\n";
 	}
 }
 

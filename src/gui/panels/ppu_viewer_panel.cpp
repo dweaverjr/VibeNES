@@ -235,12 +235,6 @@ void PPUViewerPanel::render_pattern_tables(nes::PPU *ppu, nes::Cartridge *cartri
 			// Detect ROM changes by checking CHR ROM size or cartridge pointer
 			bool rom_changed = (last_cartridge != cartridge) || (last_chr_size != rom_data.chr_rom.size());
 
-			if (rom_changed) {
-				printf("ROM change detected: cartridge %p->%p, chr_size %zu->%zu\n",
-					   static_cast<const void *>(last_cartridge), static_cast<const void *>(cartridge), last_chr_size,
-					   rom_data.chr_rom.size());
-			}
-
 			// Only regenerate when settings change, ROM changes, or first time
 			static int last_pattern_table = -1;
 			static int last_palette = -1;
@@ -479,20 +473,15 @@ void PPUViewerPanel::render_timing_info(nes::PPU * /*ppu*/) {
 }
 
 void PPUViewerPanel::initialize_textures() {
-	printf("Initializing OpenGL textures...\n");
-
 	// Generate OpenGL textures
 	glGenTextures(1, &main_display_texture_);
 	glGenTextures(1, &pattern_table_texture_);
 	glGenTextures(1, &nametable_texture_);
 
-	printf("Generated textures: main=%u, pattern=%u, nametable=%u\n", main_display_texture_, pattern_table_texture_,
-		   nametable_texture_);
-
 	// Check for OpenGL errors
 	GLenum error = glGetError();
 	if (error != GL_NO_ERROR) {
-		printf("OpenGL error after texture generation: %u\n", error);
+		fprintf(stderr, "OpenGL error after texture generation: %u\n", error);
 	}
 
 	// Setup main display texture (256x240)
@@ -503,10 +492,9 @@ void PPUViewerPanel::initialize_textures() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 240, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
-	// Check for OpenGL errors
 	error = glGetError();
 	if (error != GL_NO_ERROR) {
-		printf("OpenGL error after main display texture setup: %u\n", error);
+		fprintf(stderr, "OpenGL error after main display texture setup: %u\n", error);
 	}
 
 	// Setup pattern table texture (256x128)
@@ -522,7 +510,6 @@ void PPUViewerPanel::initialize_textures() {
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 480, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
 	textures_initialized_ = true;
-	printf("Texture initialization complete!\n");
 }
 
 void PPUViewerPanel::cleanup_textures() {
@@ -544,7 +531,7 @@ void PPUViewerPanel::update_main_display_texture(const uint32_t *frame_buffer) {
 	// Check for OpenGL errors
 	GLenum error = glGetError();
 	if (error != GL_NO_ERROR) {
-		printf("OpenGL error during texture update: %u\n", error);
+		fprintf(stderr, "OpenGL error during texture update: %u\n", error);
 	}
 }
 

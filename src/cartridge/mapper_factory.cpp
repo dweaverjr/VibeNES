@@ -22,8 +22,6 @@ std::unique_ptr<Mapper> MapperFactory::create_mapper(const RomData &rom_data) {
 	case 1: {
 		// Mapper 1 - MMC1 (SxROM)
 		// Used by: The Legend of Zelda, Metroid, Mega Man 2, Faxanadu, etc.
-		std::cout << "Creating Mapper 001 (MMC1)" << std::endl;
-
 		// Detect if CHR is RAM (no CHR ROM pages)
 		bool chr_is_ram = (rom_data.chr_rom_pages == 0);
 		// Most MMC1 games have PRG RAM, battery-backed flag indicates save RAM
@@ -35,20 +33,16 @@ std::unique_ptr<Mapper> MapperFactory::create_mapper(const RomData &rom_data) {
 	case 2:
 		// Mapper 2 - UxROM
 		// Used by: Mega Man, Castlevania, Contra, The Guardian Legend, etc.
-		std::cout << "Creating Mapper 002 (UxROM)" << std::endl;
 		return std::make_unique<Mapper002>(rom_data.prg_rom, rom_data.chr_rom, mirroring);
 
 	case 3:
 		// Mapper 3 - CNROM
 		// Used by: Arkanoid, Solomon's Key, Gradius, Paperboy, Q*bert, etc.
-		std::cout << "Creating Mapper 003 (CNROM)" << std::endl;
 		return std::make_unique<Mapper003>(rom_data.prg_rom, rom_data.chr_rom, mirroring);
 
 	case 4: {
 		// Mapper 4 - MMC3 (TxROM)
 		// Used by: Super Mario Bros 2/3, Mega Man 3-6, Willow, etc.
-		std::cout << "Creating Mapper 004 (MMC3)" << std::endl;
-
 		// Detect if CHR is RAM (no CHR ROM pages)
 		bool chr_is_ram = (rom_data.chr_rom_pages == 0);
 		// Most MMC3 games have PRG RAM, battery-backed flag indicates save RAM

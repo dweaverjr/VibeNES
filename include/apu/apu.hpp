@@ -246,11 +246,93 @@ class APU : public Component {
 	SampleRateConverter sample_rate_converter_;
 	bool audio_enabled_;
 
-	// High-pass filter for DC blocking (removes DC bias from APU output)
-	// This simulates the AC coupling that occurs in real hardware
-	float hp_filter_prev_input_;					   // Previous input sample
-	float hp_filter_prev_output_;					   // Previous output sample
-	static constexpr float HP_FILTER_POLE = 0.999835f; // Pole position (~90Hz cutoff at 44.1kHz)
+	// Dynamic rate control: periodically nudge the resampling ratio based on
+	// audio buffer fill level.  Keeps the buffer near a target level, preventing
+	// drift between emulation clock and audio device clock (which causes
+	// underrun/overflow clicks).
+	int rate_adjust_counter_ = 0;
+	static constexpr int RATE_ADJUST_INTERVAL = 512;		// check every 512 output samples (~11.6 ms)
+	static constexpr std::size_t RATE_ADJUST_TARGET = 3072; // target buffer fill (stereo sample pairs)
+
+	// NES hardware analog output filter chain.
+	// Models the analog circuitry between the DAC and the audio output jack:
+	//   1. First-order high-pass ~90 Hz  (mixer DC removal)
+	//   2. First-order high-pass ~440 Hz (amplifier AC coupling capacitor)
+	//   3. First-order low-pass  ~14 kHz (DAC output impedance + capacitance)
+	// Applied at the full CPU rate (1.789773 MHz) before downsampling.
+	// The low-pass filter is critical for the characteristic warm NES sound
+	// and also serves as an anti-aliasing pre-filter.
+	struct OutputFilter {
+		// High-pass: y[n] = α * (y[n-1] + x[n] - x[n-1])
+		// α = RC / (RC + dt), RC = 1/(2π·fc), dt = 1/1789773
+		struct HighPass {
+			float prev_input = 0.0f;
+			float prev_output = 0.0f;
+			float alpha = 0.0f;
+
+			float apply(float sample) {
+				prev_output = alpha * (prev_output + sample - prev_input);
+				prev_input = sample;
+				return prev_output;
+			}
+
+			void reset() {
+				prev_input = 0.0f;
+				prev_output = 0.0f;
+			}
+		};
+
+		// Low-pass: y[n] = α * x[n] + (1 - α) * y[n-1]
+		// α = dt / (RC + dt)
+		struct LowPass {
+			float prev_output = 0.0f;
+			float alpha = 0.0f;
+
+			float apply(float sample) {
+				prev_output += alpha * (sample - prev_output);
+				return prev_output;
+			}
+
+			void reset() {
+				prev_output = 0.0f;
+			}
+		};
+
+		HighPass hp_90;	 // ~90 Hz high-pass (DC removal from mixer)
+		HighPass hp_440; // ~440 Hz high-pass (AC coupling capacitor)
+		LowPass lp_14k;	 // ~14 kHz low-pass (DAC output filtering)
+
+		void initialize() {
+			// Coefficients for filters running at CPU clock rate (1,789,773 Hz)
+			constexpr float dt = 1.0f / 1789773.0f;
+
+			// HP 90 Hz: RC = 1/(2π×90) ≈ 0.001768
+			constexpr float rc_90 = 1.0f / (6.2831853f * 90.0f);
+			hp_90.alpha = rc_90 / (rc_90 + dt);
+
+			// HP 440 Hz: RC = 1/(2π×440) ≈ 3.617e-4
+			constexpr float rc_440 = 1.0f / (6.2831853f * 440.0f);
+			hp_440.alpha = rc_440 / (rc_440 + dt);
+
+			// LP 14000 Hz: RC = 1/(2π×14000) ≈ 1.137e-5
+			constexpr float rc_14k = 1.0f / (6.2831853f * 14000.0f);
+			lp_14k.alpha = dt / (rc_14k + dt);
+		}
+
+		float apply(float sample) {
+			sample = hp_90.apply(sample);
+			sample = hp_440.apply(sample);
+			sample = lp_14k.apply(sample);
+			return sample;
+		}
+
+		void reset() {
+			hp_90.reset();
+			hp_440.reset();
+			lp_14k.reset();
+		}
+	};
+	OutputFilter output_filter_;
 
 	// Internal methods
 	void clock_frame_counter();

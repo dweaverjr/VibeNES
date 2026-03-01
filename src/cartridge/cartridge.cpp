@@ -45,11 +45,6 @@ bool Cartridge::load_rom(const std::string &filepath) {
 		return false;
 	}
 
-	std::cout << "Cartridge loaded successfully!" << std::endl;
-	std::cout << "ROM: " << filepath << std::endl;
-	std::cout << "Mapper: " << static_cast<int>(rom_data_.mapper_id) << " (" << mapper_->get_name() << ")" << std::endl;
-	std::cout << "PRG ROM: " << rom_data_.prg_rom_pages << " x 16KB" << std::endl;
-	std::cout << "CHR ROM: " << rom_data_.chr_rom_pages << " x 8KB" << std::endl;
 	return true;
 }
 

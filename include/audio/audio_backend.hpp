@@ -12,10 +12,12 @@ namespace nes {
  * AudioBackend - SDL3 audio output interface
  *
  * Manages audio device initialization, sample buffering, and playback.
- * Operates at 44.1kHz stereo output with configurable buffer size.
+ * Operates at 44.1kHz stereo output with a fixed-size ring buffer.
  *
- * Thread-safe: Audio stream callback runs on SDL's audio thread, so all sample
- * queuing operations use mutexes to prevent data races.
+ * Thread-safe: Audio stream callback runs on SDL's audio thread, so all
+ * ring buffer operations use a lightweight mutex.  The ring buffer avoids
+ * any allocations or O(N) erases on the audio thread, preventing
+ * micro-stutters and clicks.
  */
 class AudioBackend {
   public:
@@ -115,9 +117,27 @@ class AudioBackend {
 	std::atomic<bool> is_playing_;
 	std::atomic<float> volume_;
 
-	// Sample buffer (stereo interleaved: L, R, L, R, ...)
-	std::vector<float> sample_buffer_;
-	std::mutex buffer_mutex_;
+	// Ring buffer for stereo audio (interleaved: L, R, L, R, ...)
+	// Fixed capacity avoids allocations and O(N) erases on the audio thread.
+	static constexpr std::size_t RING_CAPACITY = 32768; // ~372ms at 44.1kHz stereo
+
+	// Pre-buffer threshold: don't start SDL playback until we have this many
+	// stereo floats queued.  Prevents startup clicks from empty-buffer underruns.
+	static constexpr std::size_t PRE_BUFFER_THRESHOLD = 4096; // ~46ms at 44.1kHz stereo
+
+	std::vector<float> ring_buffer_;
+	std::size_t ring_read_;
+	std::size_t ring_write_;
+	std::size_t ring_count_;
+	std::mutex ring_mutex_;
+
+	// Underrun fade state — when the ring runs dry, we exponentially decay
+	// the last output sample instead of hard-cutting to silence.
+	float last_left_ = 0.0f;
+	float last_right_ = 0.0f;
+
+	// Pre-buffer flag: true after start() but before we have enough samples
+	bool want_playing_ = false;
 
 	// Audio parameters
 	int sample_rate_;

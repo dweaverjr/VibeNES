@@ -36,7 +36,8 @@ APU::APU()
 	  dmc_irq_flag_(false), prev_irq_line_state_(false), dmc_dma_pending_(false), dmc_dma_address_(0), cycle_count_(0),
 	  cpu_(nullptr), bus_(nullptr), audio_backend_(nullptr),
 	  sample_rate_converter_(static_cast<float>(CPU_CLOCK_NTSC), 44100.0f), audio_enabled_(false),
-	  hp_filter_prev_input_(0.0f), hp_filter_prev_output_(0.0f) {
+	  rate_adjust_counter_(0), output_filter_{} {
+	output_filter_.initialize();
 }
 
 void APU::power_on() {
@@ -66,9 +67,11 @@ void APU::reset() {
 	dmc_dma_address_ = 0;
 	cycle_count_ = 0;
 
-	// Reset high-pass filter state
-	hp_filter_prev_input_ = 0.0f;
-	hp_filter_prev_output_ = 0.0f;
+	// Reset hardware output filter chain
+	output_filter_.reset();
+
+	// Reset rate control
+	rate_adjust_counter_ = 0;
 }
 
 void APU::tick(CpuCycle cycles) {
@@ -112,11 +115,35 @@ void APU::tick(CpuCycle cycles) {
 		// Generate audio sample every CPU cycle
 		if (audio_enabled_ && audio_backend_) {
 			float sample = get_audio_sample();
+
+			// Apply NES hardware analog output filter chain:
+			// HP 90Hz (DC removal) → HP 440Hz (AC coupling) → LP 14kHz (smoothing)
+			// This runs at the full CPU rate before downsampling, matching
+			// real hardware and serving as an anti-aliasing pre-filter.
+			sample = output_filter_.apply(sample);
+
 			sample_rate_converter_.input_sample(sample);
 
 			if (sample_rate_converter_.has_output()) {
 				float output_sample = sample_rate_converter_.get_output();
 				audio_backend_->queue_sample(output_sample);
+
+				// Dynamic rate control: every RATE_ADJUST_INTERVAL output samples,
+				// check the audio buffer fill level and nudge the resampling ratio.
+				// If the buffer is below target, lower the ratio (produce more
+				// output samples). If above target, raise it (produce fewer).
+				// The ±0.5% clamp in set_rate_adjustment() keeps pitch shift
+				// well below the audible threshold (~8.6 cents).
+				if (++rate_adjust_counter_ >= RATE_ADJUST_INTERVAL) {
+					rate_adjust_counter_ = 0;
+					std::size_t fill = audio_backend_->get_buffer_size();
+					// Proportional control: error is normalized to [-1, +1]
+					float error = (static_cast<float>(fill) - static_cast<float>(RATE_ADJUST_TARGET)) /
+								  static_cast<float>(RATE_ADJUST_TARGET);
+					// Gain of 0.003: gentle adjustment, avoids oscillation
+					float adjustment = 1.0f + error * 0.003f;
+					sample_rate_converter_.set_rate_adjustment(adjustment);
+				}
 			}
 		}
 
@@ -441,19 +468,12 @@ float APU::get_audio_sample() {
 	}
 
 	// Combine both outputs
-	// Pulse range: 0.0 to ~0.95
-	// TND range: 0.0 to ~1.59
-	// Combined range: 0.0 to ~2.54
 	float mixed = pulse_output + tnd_output;
 
-	// When all channels are silent, output 0.0 to prevent popping
-	if (pulse1_out == 0 && pulse2_out == 0 && triangle_out == 0 && noise_out == 0 && dmc_out == 0) {
-		return 0.0f;
-	}
-
-	// Scale to reasonable range to prevent clipping
-	// The 0.5 factor reduces the maximum amplitude to ~1.27 which is safe
-	return mixed * 0.5f;
+	// NES DAC non-linear mixing naturally produces output in [0, ~1.0] range.
+	// The hardware filter chain (applied in tick()) removes DC bias and
+	// centers the signal around 0, so no additional scaling is needed here.
+	return mixed;
 }
 
 // Pulse Channel methods
@@ -609,31 +629,18 @@ void APU::TriangleChannel::clock_linear() {
 }
 
 uint8_t APU::TriangleChannel::get_output() {
-	// Silence conditions:
-	// 1. Channel disabled
-	if (!enabled) {
-		return 0;
-	}
+	// On real hardware the triangle DAC always reflects the current
+	// sequencer position.  When the channel is silenced (disabled,
+	// length/linear counter = 0, or ultrasonic period) the sequencer
+	// simply stops advancing — the DAC holds its last value.
+	// Returning 0 in these cases would create an audible pop/click
+	// because the signal jumps from its current level to zero.
 
-	// 2. Length counter is zero
-	if (length_counter == 0) {
-		return 0;
-	}
-
-	// 3. Linear counter is zero (specific to triangle channel)
-	if (linear_counter == 0) {
-		return 0;
-	}
-
-	// 4. Timer period too low - creates ultrasonic artifacts and aliasing
-	// Triangle is clocked at CPU rate, so it can produce much higher frequencies than pulse
-	// Period < 2 creates artifacts. Additionally, very low periods create aliasing/harsh sounds.
-	// NESDev recommends muting for periods that would produce frequencies above ~12kHz
-	// to avoid aliasing artifacts in the output.
-	// At CPU rate 1.789773 MHz: freq = 1789773 / (32 * (period + 1))
-	// For 12kHz: period ~= 4.7, so we use period < 5 as the threshold
-	if (timer_period < 5) {
-		return 0;
+	// Ultrasonic muting: period 0-1 produces 28-56 kHz fundamentals.
+	// The sequencer still clocks at these rates, generating aliased
+	// garbage, so we freeze the output at its current value.
+	if (!enabled || length_counter == 0 || linear_counter == 0 || timer_period < 2) {
+		return APU::TRIANGLE_SEQUENCE[sequence_pos];
 	}
 
 	return APU::TRIANGLE_SEQUENCE[sequence_pos];
@@ -787,9 +794,11 @@ void APU::complete_dmc_dma(uint8_t data) {
 }
 
 uint8_t APU::DMCChannel::get_output() {
-	if (!enabled) {
-		return 0;
-	}
+	// The DMC DAC always outputs output_level regardless of the
+	// enabled flag.  'enabled' only controls whether new sample
+	// bytes are fetched — the DAC register is never zeroed by
+	// disabling the channel.  Returning 0 would cause an audible
+	// pop when games toggle DMC on/off.
 	return output_level;
 }
 

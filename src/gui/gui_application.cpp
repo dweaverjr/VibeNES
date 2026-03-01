@@ -785,8 +785,6 @@ void GuiApplication::process_continuous_emulation(double delta_seconds) {
 	// Safety check: Prevent infinite loops from excessive delta_seconds
 	const std::int64_t MAX_CYCLES_PER_FRAME = 100000; // ~56ms worth of CPU cycles (safe upper bound)
 	if (target_cycles > MAX_CYCLES_PER_FRAME) {
-		std::cerr << "[WARNING] Excessive target_cycles: " << target_cycles << " (delta_seconds=" << delta_seconds
-				  << "). Capping to prevent hang." << std::endl;
 		cycle_accumulator_ = static_cast<double>(MAX_CYCLES_PER_FRAME);
 		const auto capped_target = MAX_CYCLES_PER_FRAME;
 

@@ -95,7 +95,6 @@ void RomLoaderPanel::render_file_browser(nes::Cartridge *cartridge) {
 						// Double-click to load
 						if (is_selected && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
 							if (cartridge->load_rom(selected_file_)) {
-								std::cout << "ROM loaded successfully: " << filename << std::endl;
 								if (rom_loaded_callback_) {
 									rom_loaded_callback_();
 								}
@@ -166,7 +165,6 @@ void RomLoaderPanel::render_load_button(nes::Cartridge *cartridge) {
 
 	if (ImGui::Button("Load ROM", ImVec2(100, 30))) {
 		if (cartridge->load_rom(selected_file_)) {
-			std::cout << "ROM loaded successfully!" << std::endl;
 			if (rom_loaded_callback_) {
 				rom_loaded_callback_();
 			}
@@ -188,7 +186,6 @@ void RomLoaderPanel::render_load_button(nes::Cartridge *cartridge) {
 
 	if (ImGui::Button("Unload ROM", ImVec2(100, 30))) {
 		cartridge->unload_rom();
-		std::cout << "ROM unloaded" << std::endl;
 	}
 
 	if (!can_unload) {

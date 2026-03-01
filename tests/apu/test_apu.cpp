@@ -69,10 +69,15 @@ TEST_CASE("APU Reset", "[apu]") {
 		REQUIRE_FALSE(apu.is_dmc_dma_pending());
 	}
 
-	SECTION("All channels produce zero output after reset") {
-		// After reset with no channels enabled, output should be near-zero
+	SECTION("All channels produce baseline DC after reset") {
+		// After reset, pulse/noise contribute nothing.  The triangle DAC
+		// holds its initial sequence value (15) even when disabled
+		// (hardware-accurate: sequencer freezes, DAC doesn't zero).
+		// DMC output_level is 0.  Raw mixer output is ~0.246 from
+		// triangle DC alone; the HP filters remove this at runtime.
 		float sample = apu.get_audio_sample();
-		REQUIRE(sample == Catch::Approx(0.0f).margin(0.001f));
+		REQUIRE(sample >= 0.0f);
+		REQUIRE(sample < 0.30f); // Triangle DC baseline only
 	}
 }
 
@@ -313,8 +318,11 @@ TEST_CASE("APU DMC Channel", "[apu][dmc]") {
 
 		apu->write(0x4011, 0x00); // Min = 0
 		float sample_min = apu->get_audio_sample();
-		// At 0, TND contribution from DMC is zero
-		REQUIRE(sample_min == Catch::Approx(0.0f).margin(0.001f));
+		// DMC at output_level 0 contributes nothing to TND.
+		// However the triangle DAC holds its last sequence value even
+		// when disabled (hardware-accurate), so the overall sample may
+		// be non-zero.  Just verify it's smaller than max.
+		REQUIRE(sample_min < sample_max);
 	}
 
 	SECTION("Enabling DMC with bytes_remaining=0 restarts sample") {
@@ -338,9 +346,13 @@ TEST_CASE("APU DMC Channel", "[apu][dmc]") {
 TEST_CASE("APU Audio Mixing", "[apu][mixing]") {
 	auto apu = make_apu();
 
-	SECTION("All channels silent produces zero output") {
+	SECTION("All channels silent produces baseline DC") {
+		// Triangle DAC holds its frozen sequence value (15) even when
+		// disabled (hardware-accurate), producing ~0.246 DC.  The HP
+		// output filters remove this bias at runtime.
 		float sample = apu->get_audio_sample();
-		REQUIRE(sample == Catch::Approx(0.0f).margin(0.001f));
+		REQUIRE(sample >= 0.0f);
+		REQUIRE(sample < 0.30f);
 	}
 
 	SECTION("Pulse output uses non-linear mixing") {

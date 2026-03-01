@@ -67,13 +67,6 @@ RomData RomLoader::load_rom(const std::string &filepath) {
 
 	rom_data.valid = true;
 
-	// Debug output
-	std::cout << "Loaded ROM: " << filepath << std::endl;
-	std::cout << "  Mapper: " << static_cast<int>(rom_data.mapper_id) << std::endl;
-	std::cout << "  PRG ROM: " << static_cast<int>(rom_data.prg_rom_pages) << " x 16KB" << std::endl;
-	std::cout << "  CHR ROM: " << static_cast<int>(rom_data.chr_rom_pages) << " x 8KB" << std::endl;
-	std::cout << "  Mirroring: " << (rom_data.vertical_mirroring ? "Vertical" : "Horizontal") << std::endl;
-
 	return rom_data;
 }
 
