@@ -29,14 +29,14 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 | Component | Status | Notes |
 |-----------|--------|-------|
 | CPU (6502) | ✅ Complete | 247 explicit opcodes + 9 catch-all NOPs (all 256 handled), hardware-accurate startup |
-| PPU | ⚠️ Has bugs | Full rendering pipeline; P0 bugs #1-4 FIXED, increment_fine_y bug FIXED; P1/P2 bugs remain |
+| PPU | ⚠️ Has bugs | Full rendering pipeline; P0 bugs #1-4 FIXED, increment_fine_y bug FIXED, per-cycle sprite fetches (257-320); P2 bugs remain |
 | APU | ✅ Substantial | All 5 channels (inline in header), frame counter, non-linear mixing, 1049 lines — NOT a stub |
 | Bus/Memory | ✅ Complete | Full NES memory map, mirroring, open bus, dual-purpose registers |
 | Mapper 0 (NROM) | ✅ Complete | 16KB/32KB PRG ROM |
 | Mapper 1 (MMC1) | ✅ Fixed | Consecutive-write filter for RMW instructions added (was bug #9) |
 | Mapper 2 (UxROM) | ✅ Complete | Includes bus conflict emulation |
 | Mapper 3 (CNROM) | ✅ Complete | CHR ROM bank switching, bus conflict emulation, 16KB/32KB PRG |
-| Mapper 4 (MMC3) | ⚠️ Improved | Banking works, A12 low-time filter for IRQ counter (was once-per-scanline clamp). Sprite fetch timing still batched at cycle 257. |
+| Mapper 4 (MMC3) | ✅ Fixed | Banking, per-cycle sprite pattern fetches (257-320), A12 low-time filter, proper IRQ line deassertion. Crystalis playable. |
 | Cartridge/ROM | ✅ Complete | iNES loading, mapper factory, GUI file browser |
 | Save States | ✅ Complete | Serialize/deserialize with CRC32 verification, 316 lines |
 | Audio Backend | ✅ Complete | SDL2 audio output + sample rate converter |
@@ -60,7 +60,7 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 ### P1 — Synchronization and Mapper Issues (Remaining)
 5. ~~**Instruction-level sync, not cycle-level**~~ — **FIXED (Phase 4)**: `consume_cycle()` now calls `bus_->tick_single_cpu_cycle()` which advances PPU 3 dots + APU 1 cycle + checks mapper IRQs. Every `read_byte()`/`write_byte()`/`consume_cycle()` call interleaves correctly. Main loop no longer calls `bus_->tick()` post-instruction. Interrupt handler cycle counts fixed (were double-counting memory operation cycles).
 7. ~~**OAM DMA doesn't halt CPU**~~ — **FIXED (Phase 4)**: DMA moved from PPU-driven (per PPU dot, 3× too fast) to CPU-driven. `execute_instruction()` checks `bus_->is_oam_dma_pending()` and calls `execute_oam_dma()`, which burns 513 CPU cycles (1 dummy + 256×(read+write)) via `consume_cycle()`, properly interleaving PPU/APU. CPU PC does not advance during DMA.
-8. ~~**MMC3 A12 IRQ at fixed cycle 260**~~ — **FIXED (Phase 4)**: Replaced once-per-scanline `a12_clocked_this_scanline_` clamp with a proper A12 low-time filter. PPU tracks monotonic dot counter (`ppu_dot_counter_`) and only clocks the mapper's IRQ counter on a rising A12 edge when A12 has been low for ≥15 PPU cycles. Mapper004 `ppu_a12_toggle()` comment cleaned up. Sprite pattern fetch timing still batched at cycle 257 (secondary accuracy issue).
+8. ~~**MMC3 A12 IRQ at fixed cycle 260**~~ — **FIXED (Phase 4+5)**: Replaced once-per-scanline `a12_clocked_this_scanline_` clamp with a proper A12 low-time filter. PPU tracks monotonic dot counter (`ppu_dot_counter_`) and clocks mapper IRQ counter on rising A12 edges when A12 has been low for ≥15 PPU cycles. Phase 5 added per-cycle sprite pattern fetches (cycles 257-320, 8 cycles/sprite: garbage NT, garbage attr, pattern low, pattern high) so A12 transitions match real hardware. Removed non-standard `irq_initialized_` guard from Mapper004. Bus IRQ line management fixed to deassert when no sources active.
 
 ### P2 — Moderate Issues (Remaining)
 10. **APU uses edge-triggered IRQ** — `apu.cpp` uses edge detection; NES APU IRQ is level-triggered.
@@ -90,7 +90,7 @@ Cycle-level interleaving via “fat `consume_cycle()`”. Each `consume_cycle()`
 ### Phase 4: Cycle-Level CPU/PPU/APU Interleaving
 ✅ **DONE** — Fat `consume_cycle()` implemented (bug #5 fixed). Each `consume_cycle()` now calls `bus_->tick_single_cpu_cycle()`, providing per-cycle CPU/PPU/APU interleaving. Interrupt handler cycle counts corrected (NMI/IRQ: 2 internal + 5 memory ops = 7 total; RESET: 5 internal/suppressed + 2 reads = 7 total). Main loop `bus_->tick()` calls removed. All 189 tests pass.
 OAM DMA halt implemented (bug #7 fixed). DMA moved from PPU-driven to CPU-driven: `execute_oam_dma()` burns 513 cycles (1 dummy + 256×(read+write)) via `consume_cycle()`, properly interleaving PPU/APU. CPU PC does not advance during DMA.
-MMC3 A12 IRQ fixed (bug #8 fixed). Replaced once-per-scanline clamp with A12 low-time filter (≥15 PPU dots). Monotonic `ppu_dot_counter_` tracks time since A12 was last high.
+MMC3 A12 IRQ fixed (bug #8 fixed). Replaced once-per-scanline clamp with A12 low-time filter (≥15 PPU dots). Monotonic `ppu_dot_counter_` tracks time since A12 was last high. Phase 5 further fixed: per-cycle sprite pattern fetches (257-320), removed `irq_initialized_` guard, bus IRQ deassertion.
 Penultimate-cycle interrupt polling implemented. `consume_cycle()` samples NMI/IRQ lines each cycle; `execute_instruction()` checks `prev_nmi_pending_`/`prev_irq_signal_` (the penultimate-cycle sample) at instruction boundaries. This correctly models CLI delay (IRQ not taken until instruction after CLI) and SEI window (one IRQ sneaks through after SEI). 3 new timing tests added.
 DMC DMA cycle stealing implemented (bug #11 fixed). APU signals `dmc_dma_pending_` when sample buffer empties; CPU’s `consume_cycle()` stalls ~4 cycles and performs the DMA read via `bus_->service_dmc_dma()` → `APU::complete_dmc_dma()`.
 Frame 0 hack removed (bug #14 fixed). PPU honours initial scroll/VRAM state from the first frame.
@@ -198,7 +198,7 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 - `.vscode/launch.json` — Two `cppvsdbg` configurations: "Debug VibeNES" and "Debug Tests", both use `preLaunchTask: "Build Debug"`.
 - No `c_cpp_properties.json` — CMake Tools provides IntelliSense via `compile_commands.json`.
 
-## Current State (as of Feb 28, 2026)
+## Current State (as of Mar 1, 2026)
 - **Phases 1-5 in progress**. Debug and release builds green, **zero warnings**. MSYS2 fully removed from machine.
 - **All 242 tests pass** (0 failures). 53 new tests added in Phase 5: APU (17 TEST_CASEs), mappers 0-4, ROM loader, save states.
 - **Test directories**: `tests/apu/`, `tests/cartridge/`, `tests/core/`, `tests/cpu/`, `tests/memory/`, `tests/ppu/`
@@ -206,3 +206,10 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 - **Games tested**: Super Mario Bros., Crystalis, Guardian Legend.
 - **Dependencies**: SDL2 + Catch2 via vcpkg. ImGui vendored (vcpkg port lacks sdl2-binding feature).
 - **Remaining**: Fix bug #10 (APU edge-triggered IRQ → level-triggered). Add input tests. Add test ROM infrastructure.
+
+### MMC3 Fixes (Mar 1, 2026)
+Four bugs fixed to make MMC3 games (Crystalis) playable:
+1. **Bus IRQ line never deasserted** — `tick_single_cpu_cycle()` now computes combined IRQ from mapper + APU frame + APU DMC; calls `clear_irq_line()` when no sources active
+2. **Sprite pattern fetches batched at cycle 257** — New `perform_sprite_fetch_cycle()` spreads reads across cycles 257-320 (8 cycles/sprite), producing correct A12 transitions
+3. **BG fetches gated on BG-only enable** — Changed to unconditional within rendering-enabled blocks (sprites-only games get correct A12)
+4. **Non-standard `irq_initialized_` guard in Mapper004** — Removed; real hardware has no such initialization requirement

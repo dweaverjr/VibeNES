@@ -13,13 +13,6 @@ A cycle-accurate Nintendo Entertainment System (NES) emulator written in modern 
 - **Debug GUI** — SDL3 + ImGui with 7 panels: CPU state, disassembler, memory viewer, ROM info, PPU viewer, timing, audio.
 - **Modern C++23** — `std::expected`, concepts, ranges, `constexpr`, strong types, RAII, no raw pointers.
 
-## Games Tested
-
-| Game | Mapper | Status |
-|------|--------|--------|
-| Super Mario Bros. | NROM (0) | ✅ Background + all sprites render correctly |
-| Crystalis | MMC1 (1) | ✅ Boots and runs |
-
 ## Building
 
 ### Prerequisites
