@@ -203,6 +203,6 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 - **All 242 tests pass** (0 failures). 53 new tests added in Phase 5: APU (17 TEST_CASEs), mappers 0-4, ROM loader, save states.
 - **Test directories**: `tests/apu/`, `tests/cartridge/`, `tests/core/`, `tests/cpu/`, `tests/memory/`, `tests/ppu/`
 - **Phase 5 highlights**: README.md rewritten. APU tests cover all 5 channels, frame counter modes, register I/O, mixing, serialization, DMA interface. Mapper tests cover NROM/MMC1/UxROM/CNROM/MMC3 banking, IRQ, bus conflicts, serialization. ROM loader tests cover iNES parsing and validation. Save state tests cover header magic, version, CRC32.
-- **Games tested**: Super Mario Bros. (NROM/Mapper 0) — background + all sprites render correctly. Crystalis (MMC1/Mapper 1) — boots and runs.
+- **Games tested**: Super Mario Bros., Crystalis, Guardian Legend.
 - **Dependencies**: SDL2 + Catch2 via vcpkg. ImGui vendored (vcpkg port lacks sdl2-binding feature).
 - **Remaining**: Fix bug #10 (APU edge-triggered IRQ → level-triggered). Add input tests. Add test ROM infrastructure.
