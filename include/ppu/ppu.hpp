@@ -262,6 +262,12 @@ class PPU : public Component {
 	uint8_t secondary_oam_index_;		// Write position in secondary OAM (0-31)
 	bool sprite_overflow_detected_;		// Hardware sprite overflow flag state
 
+	// Diagnostic tracing (auto-triggers when PPU state looks wrong)
+	bool diag_trace_active_ = false;	// True when detailed logging is enabled
+	int diag_trace_frames_ = 0;			// Remaining frames to trace
+	uint16_t diag_last_frame_vram_ = 0; // VRAM address at start of previous frame
+	int diag_stable_frames_ = 0;		// Count of consecutive frames with same coarse_y
+
 	// External connections
 	SystemBus *bus_;					   // For NMI generation
 	CPU6502 *cpu_;						   // For triggering NMI interrupts

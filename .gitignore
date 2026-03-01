@@ -43,6 +43,10 @@ roms/*.nes
 roms/*.chr
 roms/*.prg
 
+# Save states
+*.vns
+saves/
+
 # Test ROMs ARE committed — don't ignore tests/test_roms/
 # (put standard test ROMs like nestest, blargg, etc. there)
 

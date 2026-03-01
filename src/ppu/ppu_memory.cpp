@@ -101,40 +101,56 @@ uint16_t PPUMemory::map_nametable_address(uint16_t address) {
 		address = 0x2000 + (address - 0x3000);
 	}
 
-	// Remove the base nametable address to get offset
+	// Remove the base nametable address to get offset within the 4-nametable space
 	uint16_t offset = address - PPUMemoryMap::NAMETABLE_0_START;
+	// Which logical nametable (0-3) and offset within it
+	uint16_t nt_index = (offset >> 10) & 0x03; // 0-3
+	uint16_t nt_offset = offset & 0x03FF;	   // 0-$3FF within nametable
 
 	// Get current mirroring mode from cartridge (supports dynamic mirroring)
-	bool vertical = get_vertical_mirroring();
-
-	// Handle mirroring based on cartridge mirroring mode
-	// NES has only 2KB VRAM which holds 2 nametables
-	if (vertical) {
-		// Vertical mirroring: nametables 0 and 2 share memory, 1 and 3 share memory
-		// NT0 ($2000-$23FF) -> VRAM $0000-$03FF
-		// NT1 ($2400-$27FF) -> VRAM $0400-$07FF
-		// NT2 ($2800-$2BFF) -> VRAM $0000-$03FF (mirror of NT0)
-		// NT3 ($2C00-$2FFF) -> VRAM $0400-$07FF (mirror of NT1)
-		if (offset >= 0x800) {
-			offset -= 0x800; // Mirror nametables 2,3 to 0,1
-		}
+	// MMC1 can switch between all 4 modes at runtime (single-screen low/high,
+	// vertical, horizontal).  Previous code only handled vertical/horizontal,
+	// causing wrong nametable data for games like Crystalis that use
+	// single-screen mirroring during cave/indoor transitions.
+	Mapper::Mirroring mirroring = Mapper::Mirroring::Horizontal; // default fallback
+	if (cartridge_) {
+		mirroring = cartridge_->get_mirroring();
 	} else {
-		// Horizontal mirroring: nametables 0 and 1 share memory, 2 and 3 share memory
-		// NT0 ($2000-$23FF) -> VRAM $0000-$03FF
-		// NT1 ($2400-$27FF) -> VRAM $0000-$03FF (mirror of NT0)
-		// NT2 ($2800-$2BFF) -> VRAM $0400-$07FF
-		// NT3 ($2C00-$2FFF) -> VRAM $0400-$07FF (mirror of NT2)
-		if (offset >= 0x800) {
-			// Nametables 2,3: subtract 0x800 to get position within pair, then add 0x400 for upper 1KB
-			offset = 0x400 + (offset - 0x800);
-		} else if (offset >= 0x400) {
-			// Nametable 1: subtract 0x400 to mirror to nametable 0 (lower 1KB)
-			offset -= 0x400;
-		}
+		// Fallback for tests without cartridge
+		mirroring = vertical_mirroring_ ? Mapper::Mirroring::Vertical : Mapper::Mirroring::Horizontal;
 	}
 
+	// Map logical nametable index (0-3) to physical VRAM page (0 or 1)
+	// NES has only 2KB VRAM → 2 physical nametable pages of 1KB each
+	uint16_t physical_page = 0;
+	switch (mirroring) {
+	case Mapper::Mirroring::Horizontal:
+		// NT0,NT1 → page 0; NT2,NT3 → page 1
+		physical_page = (nt_index >= 2) ? 1 : 0;
+		break;
+	case Mapper::Mirroring::Vertical:
+		// NT0,NT2 → page 0; NT1,NT3 → page 1
+		physical_page = (nt_index & 1);
+		break;
+	case Mapper::Mirroring::SingleScreenLow:
+		// All nametables → page 0
+		physical_page = 0;
+		break;
+	case Mapper::Mirroring::SingleScreenHigh:
+		// All nametables → page 1
+		physical_page = 1;
+		break;
+	case Mapper::Mirroring::FourScreen:
+		// Four-screen: use full 4KB (not typical NES, needs extra RAM on cart)
+		// Clamp to 2KB for safety; true four-screen carts provide their own RAM
+		physical_page = nt_index & 1;
+		break;
+	}
+
+	uint16_t mapped = (physical_page * 0x0400) + nt_offset;
+
 	// Ensure we stay within VRAM bounds
-	return offset % vram_.size();
+	return mapped % vram_.size();
 }
 
 uint8_t PPUMemory::map_palette_address(uint8_t address) {
