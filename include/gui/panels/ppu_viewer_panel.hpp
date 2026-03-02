@@ -18,6 +18,8 @@ class Cartridge;
 
 namespace nes::gui {
 
+class CRTFilter; // Forward declaration
+
 /**
  * PPU Display Modes for different visualization types
  */
@@ -80,6 +82,11 @@ class PPUViewerPanel {
 	// Update texture without rendering UI (for fullscreen mode)
 	void update_display_texture_only(nes::PPU *ppu);
 
+	// Set CRT filter for display processing (non-owning pointer)
+	void set_crt_filter(CRTFilter *filter) {
+		crt_filter_ = filter;
+	}
+
   private:
 	bool visible_;
 	PPUDisplayMode display_mode_;
@@ -116,6 +123,9 @@ class PPUViewerPanel {
 
 	// Texture management
 	bool textures_initialized_;
+
+	// CRT display filter (non-owning, set by GuiApplication)
+	CRTFilter *crt_filter_ = nullptr;
 };
 
 } // namespace nes::gui

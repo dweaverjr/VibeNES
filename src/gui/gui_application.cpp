@@ -3,6 +3,7 @@
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
+#include "gui/crt_filter.hpp"
 #include "gui/style/retro_theme.hpp"
 #include "input/controller.hpp"
 #include "input/gamepad_manager.hpp"
@@ -36,8 +37,9 @@
 namespace nes::gui {
 
 GuiApplication::GuiApplication()
-	: window_(nullptr), gl_context_(nullptr), io_(nullptr), running_(false), show_demo_window_(false),
-	  fullscreen_mode_(false), fullscreen_scale_(0), fullscreen_offset_x_(0), fullscreen_offset_y_(0),
+	: window_(nullptr), gl_context_(nullptr), io_(nullptr), running_(false),
+	  fullscreen_mode_(false), fullscreen_scale_(0.0f), fullscreen_offset_x_(0.0f), fullscreen_offset_y_(0.0f),
+	  fullscreen_display_w_(0.0f), fullscreen_display_h_(0.0f), crt_filter_(std::make_unique<CRTFilter>()),
 	  emulation_running_(false), emulation_paused_(true), emulation_speed_(1.0f), cycle_accumulator_(0.0),
 	  last_frame_counter_(0), frame_timer_initialized_(false), cpu_(nullptr), bus_(nullptr), cartridge_(nullptr),
 	  ppu_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
@@ -63,6 +65,11 @@ bool GuiApplication::initialize() {
 
 	// Initialize core emulation components
 	initialize_emulation_components();
+
+	// Initialize CRT display filter (needs GL context)
+	if (crt_filter_ && !crt_filter_->initialize()) {
+		std::cerr << "Warning: CRT filter initialization failed\n";
+	}
 
 	return true;
 }
@@ -100,14 +107,7 @@ bool GuiApplication::initialize_sdl() {
 	// Standard VSync prevents the "compress/decompress" effect during scrolling
 	if (!SDL_GL_SetSwapInterval(1)) {
 		std::cerr << "Warning: Failed to enable VSync: " << SDL_GetError() << std::endl;
-	} else {
-		std::cout << "VSync enabled (standard mode for consistent frame pacing)\n";
 	}
-
-	// Verify VSync setting
-	int swap_interval = 0;
-	SDL_GL_GetSwapInterval(&swap_interval);
-	std::cout << "Current swap interval: " << swap_interval << " (0=off, 1=vsync, -1=adaptive)\n";
 
 	return true;
 }
@@ -142,7 +142,6 @@ void GuiApplication::initialize_emulation_components() {
 
 	// Initialize audio system
 	if (bus_->initialize_audio()) {
-		std::cout << "Audio system initialized successfully\n";
 		// Audio will be started by the audio panel on first render to match checkbox state
 	} else {
 		std::cerr << "Warning: Audio system initialization failed\n";
@@ -151,8 +150,7 @@ void GuiApplication::initialize_emulation_components() {
 	// Initialize gamepad/controller system
 	gamepad_manager_ = std::make_shared<nes::GamepadManager>();
 	if (gamepad_manager_->initialize()) {
-		std::cout << "Gamepad system initialized successfully\n";
-		std::cout << "Connected controllers: " << gamepad_manager_->get_connected_count() << std::endl;
+		// Gamepad system ready
 	} else {
 		std::cerr << "Warning: Gamepad system initialization failed\n";
 	}
@@ -200,7 +198,10 @@ void GuiApplication::initialize_emulation_components() {
 	save_state_manager_ =
 		std::make_unique<nes::SaveStateManager>(cpu_.get(), ppu_.get(), apu.get(), bus_.get(), cartridge_.get());
 
-	printf("Emulation components initialized and connected\n");
+	// Pass CRT filter to PPU viewer panel for windowed mode rendering
+	if (ppu_viewer_panel_ && crt_filter_) {
+		ppu_viewer_panel_->set_crt_filter(crt_filter_.get());
+	}
 }
 
 void GuiApplication::run() {
@@ -208,8 +209,6 @@ void GuiApplication::run() {
 	last_frame_counter_ = SDL_GetPerformanceCounter();
 	frame_timer_initialized_ = true;
 
-	std::cout << "[DEBUG] Entering main loop" << std::endl;
-	std::cout.flush();
 	int frame_count = 0;
 
 	while (running_) {
@@ -258,13 +257,6 @@ void GuiApplication::handle_events() {
 
 		// Handle hotkeys
 		if (event.type == SDL_EVENT_KEY_DOWN) {
-			// Debug: Print key press info
-			std::cout << "[KeyPress] Key: " << SDL_GetKeyName(event.key.key);
-			if (io_) {
-				std::cout << " | ImGui WantCapture: " << (io_->WantCaptureKeyboard ? "YES" : "NO");
-			}
-			std::cout << std::endl;
-
 			// Process hotkeys even if ImGui wants keyboard (for critical functions like fullscreen/exit)
 			SDL_Keymod mod_state = SDL_GetModState();
 			bool shift_pressed = (mod_state & SDL_KMOD_SHIFT) != 0;
@@ -273,41 +265,34 @@ void GuiApplication::handle_events() {
 
 			// Fullscreen toggle hotkeys (always process these)
 			if (event.key.key == SDLK_F11 && !shift_pressed && !ctrl_pressed && !alt_pressed) {
-				std::cout << "[Fullscreen] F11 pressed - toggling" << std::endl;
 				toggle_fullscreen();
 			}
 			// Alt+Enter for fullscreen (alternate)
 			else if (event.key.key == SDLK_RETURN && alt_pressed && !shift_pressed && !ctrl_pressed) {
-				std::cout << "[Fullscreen] Alt+Enter pressed - toggling" << std::endl;
 				toggle_fullscreen();
 			}
 			// Escape to exit fullscreen
 			else if (event.key.key == SDLK_ESCAPE && fullscreen_mode_) {
-				std::cout << "[Fullscreen] Escape pressed - exiting fullscreen" << std::endl;
 				toggle_fullscreen();
 			}
 			// Save state hotkeys (F1-F9) - always process these
 			else if (!shift_pressed && !ctrl_pressed && !alt_pressed && event.key.key >= SDLK_F1 &&
 					 event.key.key <= SDLK_F9) {
 				int slot = event.key.key - SDLK_F1 + 1;
-				std::cout << "[SaveState] Saving to slot " << slot << std::endl;
 				save_state_to_slot(slot);
 			}
 			// Load state hotkeys (Shift+F1-F9) - always process these
 			else if (shift_pressed && !ctrl_pressed && !alt_pressed && event.key.key >= SDLK_F1 &&
 					 event.key.key <= SDLK_F9) {
 				int slot = event.key.key - SDLK_F1 + 1;
-				std::cout << "[SaveState] Loading from slot " << slot << std::endl;
 				load_state_from_slot(slot);
 			}
 			// Quick save (Ctrl+F5) - always process this
 			else if (ctrl_pressed && !shift_pressed && !alt_pressed && event.key.key == SDLK_F5) {
-				std::cout << "[SaveState] Quick save" << std::endl;
 				quick_save();
 			}
 			// Quick load (Ctrl+F8) - always process this
 			else if (ctrl_pressed && !shift_pressed && !alt_pressed && event.key.key == SDLK_F8) {
-				std::cout << "[SaveState] Quick load" << std::endl;
 				quick_load();
 			}
 		}
@@ -498,10 +483,6 @@ void GuiApplication::render_frame() {
 
 	ImGui::PopStyleVar(3);
 
-	// Demo window removed (imgui_demo.cpp not compiled)
-	// if (show_demo_window_) {
-	//     ImGui::ShowDemoWindow(&show_demo_window_);
-	// }
 
 	// Display save state status message as overlay
 	if (save_state_status_timer_ > 0.0f) {
@@ -621,6 +602,15 @@ void GuiApplication::render_main_menu_bar() {
 			if (ImGui::MenuItem("Fullscreen", "F11", fullscreen_mode_)) {
 				toggle_fullscreen();
 			}
+			ImGui::Separator();
+			if (crt_filter_) {
+				if (ImGui::MenuItem("CRT Filter", nullptr, crt_filter_->enabled)) {
+					crt_filter_->enabled = !crt_filter_->enabled;
+					if (fullscreen_mode_)
+						calculate_fullscreen_layout();
+				}
+	
+			}
 			ImGui::EndMenu();
 		}
 
@@ -667,10 +657,6 @@ void GuiApplication::render_main_menu_bar() {
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::BeginMenu("View")) {
-			ImGui::MenuItem("ImGui Demo", nullptr, &show_demo_window_);
-			ImGui::EndMenu();
-		}
 
 		if (ImGui::BeginMenu("Help")) {
 			if (ImGui::MenuItem("About")) {
@@ -687,6 +673,11 @@ void GuiApplication::shutdown() {
 }
 
 void GuiApplication::cleanup() {
+	// Shut down CRT filter (GL resources) before destroying context
+	if (crt_filter_) {
+		crt_filter_->shutdown();
+	}
+
 	if (gl_context_) {
 		ImGui_ImplOpenGL3_Shutdown();
 		ImGui_ImplSDL3_Shutdown();
@@ -881,8 +872,6 @@ void GuiApplication::reset_system() {
 	pause_emulation();
 	emulation_running_ = false;
 	cycle_accumulator_ = 0.0;
-
-	std::cout << "NES System Reset: All components reset to initial state" << std::endl;
 }
 
 void GuiApplication::setup_callbacks() {
@@ -955,6 +944,10 @@ void GuiApplication::load_state_from_slot(int slot) {
 	bool success = save_state_manager_->load_from_slot(slot);
 
 	if (success) {
+		// Reset controller state after load to prevent stale strobe/shift register desync
+		if (controllers_) {
+			controllers_->reset();
+		}
 		char message[64];
 		snprintf(message, sizeof(message), "Loaded from slot %d", slot);
 		show_save_state_status(message, true);
@@ -1008,6 +1001,10 @@ void GuiApplication::quick_load() {
 	bool success = save_state_manager_->quick_load();
 
 	if (success) {
+		// Reset controller state after load to prevent stale strobe/shift register desync
+		if (controllers_) {
+			controllers_->reset();
+		}
 		show_save_state_status("Quick load successful", true);
 	} else {
 		const std::string &error = save_state_manager_->get_last_error();
@@ -1022,13 +1019,6 @@ void GuiApplication::quick_load() {
 void GuiApplication::show_save_state_status(const std::string &message, bool success) {
 	save_state_status_message_ = message;
 	save_state_status_timer_ = 3.0f; // Show for 3 seconds
-
-	// Print to console as well
-	if (success) {
-		std::cout << "[Save State] " << message << std::endl;
-	} else {
-		std::cerr << "[Save State] " << message << std::endl;
-	}
 }
 
 void GuiApplication::toggle_fullscreen() {
@@ -1038,12 +1028,9 @@ void GuiApplication::toggle_fullscreen() {
 		// Enter borderless fullscreen
 		SDL_SetWindowFullscreen(window_, true);
 		calculate_fullscreen_layout();
-		std::cout << "[Fullscreen] Enabled - Scale: " << fullscreen_scale_ << "x (" << (256 * fullscreen_scale_) << "x"
-				  << (240 * fullscreen_scale_) << ")" << std::endl;
 	} else {
 		// Exit fullscreen - return to windowed mode
 		SDL_SetWindowFullscreen(window_, false);
-		std::cout << "[Fullscreen] Disabled" << std::endl;
 	}
 }
 
@@ -1052,36 +1039,37 @@ void GuiApplication::calculate_fullscreen_layout() {
 	SDL_DisplayID display_id = SDL_GetPrimaryDisplay();
 	const SDL_DisplayMode *display_mode = SDL_GetCurrentDisplayMode(display_id);
 	if (!display_mode) {
-		fullscreen_scale_ = 1;
-		fullscreen_offset_x_ = 0;
-		fullscreen_offset_y_ = 0;
+		fullscreen_scale_ = 1.0f;
+		fullscreen_offset_x_ = 0.0f;
+		fullscreen_offset_y_ = 0.0f;
+		fullscreen_display_w_ = 256.0f;
+		fullscreen_display_h_ = 240.0f;
 		return;
 	}
 
-	const int screen_width = display_mode->w;
-	const int screen_height = display_mode->h;
+	const float screen_w = static_cast<float>(display_mode->w);
+	const float screen_h = static_cast<float>(display_mode->h);
 
-	// NES native resolution
-	const int nes_width = 256;
-	const int nes_height = 240;
+	// NES display dimensions accounting for NTSC pixel aspect ratio
+	const bool use_par = crt_filter_ && crt_filter_->enabled && crt_filter_->aspect_correction;
+	const float nes_w = use_par ? 256.0f * CRTFilter::NTSC_PAR : 256.0f;
+	const float nes_h = 240.0f;
 
-	// Calculate maximum integer scale that fits
-	const int max_scale_x = screen_width / nes_width;
-	const int max_scale_y = screen_height / nes_height;
-	fullscreen_scale_ = std::min(max_scale_x, max_scale_y);
+	// Calculate maximum scale that fits the screen
+	const float scale_x = screen_w / nes_w;
+	const float scale_y = screen_h / nes_h;
+	float scale = std::min(scale_x, scale_y);
 
-	// Ensure at least 1x scale
-	if (fullscreen_scale_ < 1) {
-		fullscreen_scale_ = 1;
+	// Use integer scaling for pixel-perfect display (non-CRT mode)
+	if (!crt_filter_ || !crt_filter_->enabled) {
+		scale = std::floor(scale);
 	}
 
-	// Calculate actual display size
-	const int display_width = nes_width * fullscreen_scale_;
-	const int display_height = nes_height * fullscreen_scale_;
-
-	// Center the display
-	fullscreen_offset_x_ = (screen_width - display_width) / 2;
-	fullscreen_offset_y_ = (screen_height - display_height) / 2;
+	fullscreen_scale_ = std::max(scale, 1.0f);
+	fullscreen_display_w_ = nes_w * fullscreen_scale_;
+	fullscreen_display_h_ = nes_h * fullscreen_scale_;
+	fullscreen_offset_x_ = (screen_w - fullscreen_display_w_) / 2.0f;
+	fullscreen_offset_y_ = (screen_h - fullscreen_display_h_) / 2.0f;
 }
 
 void GuiApplication::render_fullscreen_display() {
@@ -1089,7 +1077,7 @@ void GuiApplication::render_fullscreen_display() {
 		return;
 	}
 
-	// Update the PPU display texture WITHOUT rendering any UI windows
+	// Update the PPU display texture
 	ppu_viewer_panel_->update_display_texture_only(ppu_.get());
 
 	// Clear to black for letterboxing
@@ -1108,20 +1096,30 @@ void GuiApplication::render_fullscreen_display() {
 									ImGuiWindowFlags_NoDecoration;
 
 	if (ImGui::Begin("FullscreenDisplay", nullptr, window_flags)) {
-		// Get the NES display texture from PPU viewer panel
 		unsigned int texture_id = ppu_viewer_panel_->get_main_display_texture();
 
 		if (texture_id != 0) {
-			// Calculate display size and position
-			ImVec2 display_size(static_cast<float>(256 * fullscreen_scale_),
-								static_cast<float>(240 * fullscreen_scale_));
-			ImVec2 display_pos(static_cast<float>(fullscreen_offset_x_), static_cast<float>(fullscreen_offset_y_));
+			// Apply bilinear filtering when CRT mode is enabled for soft CRT look
+			if (crt_filter_ && crt_filter_->enabled) {
+				glBindTexture(GL_TEXTURE_2D, texture_id);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			}
+
+			ImVec2 display_size(fullscreen_display_w_, fullscreen_display_h_);
+			ImVec2 display_pos(fullscreen_offset_x_, fullscreen_offset_y_);
 
 			// Set cursor position for centering
 			ImGui::SetCursorPos(display_pos);
 
-			// Render the texture with integer scaling
 			ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(texture_id)), display_size);
+
+			// Restore nearest-neighbor filtering for debug views
+			if (crt_filter_ && crt_filter_->enabled) {
+				glBindTexture(GL_TEXTURE_2D, texture_id);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			}
 		}
 	}
 	ImGui::End();

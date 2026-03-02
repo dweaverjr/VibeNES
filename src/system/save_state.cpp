@@ -57,7 +57,7 @@ SaveStateHeader::SaveStateHeader() : version(SAVE_STATE_VERSION), crc32(0), time
 }
 
 bool SaveStateHeader::is_valid() const {
-	return std::memcmp(magic, SAVE_STATE_MAGIC, 8) == 0 && version == SAVE_STATE_VERSION;
+	return std::memcmp(magic, SAVE_STATE_MAGIC, 8) == 0 && version >= 1 && version <= SAVE_STATE_VERSION;
 }
 
 // SaveStateManager implementation

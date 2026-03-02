@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/types.hpp"
+#include "gui/crt_filter.hpp"
 #include <SDL3/SDL.h>
 #include <cstdint>
 #include <memory>
@@ -62,13 +63,18 @@ class GuiApplication {
 
 	// Application state
 	bool running_;
-	bool show_demo_window_;
 
 	// Fullscreen state
 	bool fullscreen_mode_;
-	int fullscreen_scale_;	  // Integer scaling multiplier (calculated automatically)
-	int fullscreen_offset_x_; // X offset for centering
-	int fullscreen_offset_y_; // Y offset for centering
+	float fullscreen_scale_;	 // Scaling multiplier (calculated automatically)
+	float fullscreen_offset_x_;	 // X offset for centering
+	float fullscreen_offset_y_;	 // Y offset for centering
+	float fullscreen_display_w_; // Actual display width
+	float fullscreen_display_h_; // Actual display height
+
+	// CRT display filter
+	std::unique_ptr<CRTFilter> crt_filter_;
+	unsigned int fullscreen_filtered_texture_ = 0; // Pre-computed CRT texture for fullscreen
 
 	// Emulation state
 	bool emulation_running_;

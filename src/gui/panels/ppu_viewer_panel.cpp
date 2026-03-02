@@ -1,5 +1,6 @@
 #include "gui/panels/ppu_viewer_panel.hpp"
 #include "cartridge/cartridge.hpp"
+#include "gui/crt_filter.hpp"
 #include "gui/style/retro_theme.hpp"
 #include "ppu/nes_palette.hpp"
 #include "ppu/ppu.hpp"
@@ -158,7 +159,28 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 
 	// Display the texture
 	if (main_display_texture_ != 0) {
-		ImVec2 display_size(256 * display_scale_, 240 * display_scale_);
+		// Calculate display size accounting for CRT aspect ratio correction
+		float disp_w, disp_h;
+		if (crt_filter_) {
+			crt_filter_->get_display_size(256.0f, 240.0f, display_scale_, disp_w, disp_h);
+		} else {
+			disp_w = 256.0f * display_scale_;
+			disp_h = 240.0f * display_scale_;
+		}
+
+		// In windowed mode: use bilinear filtering for CRT softness
+		// (FBO shader rendering is only safe in fullscreen, outside ImGui frame)
+		if (crt_filter_ && crt_filter_->enabled) {
+			glBindTexture(GL_TEXTURE_2D, main_display_texture_);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		} else {
+			glBindTexture(GL_TEXTURE_2D, main_display_texture_);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		}
+
+		ImVec2 display_size(disp_w, disp_h);
 		ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(main_display_texture_)), display_size);
 
 		// Timing info removed - now in right panel

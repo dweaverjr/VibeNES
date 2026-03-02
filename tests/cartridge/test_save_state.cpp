@@ -53,8 +53,8 @@ TEST_CASE("SaveState Constants", "[save-state]") {
 		REQUIRE(std::string(SAVE_STATE_MAGIC, 7) == "VIBENES");
 	}
 
-	SECTION("Version is 1") {
-		REQUIRE(SAVE_STATE_VERSION == 1);
+	SECTION("Version is 2") {
+		REQUIRE(SAVE_STATE_VERSION == 2);
 	}
 }
 

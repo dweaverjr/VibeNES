@@ -68,6 +68,7 @@ endif()
 add_executable(VibeNES_GUI
     src/main.cpp
     src/gui/gui_application.cpp
+    src/gui/crt_filter.cpp
     src/gui/panels/audio_panel.cpp
     src/gui/panels/cpu_state_panel.cpp
     src/gui/panels/disassembler_panel.cpp

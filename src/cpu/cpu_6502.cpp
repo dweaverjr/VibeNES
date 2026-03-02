@@ -5279,6 +5279,12 @@ void CPU6502::serialize_state(std::vector<uint8_t> &buffer) const {
 	buffer.push_back(interrupt_state_.reset_pending ? 1 : 0);
 	buffer.push_back(irq_line_ ? 1 : 0);
 	buffer.push_back(nmi_line_ ? 1 : 0);
+
+	// Penultimate-cycle interrupt polling state (added v2)
+	buffer.push_back(curr_nmi_pending_ ? 1 : 0);
+	buffer.push_back(prev_nmi_pending_ ? 1 : 0);
+	buffer.push_back(curr_irq_signal_ ? 1 : 0);
+	buffer.push_back(prev_irq_signal_ ? 1 : 0);
 }
 
 void CPU6502::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
@@ -5308,6 +5314,14 @@ void CPU6502::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offs
 	interrupt_state_.reset_pending = buffer[offset++] != 0;
 	irq_line_ = buffer[offset++] != 0;
 	nmi_line_ = buffer[offset++] != 0;
+
+	// Penultimate-cycle interrupt polling state (added v2)
+	if (offset + 4 <= buffer.size()) {
+		curr_nmi_pending_ = buffer[offset++] != 0;
+		prev_nmi_pending_ = buffer[offset++] != 0;
+		curr_irq_signal_ = buffer[offset++] != 0;
+		prev_irq_signal_ = buffer[offset++] != 0;
+	}
 }
 
 } // namespace nes

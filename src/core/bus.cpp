@@ -515,12 +515,24 @@ void SystemBus::serialize_state(std::vector<uint8_t> &buffer) const {
 	if (ram_) {
 		ram_->serialize_state(buffer);
 	}
+
+	// Bus state (added v2)
+	buffer.push_back(oam_dma_pending_ ? 1 : 0);
+	buffer.push_back(oam_dma_page_);
+	buffer.push_back(last_bus_value_);
 }
 
 void SystemBus::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
 	// Deserialize RAM (2KB)
 	if (ram_) {
 		ram_->deserialize_state(buffer, offset);
+	}
+
+	// Bus state (added v2)
+	if (offset + 3 <= buffer.size()) {
+		oam_dma_pending_ = buffer[offset++] != 0;
+		oam_dma_page_ = buffer[offset++];
+		last_bus_value_ = buffer[offset++];
 	}
 }
 

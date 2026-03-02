@@ -302,6 +302,20 @@ class APU : public Component {
 		HighPass hp_440; // ~440 Hz high-pass (AC coupling capacitor)
 		LowPass lp_14k;	 // ~14 kHz low-pass (DAC output filtering)
 
+		// Low-shelf bass boost — not part of original NES hardware, but
+		// applied as a post-processing enhancement to give the output a
+		// warmer, more modern feel.  Boosts frequencies below ~200 Hz
+		// by ~6 dB using a first-order shelving filter.
+		//
+		// Implementation: split signal into low-frequency and remainder
+		// using a first-order LP at the shelf frequency, then add a
+		// scaled copy of the low-frequency content back into the output.
+		//   lp_bass tracks frequencies below ~200 Hz
+		//   output = input + bass_gain * lp_bass(input)
+		// bass_gain = 1.0 means +6 dB shelf (~2× amplitude below cutoff).
+		LowPass lp_bass;		// ~200 Hz low-pass for shelf extraction
+		float bass_gain = 1.0f; // Shelf gain (1.0 ≈ +6 dB boost)
+
 		void initialize() {
 			// Coefficients for filters running at CPU clock rate (1,789,773 Hz)
 			constexpr float dt = 1.0f / 1789773.0f;
@@ -317,12 +331,23 @@ class APU : public Component {
 			// LP 14000 Hz: RC = 1/(2π×14000) ≈ 1.137e-5
 			constexpr float rc_14k = 1.0f / (6.2831853f * 14000.0f);
 			lp_14k.alpha = dt / (rc_14k + dt);
+
+			// Bass shelf LP 200 Hz: RC = 1/(2π×200) ≈ 7.958e-4
+			constexpr float rc_bass = 1.0f / (6.2831853f * 200.0f);
+			lp_bass.alpha = dt / (rc_bass + dt);
+			bass_gain = 1.0f; // +6 dB shelf below 200 Hz
 		}
 
 		float apply(float sample) {
+			// Hardware filter chain
 			sample = hp_90.apply(sample);
 			sample = hp_440.apply(sample);
 			sample = lp_14k.apply(sample);
+
+			// Bass shelf boost: extract low frequencies and add scaled copy
+			float bass = lp_bass.apply(sample);
+			sample += bass_gain * bass;
+
 			return sample;
 		}
 
@@ -330,6 +355,7 @@ class APU : public Component {
 			hp_90.reset();
 			hp_440.reset();
 			lp_14k.reset();
+			lp_bass.reset();
 		}
 	};
 	OutputFilter output_filter_;

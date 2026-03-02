@@ -1,5 +1,4 @@
 #include "input/controller.hpp"
-#include <iostream>
 
 namespace nes {
 
@@ -34,28 +33,30 @@ Byte Controller::read(Address address) const noexcept {
 		// Controller 1
 		if (strobe_) {
 			// While strobe is high, continuously return button A state
-			return (button_states_1_ & 0x01);
+			return (button_states_1_ & 0x01) | 0x40;
 		} else {
+			// After 8 reads, real hardware returns 1 for all subsequent reads
+			if (shift_count_1_ >= 8) {
+				return 0x41; // All 1s + open bus bit 6
+			}
 			// Return current bit from shift register
 			Byte bit = (shift_register_1_ >> shift_count_1_) & 0x01;
 			shift_count_1_++;
-			if (shift_count_1_ > 7) {
-				shift_count_1_ = 0; // Wrap around (returns 1s after 8 reads on real hardware)
-			}
 			return bit | 0x40; // Bit 6 is always 1 (open bus behavior)
 		}
 	} else if (address == 0x4017) {
 		// Controller 2
 		if (strobe_) {
 			// While strobe is high, continuously return button A state
-			return (button_states_2_ & 0x01);
+			return (button_states_2_ & 0x01) | 0x40;
 		} else {
+			// After 8 reads, real hardware returns 1 for all subsequent reads
+			if (shift_count_2_ >= 8) {
+				return 0x41; // All 1s + open bus bit 6
+			}
 			// Return current bit from shift register
 			Byte bit = (shift_register_2_ >> shift_count_2_) & 0x01;
 			shift_count_2_++;
-			if (shift_count_2_ > 7) {
-				shift_count_2_ = 0;
-			}
 			return bit | 0x40; // Bit 6 is always 1 (open bus behavior)
 		}
 	}

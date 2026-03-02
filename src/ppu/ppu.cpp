@@ -2355,6 +2355,41 @@ void PPU::serialize_state(std::vector<uint8_t> &buffer) const {
 	buffer.push_back(secondary_oam_index_);
 	buffer.push_back(sprite_overflow_detected_ ? 1 : 0);
 
+	// MMC3 A12 line tracking (added v2)
+	buffer.push_back(last_a12_state_ ? 1 : 0);
+	buffer.push_back(static_cast<uint8_t>(ppu_dot_counter_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((ppu_dot_counter_ >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((ppu_dot_counter_ >> 16) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((ppu_dot_counter_ >> 24) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>(a12_last_high_dot_ & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((a12_last_high_dot_ >> 8) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((a12_last_high_dot_ >> 16) & 0xFF));
+	buffer.push_back(static_cast<uint8_t>((a12_last_high_dot_ >> 24) & 0xFF));
+
+	// Rendering state (added v2)
+	buffer.push_back(was_rendering_enabled_ ? 1 : 0);
+
+	// Secondary OAM source indices (added v2)
+	buffer.insert(buffer.end(), secondary_oam_source_.begin(), secondary_oam_source_.end());
+
+	// Scanline sprite arrays (added v2) — 8 entries × 2 arrays
+	for (int arr = 0; arr < 2; ++arr) {
+		const auto &sprites = (arr == 0) ? scanline_sprites_current_ : scanline_sprites_next_;
+		for (int i = 0; i < 8; ++i) {
+			const auto &s = sprites[i];
+			buffer.push_back(s.sprite_data.y_position);
+			buffer.push_back(s.sprite_data.tile_index);
+			uint8_t attr_byte;
+			std::memcpy(&attr_byte, &s.sprite_data.attributes, 1);
+			buffer.push_back(attr_byte);
+			buffer.push_back(s.sprite_data.x_position);
+			buffer.push_back(s.sprite_index);
+			buffer.push_back(s.pattern_data_low);
+			buffer.push_back(s.pattern_data_high);
+			buffer.push_back(s.is_sprite_0 ? 1 : 0);
+		}
+	}
+
 	// PPU Memory (VRAM, palette RAM)
 	memory_.serialize_state(buffer);
 }
@@ -2456,6 +2491,44 @@ void PPU::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) 
 	sprite_eval_buffer_ = buffer[offset++];
 	secondary_oam_index_ = buffer[offset++];
 	sprite_overflow_detected_ = buffer[offset++] != 0;
+
+	// MMC3 A12 line tracking (added v2)
+	if (offset + 10 <= buffer.size()) {
+		last_a12_state_ = buffer[offset++] != 0;
+		ppu_dot_counter_ = buffer[offset] | (static_cast<uint32_t>(buffer[offset + 1]) << 8) |
+						   (static_cast<uint32_t>(buffer[offset + 2]) << 16) |
+						   (static_cast<uint32_t>(buffer[offset + 3]) << 24);
+		offset += 4;
+		a12_last_high_dot_ = buffer[offset] | (static_cast<uint32_t>(buffer[offset + 1]) << 8) |
+							 (static_cast<uint32_t>(buffer[offset + 2]) << 16) |
+							 (static_cast<uint32_t>(buffer[offset + 3]) << 24);
+		offset += 4;
+
+		// Rendering state (added v2)
+		was_rendering_enabled_ = buffer[offset++] != 0;
+
+		// Secondary OAM source indices (added v2)
+		for (int i = 0; i < 8 && offset < buffer.size(); ++i) {
+			secondary_oam_source_[i] = buffer[offset++];
+		}
+
+		// Scanline sprite arrays (added v2)
+		for (int arr = 0; arr < 2; ++arr) {
+			auto &sprites = (arr == 0) ? scanline_sprites_current_ : scanline_sprites_next_;
+			for (int i = 0; i < 8 && offset + 8 <= buffer.size(); ++i) {
+				auto &s = sprites[i];
+				s.sprite_data.y_position = buffer[offset++];
+				s.sprite_data.tile_index = buffer[offset++];
+				uint8_t attr_byte = buffer[offset++];
+				std::memcpy(&s.sprite_data.attributes, &attr_byte, 1);
+				s.sprite_data.x_position = buffer[offset++];
+				s.sprite_index = buffer[offset++];
+				s.pattern_data_low = buffer[offset++];
+				s.pattern_data_high = buffer[offset++];
+				s.is_sprite_0 = buffer[offset++] != 0;
+			}
+		}
+	}
 
 	// PPU Memory (VRAM, palette RAM)
 	memory_.deserialize_state(buffer, offset);

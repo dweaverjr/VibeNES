@@ -17,7 +17,7 @@ class SystemBus;
 class Cartridge;
 
 // Save state file format version
-constexpr uint32_t SAVE_STATE_VERSION = 1;
+constexpr uint32_t SAVE_STATE_VERSION = 2;
 constexpr char SAVE_STATE_MAGIC[8] = "VIBENES";
 
 // Save state header structure
