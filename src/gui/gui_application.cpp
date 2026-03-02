@@ -37,16 +37,16 @@
 namespace nes::gui {
 
 GuiApplication::GuiApplication()
-	: window_(nullptr), gl_context_(nullptr), io_(nullptr), running_(false),
-	  fullscreen_mode_(false), fullscreen_scale_(0.0f), fullscreen_offset_x_(0.0f), fullscreen_offset_y_(0.0f),
-	  fullscreen_display_w_(0.0f), fullscreen_display_h_(0.0f), crt_filter_(std::make_unique<CRTFilter>()),
-	  emulation_running_(false), emulation_paused_(true), emulation_speed_(1.0f), cycle_accumulator_(0.0),
-	  last_frame_counter_(0), frame_timer_initialized_(false), cpu_(nullptr), bus_(nullptr), cartridge_(nullptr),
-	  ppu_(nullptr), cpu_panel_(std::make_unique<CPUStatePanel>()),
-	  disassembler_panel_(std::make_unique<DisassemblerPanel>()), memory_panel_(std::make_unique<MemoryViewerPanel>()),
-	  rom_loader_panel_(std::make_unique<RomLoaderPanel>()), ppu_viewer_panel_(std::make_unique<PPUViewerPanel>()),
-	  timing_panel_(std::make_unique<TimingPanel>()), audio_panel_(std::make_unique<nes::AudioPanel>()),
-	  save_state_manager_(nullptr), save_state_status_message_(""), save_state_status_timer_(0.0f) {
+	: window_(nullptr), gl_context_(nullptr), io_(nullptr), running_(false), fullscreen_mode_(false),
+	  fullscreen_scale_(0.0f), fullscreen_offset_x_(0.0f), fullscreen_offset_y_(0.0f), fullscreen_display_w_(0.0f),
+	  fullscreen_display_h_(0.0f), crt_filter_(std::make_unique<CRTFilter>()), emulation_running_(false),
+	  emulation_paused_(true), emulation_speed_(1.0f), cycle_accumulator_(0.0), last_frame_counter_(0),
+	  frame_timer_initialized_(false), cpu_(nullptr), bus_(nullptr), cartridge_(nullptr), ppu_(nullptr),
+	  cpu_panel_(std::make_unique<CPUStatePanel>()), disassembler_panel_(std::make_unique<DisassemblerPanel>()),
+	  memory_panel_(std::make_unique<MemoryViewerPanel>()), rom_loader_panel_(std::make_unique<RomLoaderPanel>()),
+	  ppu_viewer_panel_(std::make_unique<PPUViewerPanel>()), timing_panel_(std::make_unique<TimingPanel>()),
+	  audio_panel_(std::make_unique<nes::AudioPanel>()), save_state_manager_(nullptr), save_state_status_message_(""),
+	  save_state_status_timer_(0.0f) {
 }
 
 GuiApplication::~GuiApplication() {
@@ -483,7 +483,6 @@ void GuiApplication::render_frame() {
 
 	ImGui::PopStyleVar(3);
 
-
 	// Display save state status message as overlay
 	if (save_state_status_timer_ > 0.0f) {
 		ImGui::SetNextWindowPos(ImVec2(WINDOW_WIDTH / 2.0f, 60.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
@@ -609,7 +608,6 @@ void GuiApplication::render_main_menu_bar() {
 					if (fullscreen_mode_)
 						calculate_fullscreen_layout();
 				}
-	
 			}
 			ImGui::EndMenu();
 		}
@@ -656,7 +654,6 @@ void GuiApplication::render_main_menu_bar() {
 
 			ImGui::EndMenu();
 		}
-
 
 		if (ImGui::BeginMenu("Help")) {
 			if (ImGui::MenuItem("About")) {
