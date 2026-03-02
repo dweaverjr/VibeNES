@@ -305,7 +305,7 @@ class APU : public Component {
 		// Low-shelf bass boost — not part of original NES hardware, but
 		// applied as a post-processing enhancement to give the output a
 		// warmer, more modern feel.  Boosts frequencies below ~200 Hz
-		// by ~6 dB using a first-order shelving filter.
+		// by ~9 dB using a first-order shelving filter.
 		//
 		// Implementation: split signal into low-frequency and remainder
 		// using a first-order LP at the shelf frequency, then add a
@@ -335,7 +335,7 @@ class APU : public Component {
 			// Bass shelf LP 200 Hz: RC = 1/(2π×200) ≈ 7.958e-4
 			constexpr float rc_bass = 1.0f / (6.2831853f * 200.0f);
 			lp_bass.alpha = dt / (rc_bass + dt);
-			bass_gain = 1.0f; // +6 dB shelf below 200 Hz
+			bass_gain = 1.5f; // +9 dB shelf below 200 Hz
 		}
 
 		float apply(float sample) {

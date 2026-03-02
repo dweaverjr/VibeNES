@@ -1013,7 +1013,7 @@ void GuiApplication::quick_load() {
 	}
 }
 
-void GuiApplication::show_save_state_status(const std::string &message, bool success) {
+void GuiApplication::show_save_state_status(const std::string &message, [[maybe_unused]] bool success) {
 	save_state_status_message_ = message;
 	save_state_status_timer_ = 3.0f; // Show for 3 seconds
 }
