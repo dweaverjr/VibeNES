@@ -37,6 +37,7 @@ class CRTFilter {
 
 	// --- Settings (public for ImGui controls) ---
 	bool enabled = false;			  ///< Master enable for CRT filter
+	bool soft_pixels = false;		  ///< Gently soften pixel edges (GL_LINEAR upscale, integer scale)
 	bool aspect_correction = true;	  ///< Apply 8:7 NTSC PAR correction
 	float scanline_intensity = 0.25f; ///< Scanline darkness (0=none, 1=full)
 	float curvature = 0.03f;		  ///< Barrel distortion strength (0=flat)

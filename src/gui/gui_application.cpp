@@ -308,9 +308,23 @@ void GuiApplication::render_frame() {
 	if (fullscreen_mode_) {
 		render_fullscreen_display();
 
-		// Render ImGui
+		// Render ImGui — this is where ImGui::Image() is actually drawn,
+		// so GL_LINEAR must still be set on the texture at this point.
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+		// After drawing, restore the texture to GL_NEAREST so the debug views
+		// look crisp if the user exits fullscreen.
+		if (ppu_viewer_panel_ && crt_filter_ && (crt_filter_->enabled || crt_filter_->soft_pixels)) {
+			unsigned int tex = ppu_viewer_panel_->get_main_display_texture();
+			if (tex) {
+				glBindTexture(GL_TEXTURE_2D, tex);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				glBindTexture(GL_TEXTURE_2D, 0);
+			}
+		}
+
 		SDL_GL_SwapWindow(window_);
 		return;
 	}
@@ -603,6 +617,9 @@ void GuiApplication::render_main_menu_bar() {
 			}
 			ImGui::Separator();
 			if (crt_filter_) {
+				if (ImGui::MenuItem("Soft Pixels", nullptr, crt_filter_->soft_pixels)) {
+					crt_filter_->soft_pixels = !crt_filter_->soft_pixels;
+				}
 				if (ImGui::MenuItem("CRT Filter", nullptr, crt_filter_->enabled)) {
 					crt_filter_->enabled = !crt_filter_->enabled;
 					if (fullscreen_mode_)
@@ -1096,8 +1113,9 @@ void GuiApplication::render_fullscreen_display() {
 		unsigned int texture_id = ppu_viewer_panel_->get_main_display_texture();
 
 		if (texture_id != 0) {
-			// Apply bilinear filtering when CRT mode is enabled for soft CRT look
-			if (crt_filter_ && crt_filter_->enabled) {
+			// Bilinear filtering for CRT mode or soft-pixels mode
+			const bool use_linear = crt_filter_ && (crt_filter_->enabled || crt_filter_->soft_pixels);
+			if (use_linear) {
 				glBindTexture(GL_TEXTURE_2D, texture_id);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1110,13 +1128,10 @@ void GuiApplication::render_fullscreen_display() {
 			ImGui::SetCursorPos(display_pos);
 
 			ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(texture_id)), display_size);
-
-			// Restore nearest-neighbor filtering for debug views
-			if (crt_filter_ && crt_filter_->enabled) {
-				glBindTexture(GL_TEXTURE_2D, texture_id);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-			}
+			// Note: GL_LINEAR is intentionally NOT restored here.
+			// ImGui::Image() is deferred — the actual GL draw happens in
+			// ImGui_ImplOpenGL3_RenderDrawData(), so the filter must still be
+			// GL_LINEAR at that point.  Restore to GL_NEAREST after the swap.
 		}
 	}
 	ImGui::End();

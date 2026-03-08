@@ -168,17 +168,11 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 			disp_h = 240.0f * display_scale_;
 		}
 
-		// In windowed mode: use bilinear filtering for CRT softness
-		// (FBO shader rendering is only safe in fullscreen, outside ImGui frame)
-		if (crt_filter_ && crt_filter_->enabled) {
-			glBindTexture(GL_TEXTURE_2D, main_display_texture_);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		} else {
-			glBindTexture(GL_TEXTURE_2D, main_display_texture_);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		}
+		// Bilinear filtering for CRT mode or soft-pixels mode; nearest for crisp debug view
+		const bool use_linear = crt_filter_ && (crt_filter_->enabled || crt_filter_->soft_pixels);
+		glBindTexture(GL_TEXTURE_2D, main_display_texture_);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, use_linear ? GL_LINEAR : GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, use_linear ? GL_LINEAR : GL_NEAREST);
 
 		ImVec2 display_size(disp_w, disp_h);
 		ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(main_display_texture_)), display_size);
