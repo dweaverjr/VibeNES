@@ -301,6 +301,7 @@ class APU : public Component {
 		HighPass hp_90;	 // ~90 Hz high-pass (DC removal from mixer)
 		HighPass hp_440; // ~440 Hz high-pass (AC coupling capacitor)
 		LowPass lp_14k;	 // ~14 kHz low-pass (DAC output filtering)
+		LowPass lp_6k;	 // ~6 kHz low-pass (TV speaker roll-off — warmth/mellowing)
 
 		// Low-shelf bass boost — not part of original NES hardware, but
 		// applied as a post-processing enhancement to give the output a
@@ -332,10 +333,14 @@ class APU : public Component {
 			constexpr float rc_14k = 1.0f / (6.2831853f * 14000.0f);
 			lp_14k.alpha = dt / (rc_14k + dt);
 
+			// LP 6000 Hz: RC = 1/(2π×6000) ≈ 2.653e-5  (TV speaker roll-off)
+			constexpr float rc_6k = 1.0f / (6.2831853f * 6000.0f);
+			lp_6k.alpha = dt / (rc_6k + dt);
+
 			// Bass shelf LP 200 Hz: RC = 1/(2π×200) ≈ 7.958e-4
 			constexpr float rc_bass = 1.0f / (6.2831853f * 200.0f);
 			lp_bass.alpha = dt / (rc_bass + dt);
-			bass_gain = 1.5f; // +9 dB shelf below 200 Hz
+			bass_gain = 2.0f; // +12 dB shelf below 200 Hz (slightly warmer than before)
 		}
 
 		float apply(float sample) {
@@ -343,6 +348,8 @@ class APU : public Component {
 			sample = hp_90.apply(sample);
 			sample = hp_440.apply(sample);
 			sample = lp_14k.apply(sample);
+			// TV speaker roll-off: tames harsh noise / triangle harmonics
+			sample = lp_6k.apply(sample);
 
 			// Bass shelf boost: extract low frequencies and add scaled copy
 			float bass = lp_bass.apply(sample);
@@ -355,6 +362,7 @@ class APU : public Component {
 			hp_90.reset();
 			hp_440.reset();
 			lp_14k.reset();
+			lp_6k.reset();
 			lp_bass.reset();
 		}
 	};
