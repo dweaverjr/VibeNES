@@ -107,15 +107,13 @@ Byte Controller::read_gamepad_state(int player_index) const noexcept {
 	Byte state = 0x00;
 
 	// Button mapping: Modern controller -> NES controller
-	// A button (Xbox A, PS Cross)
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_SOUTH) ||
-		gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_EAST)) {
+	// NES A button = Xbox A (SOUTH)
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_SOUTH)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::A));
 	}
 
-	// B button (Xbox B, PS Circle) OR X button
-	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_WEST) ||
-		gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_NORTH)) {
+	// NES B button = Xbox X (WEST)
+	if (gamepad_manager_->is_button_pressed(player_index, SDL_GAMEPAD_BUTTON_WEST)) {
 		state |= (1 << static_cast<uint8_t>(NESButton::B));
 	}
 
