@@ -24,26 +24,26 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 - Look for "Build Successful" / "Exit Code: 0" before proceeding
 - Build tasks take time — verify completion in output before continuing
 
-## Component Status (Accurate as of Feb 2026)
+## Component Status (Accurate as of May 2026)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
 | CPU (6502) | ✅ Complete | 247 explicit opcodes + 9 catch-all NOPs (all 256 handled), hardware-accurate startup |
-| PPU | ⚠️ Has bugs | Full rendering pipeline; P0 bugs #1-4 FIXED, increment_fine_y bug FIXED, per-cycle sprite fetches (257-320); P2 bugs remain |
-| APU | ✅ Substantial | All 5 channels (inline in header), frame counter, non-linear mixing, 1049 lines — NOT a stub |
+| PPU | ✅ Substantial | Full rendering pipeline; P0 bugs #1-4 FIXED, increment_fine_y bug FIXED, per-cycle sprite fetches (257-320). Minor edge-case rendering quirks remain |
+| APU | ✅ Complete | All 5 channels (inline in header), frame counter, non-linear mixing, level-triggered IRQ (bug #10 fixed) |
 | Bus/Memory | ✅ Complete | Full NES memory map, mirroring, open bus, dual-purpose registers |
 | Mapper 0 (NROM) | ✅ Complete | 16KB/32KB PRG ROM |
-| Mapper 1 (MMC1) | ✅ Fixed | Consecutive-write filter for RMW instructions added (was bug #9) |
-| Mapper 2 (UxROM) | ✅ Complete | Includes bus conflict emulation |
+| Mapper 1 (MMC1) | ✅ Complete | Consecutive-write filter for RMW instructions (was bug #9) |
+| Mapper 2 (UxROM) | ✅ Complete | Includes (simplified) bus conflict emulation |
 | Mapper 3 (CNROM) | ✅ Complete | CHR ROM bank switching, bus conflict emulation, 16KB/32KB PRG |
-| Mapper 4 (MMC3) | ✅ Fixed | Banking, per-cycle sprite pattern fetches (257-320), A12 low-time filter, proper IRQ line deassertion. Crystalis playable. |
+| Mapper 4 (MMC3) | ✅ Complete | Banking, per-cycle sprite pattern fetches (257-320), A12 low-time filter, proper IRQ line deassertion. Crystalis playable. |
 | Cartridge/ROM | ✅ Complete | iNES loading, mapper factory, GUI file browser |
-| Save States | ✅ Complete | Serialize/deserialize with CRC32 verification, 316 lines |
-| Audio Backend | ✅ Complete | SDL2 audio output + sample rate converter |
+| Save States | ✅ Complete | Serialize/deserialize with CRC32 verification, bounds-checked read helpers (throw on truncated/malicious files) |
+| Audio Backend | ✅ Complete | SDL3 audio output + sample rate converter |
 | Input | ✅ Complete | Controller + gamepad manager |
-| GUI | ✅ Complete | SDL2 + ImGui, 7 panels (CPU, disassembler, memory, ROM, PPU, timing, audio), retro theme |
+| GUI | ✅ Complete | SDL3 + ImGui (vcpkg, sdl3-binding), 7 panels (CPU, disassembler, memory, ROM, PPU, timing, audio), retro theme |
 | Disassembler | ✅ Complete | All 256 opcodes with addressing modes |
-| Tests | ✅ Substantial | 3 CPU + 18 PPU + 2 core + 1 memory + 1 APU + 3 cartridge test files (242 tests, all passing). Tests cover APU, all 5 mappers, ROM loader, save states. No tests for input. |
+| Tests | ✅ Substantial | 242 tests, all passing. Cover CPU, PPU, APU, all 5 mappers, ROM loader, save states. No tests for input. |
 
 ## Known Bugs (Priority Order)
 
@@ -63,10 +63,15 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 8. ~~**MMC3 A12 IRQ at fixed cycle 260**~~ — **FIXED (Phase 4+5)**: Replaced once-per-scanline `a12_clocked_this_scanline_` clamp with a proper A12 low-time filter. PPU tracks monotonic dot counter (`ppu_dot_counter_`) and clocks mapper IRQ counter on rising A12 edges when A12 has been low for ≥15 PPU cycles. Phase 5 added per-cycle sprite pattern fetches (cycles 257-320, 8 cycles/sprite: garbage NT, garbage attr, pattern low, pattern high) so A12 transitions match real hardware. Removed non-standard `irq_initialized_` guard from Mapper004. Bus IRQ line management fixed to deassert when no sources active.
 
 ### P2 — Moderate Issues (Remaining)
-10. **APU uses edge-triggered IRQ** — `apu.cpp` uses edge detection; NES APU IRQ is level-triggered.
+10. ~~**APU uses edge-triggered IRQ**~~ — **FIXED**: `apu.cpp` now drives a level-triggered IRQ line. `irq_line_asserted_ = (frame_irq_flag_ || dmc_irq_flag_)` is recomputed each tick; the bus reflects the level rather than a one-shot edge. Regression test added.
 11. ~~**DMC DMA cycle stealing not implemented**~~ — **FIXED (Phase 4)**: `load_sample_byte()` replaced with a signal-based DMA request.  When the DMC sample buffer empties, `APU::tick()` sets `dmc_dma_pending_` + `dmc_dma_address_`.  CPU’s `consume_cycle()` detects the pending DMA, stalls for ~4 cycles (3 dummy + 1 read) while continuing PPU/APU interleaving, then calls `bus_->service_dmc_dma()` which reads the byte and delivers it via `APU::complete_dmc_dma()`.
 12. ~~**`step_frame()` only runs 1000 cycles**~~ — Fixed: `gui_application.cpp` now runs 29,781 cycles per frame.
 14. ~~**Frame 0 hack**~~ — **FIXED (Phase 4)**: Removed workaround that cleared fine_x/fine_y on frame 0.  PPU now honours whatever scroll/VRAM state software has configured from the very first frame.
+
+### Remaining latent issues (from code review 2026-05-29)
+- **Bus-conflict emulation simplification** (mapper_002 / mapper_003): reads from the currently selected bank rather than the bank fixed at the written address. Documented trade-off.
+- **Minor PPU edge-case rendering quirks**: some obscure mid-scanline register-write corner cases. Dead/disabled timing helpers (`handle_sprite_overflow_bug`, `read_oamdata_during_rendering`, `handle_ppustatus_race_condition`) are present but unwired.
+- Save-state read helpers are now bounds-checked (throw on overrun) and the PPU sprite-attribute unpack uses `std::bit_cast` (no strict-aliasing UB).
 
 ## Architecture Notes
 
@@ -96,7 +101,7 @@ DMC DMA cycle stealing implemented (bug #11 fixed). APU signals `dmc_dma_pending
 Frame 0 hack removed (bug #14 fixed). PPU honours initial scroll/VRAM state from the first frame.
 
 ### Phase 5: Documentation and Test Coverage
-⚠️ **IN PROGRESS** — README.md rewritten to match current project reality. Added 53 new tests (189→242): APU tests (17 TEST_CASEs covering all 5 channels, frame counter, registers, mixing, serialization, DMA), mapper tests (all 5 mappers: banking, IRQ, bus conflicts, serialization), ROM loader tests (iNES parsing, header validation), save state tests (header magic, version, validation). Copilot instructions updated. Remaining: input tests, test ROM infrastructure.
+✅ **SUBSTANTIALLY DONE** — README.md rewritten and refreshed to match current project reality (SDL3, correct dependency versions, accurate Known Issues). Added 53 new tests (189→242): APU tests (all 5 channels, frame counter, registers, mixing, serialization, DMA), mapper tests (all 5 mappers: banking, IRQ, bus conflicts, serialization), ROM loader tests (iNES parsing, header validation), save state tests (header magic, version, validation). Code-review fixes applied: bounds-checked save-state read helpers, `std::bit_cast` for sprite attributes. Remaining: input tests, test ROM infrastructure.
 
 ## NES Hardware Reference
 
@@ -154,7 +159,7 @@ TEST_CASE("LDA Absolute,X", "[cpu][instructions][timing]") {
 ```
 
 ## Build System
-MSVC v143 (Build Tools 2022 v17.14.27) + CMake 3.31.6 + Ninja 1.12.1 + vcpkg (project-local). Dependencies: SDL2 2.32.10 (vcpkg, x64-windows), Catch2 3.13.0 (vcpkg, x64-windows), ImGui 1.91.6 (third_party/imgui/, compiled as static lib — vcpkg imgui lacks sdl2-binding), OpenGL3. MSYS2 fully uninstalled from machine.
+MSVC v143 (Build Tools 2022) + CMake + Ninja + vcpkg (project-local). Dependencies (all via vcpkg, x64-windows): SDL3 3.4.8, Catch2 3.15.0, ImGui 1.92.8 (with `sdl3-binding` + `opengl3-binding` features), OpenGL3. MSYS2 fully uninstalled from machine.
 
 ### Key Paths
 - **Build Tools**: `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`
@@ -175,17 +180,17 @@ Use VS Code tasks (Ctrl+Shift+B for default build). All tasks use `cmd.exe`, sou
 CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PATH issues.
 
 ### CMake Targets
-- `imgui` — static lib from `third_party/imgui/` (core + SDL2/OpenGL3 backends)
-- `vibes_core` — static lib with all emulation code (CPU, PPU, APU, Bus, Cartridge, Input, SaveState)
-- `VibeNES_GUI` — main executable (links vibes_core, imgui, opengl32)
-- `VibeNES_Tests` — test executable (links vibes_core + Catch2::Catch2WithMain from vcpkg, `catch_discover_tests()` for per-test CTest)
+- `vibes_core` — static lib with all emulation code (CPU, PPU, APU, Bus, Cartridge, Input, SaveState). Links `SDL3::SDL3` (public) and `imgui::imgui` (private, for `NESPalette::get_imgui_color`)
+- `VibeNES_GUI` — main executable (links `vibes_core`, `imgui::imgui`, `opengl32`). Post-build step copies `SDL3.dll` next to the exe
+- `VibeNES_Tests` — test executable (links `vibes_core` + `Catch2::Catch2WithMain` from vcpkg, `catch_discover_tests()` for per-test CTest)
+
+ImGui is resolved from vcpkg (`find_package(imgui CONFIG REQUIRED)` → `imgui::imgui`) with the `sdl3-binding` feature — it is no longer a vendored static lib.
 
 ### MSVC-Specific Fixes Applied
-- `src/main.cpp` has `#define SDL_MAIN_HANDLED` at line 1 (prevents SDL2 main hijack)
+- `src/main.cpp` has `#define SDL_MAIN_HANDLED` at line 1 (prevents SDL3 main hijack)
 - `include/cartridge/rom_loader.hpp` has explicit `#include <array>` (MSVC doesn't transitively include it)
 - `include/gui/panels/ppu_viewer_panel.hpp`, `src/gui/gui_application.cpp`, `src/gui/panels/ppu_viewer_panel.cpp` all have `#define NOMINMAX` + `#define WIN32_LEAN_AND_MEAN` + `#include <windows.h>` before `#include <GL/gl.h>`
-- `src/ppu/nes_palette.cpp` — removed `#ifdef NES_GUI_ENABLED` guard; always compiles `get_imgui_color()` since `vibes_core` has imgui include path
-- `ImGui::ShowDemoWindow()` call commented out in `gui_application.cpp` (we removed `imgui_demo.cpp`)
+- `src/ppu/nes_palette.cpp` — removed `#ifdef NES_GUI_ENABLED` guard; always compiles `get_imgui_color()` since `vibes_core` has the imgui include path
 - `CMakeLists.txt` uses link options for subsystem (CONSOLE debug, WINDOWS release) instead of `WIN32` on `add_executable`
 - All targets use generator expressions for debug/release compile options (no D9025 override warnings)
 
@@ -198,14 +203,14 @@ CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PAT
 - `.vscode/launch.json` — Two `cppvsdbg` configurations: "Debug VibeNES" and "Debug Tests", both use `preLaunchTask: "Build Debug"`.
 - No `c_cpp_properties.json` — CMake Tools provides IntelliSense via `compile_commands.json`.
 
-## Current State (as of Mar 1, 2026)
-- **Phases 1-5 in progress**. Debug and release builds green, **zero warnings**. MSYS2 fully removed from machine.
-- **All 242 tests pass** (0 failures). 53 new tests added in Phase 5: APU (17 TEST_CASEs), mappers 0-4, ROM loader, save states.
-- **Test directories**: `tests/apu/`, `tests/cartridge/`, `tests/core/`, `tests/cpu/`, `tests/memory/`, `tests/ppu/`
-- **Phase 5 highlights**: README.md rewritten. APU tests cover all 5 channels, frame counter modes, register I/O, mixing, serialization, DMA interface. Mapper tests cover NROM/MMC1/UxROM/CNROM/MMC3 banking, IRQ, bus conflicts, serialization. ROM loader tests cover iNES parsing and validation. Save state tests cover header magic, version, CRC32.
+## Current State (as of May 2026)
+- **Phases 1-4 complete; Phase 5 substantially complete**. Debug and release builds green, **zero warnings**. MSYS2 fully removed from machine.
+- **All 242 tests pass** (0 failures). 53 tests added in Phase 5: APU (all 5 channels), mappers 0-4, ROM loader, save states.
+- **Test directories**: `tests/apu/`, `tests/cartridge/`, `tests/core/`, `tests/cpu/`, `tests/memory/`, `tests/ppu/` (plus `tests/input/`, `tests/fixtures/`, `tests/test_roms/`)
+- **Code-review follow-ups (2026-05-29)**: save-state read helpers bounds-checked; PPU sprite-attribute unpack uses `std::bit_cast`; APU IRQ now level-triggered (bug #10); README/instructions refreshed for SDL3 and correct dependency versions.
 - **Games tested**: Super Mario Bros., Crystalis, Guardian Legend.
-- **Dependencies**: SDL2 + Catch2 via vcpkg. ImGui vendored (vcpkg port lacks sdl2-binding feature).
-- **Remaining**: Fix bug #10 (APU edge-triggered IRQ → level-triggered). Add input tests. Add test ROM infrastructure.
+- **Dependencies**: SDL3 + Catch2 + ImGui (sdl3-binding) all via vcpkg, x64-windows.
+- **Remaining**: Add input tests. Add test ROM infrastructure. Address simplified bus-conflict emulation and unwired PPU timing helpers as accuracy work continues.
 
 ### MMC3 Fixes (Mar 1, 2026)
 Four bugs fixed to make MMC3 games (Crystalis) playable:
