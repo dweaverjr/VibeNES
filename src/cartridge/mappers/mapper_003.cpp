@@ -47,7 +47,10 @@ void Mapper003::cpu_write(Address address, Byte value) {
 		return; // Outside mapper control range
 	}
 
-	// CNROM has bus conflicts: the mapper sees the AND of CPU data bus and ROM data bus
+	// CNROM has bus conflicts: the mapper sees the AND of CPU data bus and ROM data bus.
+	// cpu_read(address) returns the byte currently mapped at exactly this address, which
+	// is precisely the ROM operand the hardware ANDs against (CNROM PRG mapping is fixed,
+	// so this is always the correct byte).
 	Byte rom_value = cpu_read(address);
 	Byte effective_value = value & rom_value;
 

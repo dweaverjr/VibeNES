@@ -1,5 +1,6 @@
 #include "cartridge/mappers/mapper_001.hpp"
 #include <algorithm>
+#include <stdexcept>
 
 namespace nes {
 
@@ -16,9 +17,14 @@ Mapper001::Mapper001(std::vector<Byte> prg_rom, std::vector<Byte> chr_mem, Mirro
 		prg_ram_.resize(8192, 0x00);
 	}
 
-	// If CHR is RAM and the vector is empty, allocate 8KB CHR RAM
-	if (chr_is_ram_ && chr_mem_.empty()) {
+	// If CHR is RAM and the vector is empty, allocate 8KB CHR RAM.
+	// Also guard against a malformed ROM declaring CHR ROM but providing no
+	// data: an empty CHR vector makes the 4KB bank count 0, and the
+	// `(bank_count - 1)` masks below would wrap to SIZE_MAX. Allocate a
+	// minimal 8KB region so bank math stays well-defined.
+	if (chr_mem_.empty()) {
 		chr_mem_.resize(8192, 0x00);
+		chr_is_ram_ = true;
 	}
 }
 
@@ -244,6 +250,15 @@ void Mapper001::serialize_state(std::vector<uint8_t> &buffer) const {
 }
 
 void Mapper001::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Compute the total size this routine will consume and bounds-check it up
+	// front. Save files are untrusted input, so a truncated/malicious state
+	// must not cause out-of-bounds reads.
+	const std::size_t required =
+		(has_prg_ram_ ? prg_ram_.size() : 0) + (chr_is_ram_ ? chr_mem_.size() : 0) + 7; // 7 single-byte registers below
+	if (offset + required > buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer (MMC1)");
+	}
+
 	// PRG RAM (8KB if present)
 	if (has_prg_ram_) {
 		std::copy(buffer.begin() + offset, buffer.begin() + offset + prg_ram_.size(), prg_ram_.begin());

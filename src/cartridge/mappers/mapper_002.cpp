@@ -70,7 +70,11 @@ void Mapper002::cpu_write(Address address, Byte value) {
 
 	// UxROM has bus conflicts: The mapper sees the AND of CPU data bus and ROM data bus
 	// Nintendo-published games (like Guardian Legend) work around this by writing to
-	// ROM addresses that already contain the desired value
+	// ROM addresses that already contain the desired value.
+	// cpu_read(address) returns the byte currently mapped at exactly this address
+	// (switchable bank for $8000-$BFFF, fixed last bank for $C000-$FFFF), which is
+	// precisely the ROM operand the hardware ANDs against — no separate "bank fixed
+	// at the written address" lookup is needed.
 	Byte rom_value = cpu_read(address);
 	Byte effective_value = value & rom_value;
 

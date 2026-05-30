@@ -1,6 +1,7 @@
 #include "cartridge/mappers/mapper_004.hpp"
 #include <algorithm>
 #include <iostream>
+#include <stdexcept>
 
 namespace nes {
 
@@ -16,9 +17,14 @@ Mapper004::Mapper004(std::vector<Byte> prg_rom, std::vector<Byte> chr_mem, Mirro
 		prg_ram_.resize(8192, 0x00);
 	}
 
-	// If CHR is RAM and the vector is empty, allocate 8KB CHR RAM
-	if (chr_is_ram_ && chr_mem_.empty()) {
+	// If CHR is RAM and the vector is empty, allocate 8KB CHR RAM.
+	// Also guard against a malformed ROM declaring CHR ROM but providing no
+	// data: an empty CHR vector makes the 1KB bank count 0, and the
+	// `(bank_count - 1)` masks below would wrap to SIZE_MAX. Allocate a
+	// minimal 8KB region so bank math stays well-defined.
+	if (chr_mem_.empty()) {
 		chr_mem_.resize(8192, 0x00);
+		chr_is_ram_ = true;
 	}
 
 	// Initialize bank registers to power-on state
@@ -348,6 +354,11 @@ void Mapper004::deserialize_state(const std::vector<Byte> &buffer, size_t &offse
 	}
 
 	// Deserialize MMC3 registers
+	// Remaining fixed-size fields: bank_select (1) + 8 bank registers +
+	// mirroring (1) + prg_ram_protect (1) + 5 IRQ fields = 16 bytes.
+	if (offset + 16 > buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer (MMC3)");
+	}
 	bank_select_ = buffer[offset++];
 
 	// Deserialize all 8 bank registers
