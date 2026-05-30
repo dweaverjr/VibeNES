@@ -22,9 +22,9 @@ A cycle-accurate Nintendo Entertainment System (NES) emulator written in modern 
 - **vcpkg** (bootstrapped locally in project — `./vcpkg/vcpkg.exe`)
 
 Dependencies (installed automatically via vcpkg):
-- SDL3 3.4.2
-- Catch2 3.13.0
-- ImGui 1.91.9
+- SDL3 3.4.8
+- Catch2 3.15.0
+- ImGui 1.92.8 (with `sdl3-binding` + `opengl3-binding` features)
 
 ### Build Commands
 
@@ -158,9 +158,8 @@ cmake -E chdir build/debug ctest --output-on-failure
 
 ## Known Issues
 
-- **APU uses edge-triggered IRQ** — NES APU IRQ is level-triggered
-- **MMC3 sprite fetch timing** — Batched at cycle 257 instead of per-sprite
-- **Minor PPU rendering issues** — Some edge-case rendering bugs remain
+- **Minor PPU rendering issues** — Some edge-case rendering bugs remain (e.g. obscure mid-scanline register-write corner cases).
+- **Bus-conflict emulation is simplified** — Mapper 2/3 bus conflicts read from the currently selected bank rather than the bank fixed at the written address.
 
 ## License
 
