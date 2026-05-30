@@ -294,7 +294,6 @@ class PPU : public Component {
 	void perform_sprite_evaluation_cycle();
 	void prepare_scanline_sprites();   // Convert secondary OAM to scanline sprites with pattern data
 	void perform_sprite_fetch_cycle(); // Per-cycle sprite pattern fetch during cycles 257-320
-	void handle_sprite_overflow_bug();
 
 	// Hardware timing features
 	void handle_odd_frame_skip();
@@ -328,10 +327,6 @@ class PPU : public Component {
 	uint32_t apply_color_emphasis(uint32_t color);
 	bool is_transparent_color(uint8_t palette_index);
 	// Note: resolve_pixel_priority functionality merged into multiplex_background_sprite_pixels
-
-	// Hardware-accurate register behavior
-	uint8_t read_oamdata_during_rendering(); // Enhanced version that handles rendering behavior
-	void handle_ppustatus_race_condition();
 
 	// Background rendering (Phase 2)
 	void render_background_pixel();

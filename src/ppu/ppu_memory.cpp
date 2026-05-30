@@ -2,6 +2,7 @@
 #include "cartridge/cartridge.hpp"
 #include <cstdio>
 #include <cstring>
+#include <stdexcept>
 
 namespace nes {
 
@@ -179,6 +180,11 @@ void PPUMemory::serialize_state(std::vector<uint8_t> &buffer) const {
 }
 
 void PPUMemory::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Bounds check: VRAM (2048) + palette (32) + CHR RAM fallback (8192) + mirroring (1)
+	if (offset + 2048 + 32 + 8192 + 1 > buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer (PPU memory)");
+	}
+
 	// Deserialize VRAM (2048 bytes)
 	std::copy(buffer.begin() + offset, buffer.begin() + offset + 2048, vram_.begin());
 	offset += 2048;

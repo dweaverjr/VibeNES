@@ -5,7 +5,9 @@
 #include "cpu/cpu_6502.hpp"
 #include "ppu/nes_palette.hpp"
 #include <algorithm>
+#include <bit>
 #include <cstring>
+#include <stdexcept>
 
 namespace nes {
 
@@ -617,8 +619,7 @@ void PPU::process_pre_render_scanline() {
 // ============================================================================
 
 uint8_t PPU::read_ppustatus() {
-	// Handle race condition first
-	handle_ppustatus_race_condition(); // Hardware-accurate PPUSTATUS read:
+	// Hardware-accurate PPUSTATUS read:
 	// - Bits 7-5: Status flags (VBlank, Sprite 0 Hit, Sprite Overflow)
 	// - Bits 4-0: Open bus (return last value on PPU data bus)
 	uint8_t result = (status_register_ & 0xE0) | (ppu_data_bus_ & 0x1F);
@@ -1587,13 +1588,6 @@ void PPU::perform_sprite_evaluation_cycle() {
 	}
 }
 
-void PPU::handle_sprite_overflow_bug() {
-	// This function is no longer needed - overflow handled in state machine
-	// Kept for compatibility but should not be called
-	sprite_overflow_detected_ = true;
-	status_register_ |= PPUConstants::PPUSTATUS_OVERFLOW_MASK;
-}
-
 void PPU::prepare_scanline_sprites() {
 	// Phase 1 of sprite preparation: Read secondary OAM and compute sprite
 	// metadata (positions, tile indices, row calculations).  Pattern table
@@ -1607,7 +1601,7 @@ void PPU::prepare_scanline_sprites() {
 		Sprite sprite;
 		sprite.y_position = secondary_oam_[base_addr];
 		sprite.tile_index = secondary_oam_[base_addr + 1];
-		sprite.attributes = *reinterpret_cast<const SpriteAttributes *>(&secondary_oam_[base_addr + 2]);
+		sprite.attributes = std::bit_cast<SpriteAttributes>(secondary_oam_[base_addr + 2]);
 		sprite.x_position = secondary_oam_[base_addr + 3];
 
 		// Store sprite data and index
@@ -2003,45 +1997,6 @@ bool PPU::is_transparent_color(uint8_t palette_index) {
 // Enhanced Register Behavior
 // =============================================================================
 
-uint8_t PPU::read_oamdata_during_rendering() {
-	// Enhanced OAMDATA reading with rendering-specific behavior
-	if (is_rendering_enabled() &&
-		(current_scanline_ < PPUTiming::VISIBLE_SCANLINES || current_scanline_ == PPUTiming::PRE_RENDER_SCANLINE)) {
-
-		// During rendering, OAMDATA reads return specific values
-		// based on the current sprite evaluation state
-		if (current_cycle_ >= PPUTiming::SPRITE_EVAL_START_CYCLE &&
-			current_cycle_ <= PPUTiming::SPRITE_EVAL_END_CYCLE) {
-			// During sprite evaluation, return secondary OAM data
-			return 0xFF; // Simplified: real hardware behavior is complex
-		} else {
-			// During other rendering cycles, return 0xFF
-			return 0xFF;
-		}
-	} else {
-		// During VBlank or when rendering is disabled, normal read
-		uint8_t value = oam_memory_[oam_address_];
-		// NO auto-increment here - this is a specialized rendering function
-		// Auto-increment should only happen in read_oamdata()
-		return value;
-	}
-}
-
-void PPU::handle_ppustatus_race_condition() {
-	// Handle PPUSTATUS race condition near VBlank
-	// Only suppress VBlank if reading PPUSTATUS exactly when VBlank is being set (cycle 1)
-	// This is the actual race condition - reading at the same cycle VBlank is set
-	// However, this should be rare and only apply to very specific timing
-	// For now, disable this aggressive suppression to let tests pass
-	// TODO: Implement more precise race condition timing if needed for specific edge cases
-
-	// Commenting out the suppression for now:
-	// if (current_scanline_ == PPUTiming::VBLANK_START_SCANLINE && current_cycle_ ==
-	// PPUTiming::VBLANK_SET_CYCLE) {
-	//     suppress_vbl_ = true;
-	// }
-}
-
 // =============================================================================
 // Sprite Timing Features
 // =============================================================================
@@ -2395,6 +2350,12 @@ void PPU::serialize_state(std::vector<uint8_t> &buffer) const {
 }
 
 void PPU::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Bounds check the entire fixed-size (v1) portion up front. Variable/versioned
+	// sections later in the function carry their own guards.
+	if (offset + 360 > buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer (PPU)");
+	}
+
 	// Timing state
 	current_cycle_ = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
 	offset += 2;
