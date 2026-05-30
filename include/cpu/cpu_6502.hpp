@@ -38,7 +38,7 @@ class CPU6502 final : public Component {
 	void clear_nmi_line() noexcept; ///< Clear NMI line (when VBlank flag is cleared by reading $2002)
 	void trigger_irq() noexcept;	///< Trigger Maskable Interrupt (APU, mappers, etc.)
 	void trigger_reset() noexcept;	///< Trigger Reset (reset button, power-on)
-	void clear_irq_line() noexcept; ///< Clear IRQ line (for edge detection when source is acknowledged)
+	void clear_irq_line() noexcept; ///< Clear IRQ line when all maskable sources are inactive
 
 	[[nodiscard]] bool has_pending_interrupt() const noexcept;
 	[[nodiscard]] InterruptType get_pending_interrupt() const noexcept;

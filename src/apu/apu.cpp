@@ -33,7 +33,7 @@ const uint16_t APU::DMC_RATE_TABLE[16] = {428, 380, 340, 320, 286, 254, 226, 214
 
 APU::APU()
 	: frame_counter_{}, pulse1_{}, pulse2_{}, triangle_{}, noise_{}, dmc_{}, frame_irq_flag_(false),
-	  dmc_irq_flag_(false), prev_irq_line_state_(false), dmc_dma_pending_(false), dmc_dma_address_(0), cycle_count_(0),
+	  dmc_irq_flag_(false), irq_line_asserted_(false), dmc_dma_pending_(false), dmc_dma_address_(0), cycle_count_(0),
 	  cpu_(nullptr), bus_(nullptr), audio_backend_(nullptr),
 	  sample_rate_converter_(static_cast<float>(CPU_CLOCK_NTSC), 44100.0f), audio_enabled_(false),
 	  rate_adjust_counter_(0), output_filter_{} {
@@ -62,7 +62,7 @@ void APU::reset() {
 	// Clear flags
 	frame_irq_flag_ = false;
 	dmc_irq_flag_ = false;
-	prev_irq_line_state_ = false;
+	irq_line_asserted_ = false;
 	dmc_dma_pending_ = false;
 	dmc_dma_address_ = 0;
 	cycle_count_ = 0;
@@ -236,20 +236,14 @@ void APU::clock_half_frame() {
 }
 
 void APU::update_irq_line() {
-	if (cpu_) {
-		// Determine current IRQ line state
-		bool current_irq_line = (frame_irq_flag_ || dmc_irq_flag_);
+	irq_line_asserted_ = (frame_irq_flag_ || dmc_irq_flag_);
 
-		// Edge detection: only trigger on rising edge (0 -> 1 transition)
-		if (current_irq_line && !prev_irq_line_state_) {
+	if (cpu_) {
+		if (irq_line_asserted_) {
 			cpu_->trigger_irq();
-		}
-		// Falling edge: clear IRQ line when both flags are clear
-		else if (!current_irq_line && prev_irq_line_state_) {
+		} else {
 			cpu_->clear_irq_line();
 		}
-
-		prev_irq_line_state_ = current_irq_line;
 	}
 }
 
@@ -920,7 +914,7 @@ void APU::serialize_state(std::vector<uint8_t> &buffer) const {
 	// Status flags
 	buffer.push_back(frame_irq_flag_ ? 1 : 0);
 	buffer.push_back(dmc_irq_flag_ ? 1 : 0);
-	buffer.push_back(prev_irq_line_state_ ? 1 : 0);
+	buffer.push_back(irq_line_asserted_ ? 1 : 0);
 
 	// DMC DMA tracking
 	buffer.push_back(dmc_dma_pending_ ? 1 : 0);
@@ -1047,7 +1041,7 @@ void APU::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) 
 	// Status flags
 	frame_irq_flag_ = buffer[offset++] != 0;
 	dmc_irq_flag_ = buffer[offset++] != 0;
-	prev_irq_line_state_ = buffer[offset++] != 0;
+	irq_line_asserted_ = buffer[offset++] != 0;
 
 	// DMC DMA tracking
 	dmc_dma_pending_ = buffer[offset++] != 0;

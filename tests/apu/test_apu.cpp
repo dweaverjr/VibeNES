@@ -5,6 +5,7 @@
 #include "../../include/apu/apu.hpp"
 #include "../../include/core/bus.hpp"
 #include "../../include/core/types.hpp"
+#include "../../include/cpu/cpu_6502.hpp"
 #include "../../include/memory/ram.hpp"
 #include <catch2/catch_all.hpp>
 #include <cmath>
@@ -705,6 +706,28 @@ TEST_CASE("APU Frame Counter Timing", "[apu][frame-counter][timing]") {
 		// Just verify the acknowledge mechanism works
 		apu->acknowledge_dmc_irq();
 		REQUIRE_FALSE(apu->is_dmc_irq_pending());
+	}
+
+	SECTION("Frame IRQ drives the CPU IRQ line as a level") {
+		SystemBus bus;
+		CPU6502 cpu(&bus);
+		apu->connect_cpu(&cpu);
+
+		apu->write(0x4017, 0x00);
+		tick_apu(*apu, 60000);
+
+		REQUIRE(apu->is_frame_irq_pending());
+		REQUIRE(cpu.has_pending_interrupt());
+
+		cpu.clear_irq_line();
+		REQUIRE_FALSE(cpu.has_pending_interrupt());
+
+		apu->tick(CpuCycle(1));
+		REQUIRE(cpu.has_pending_interrupt());
+
+		apu->read(0x4015);
+		apu->tick(CpuCycle(1));
+		REQUIRE_FALSE(cpu.has_pending_interrupt());
 	}
 }
 

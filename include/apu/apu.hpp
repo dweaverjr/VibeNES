@@ -228,7 +228,7 @@ class APU : public Component {
 	// Status flags
 	bool frame_irq_flag_;
 	bool dmc_irq_flag_;
-	bool prev_irq_line_state_; // Track previous IRQ line state for edge detection
+	bool irq_line_asserted_; // Cached APU IRQ output level for save-state compatibility
 
 	// DMC DMA tracking — the APU requests a fetch; the CPU fulfils it.
 	bool dmc_dma_pending_ = false; // true while waiting for CPU to deliver byte
