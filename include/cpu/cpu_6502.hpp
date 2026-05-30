@@ -63,6 +63,13 @@ class CPU6502 final : public Component {
 		return status_.status_register_;
 	}
 
+	// True once the CPU has decoded an opcode that is not handled by the
+	// instruction decoder. Every one of the 256 opcodes should be handled, so a
+	// set flag indicates a genuine decoder/ROM bug rather than normal execution.
+	[[nodiscard]] bool is_halted() const noexcept {
+		return halted_;
+	}
+
 	// Individual flag access
 	[[nodiscard]] bool get_carry_flag() const noexcept {
 		return status_.flags.carry_flag_;
@@ -172,6 +179,10 @@ class CPU6502 final : public Component {
 	InterruptState interrupt_state_;
 	bool irq_line_ = false; // External IRQ line state (for level-triggered IRQ)
 	bool nmi_line_ = false; // External NMI line state (for edge-triggered NMI)
+
+	// Set when the decoder hits an opcode it does not recognize. Surfaces
+	// decoder/ROM bugs that would otherwise be masked by the NOP fallback.
+	bool halted_ = false;
 
 	// Penultimate-cycle interrupt polling state
 	// On real 6502, interrupt lines are sampled on the penultimate (second-to-last)

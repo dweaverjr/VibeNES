@@ -2,6 +2,7 @@
 #include "core/bus.hpp"
 #include <format>
 #include <iostream>
+#include <stdexcept>
 
 namespace nes {
 
@@ -1053,7 +1054,10 @@ int CPU6502::execute_instruction() {
 	default:
 		std::cerr << std::format("Unknown opcode: 0x{:02X} at PC: 0x{:04X}\n", static_cast<int>(opcode),
 								 static_cast<int>(program_counter_ - 1));
-		// For now, treat unknown opcodes as NOP
+		// Every opcode 0x00-0xFF should be handled above; reaching here means a
+		// decoder or ROM bug. Flag it (queryable via is_halted()) so callers can
+		// detect it, then fall back to NOP timing so the emulator keeps running.
+		halted_ = true;
 		cycles_remaining_ -= CpuCycle{2};
 		break;
 	}
@@ -5288,6 +5292,12 @@ void CPU6502::serialize_state(std::vector<uint8_t> &buffer) const {
 }
 
 void CPU6502::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) {
+	// Bounds check the fixed-size (v1) portion up front (registers, PC, status,
+	// cycle count, interrupt flags). The v2 section below carries its own guard.
+	if (offset + 20 > buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer (CPU)");
+	}
+
 	// Deserialize all registers
 	accumulator_ = buffer[offset++];
 	x_register_ = buffer[offset++];

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstring>
 #include <fstream>
+#include <stdexcept>
 
 namespace nes {
 
@@ -162,16 +163,25 @@ void SaveStateManager::write_bytes(std::vector<uint8_t> &buffer, const uint8_t *
 }
 
 uint8_t SaveStateManager::read_uint8(const std::vector<uint8_t> &buffer, size_t &offset) {
+	if (offset >= buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer");
+	}
 	return buffer[offset++];
 }
 
 uint16_t SaveStateManager::read_uint16(const std::vector<uint8_t> &buffer, size_t &offset) {
+	if (offset + 2 > buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer");
+	}
 	uint16_t value = buffer[offset] | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
 	offset += 2;
 	return value;
 }
 
 uint32_t SaveStateManager::read_uint32(const std::vector<uint8_t> &buffer, size_t &offset) {
+	if (offset + 4 > buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer");
+	}
 	uint32_t value = buffer[offset] | (static_cast<uint32_t>(buffer[offset + 1]) << 8) |
 					 (static_cast<uint32_t>(buffer[offset + 2]) << 16) |
 					 (static_cast<uint32_t>(buffer[offset + 3]) << 24);
@@ -180,6 +190,9 @@ uint32_t SaveStateManager::read_uint32(const std::vector<uint8_t> &buffer, size_
 }
 
 uint64_t SaveStateManager::read_uint64(const std::vector<uint8_t> &buffer, size_t &offset) {
+	if (offset + 8 > buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer");
+	}
 	uint64_t value = 0;
 	for (int i = 0; i < 8; ++i) {
 		value |= static_cast<uint64_t>(buffer[offset + i]) << (i * 8);
@@ -189,10 +202,16 @@ uint64_t SaveStateManager::read_uint64(const std::vector<uint8_t> &buffer, size_
 }
 
 bool SaveStateManager::read_bool(const std::vector<uint8_t> &buffer, size_t &offset) {
+	if (offset >= buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer");
+	}
 	return buffer[offset++] != 0;
 }
 
 void SaveStateManager::read_bytes(const std::vector<uint8_t> &buffer, size_t &offset, uint8_t *data, size_t size) {
+	if (offset + size > buffer.size()) {
+		throw std::runtime_error("save state: unexpected end of buffer");
+	}
 	std::memcpy(data, buffer.data() + offset, size);
 	offset += size;
 }
