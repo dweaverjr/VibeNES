@@ -33,7 +33,7 @@ Byte Controller::read(Address address) const noexcept {
 		// Controller 1
 		if (strobe_) {
 			// While strobe is high, continuously return button A state
-			return (button_states_1_ & 0x01) | 0x40;
+			return (read_gamepad_state(0) & 0x01) | 0x40;
 		} else {
 			// After 8 reads, real hardware returns 1 for all subsequent reads
 			if (shift_count_1_ >= 8) {
@@ -48,7 +48,7 @@ Byte Controller::read(Address address) const noexcept {
 		// Controller 2
 		if (strobe_) {
 			// While strobe is high, continuously return button A state
-			return (button_states_2_ & 0x01) | 0x40;
+			return (read_gamepad_state(1) & 0x01) | 0x40;
 		} else {
 			// After 8 reads, real hardware returns 1 for all subsequent reads
 			if (shift_count_2_ >= 8) {

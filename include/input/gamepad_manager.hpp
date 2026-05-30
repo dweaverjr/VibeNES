@@ -18,7 +18,7 @@ namespace nes {
 class GamepadManager {
   public:
 	GamepadManager();
-	~GamepadManager();
+	virtual ~GamepadManager();
 
 	// Delete copy/move to prevent double-free of SDL resources
 	GamepadManager(const GamepadManager &) = delete;
@@ -55,7 +55,7 @@ class GamepadManager {
 	 * @param player_index 0 for Player 1, 1 for Player 2
 	 * @return true if controller is connected
 	 */
-	bool is_controller_connected(int player_index) const;
+	virtual bool is_controller_connected(int player_index) const;
 
 	/**
 	 * Get the name of the connected controller
@@ -70,7 +70,7 @@ class GamepadManager {
 	 * @param button SDL gamepad button code
 	 * @return true if button is pressed
 	 */
-	bool is_button_pressed(int player_index, SDL_GamepadButton button) const;
+	virtual bool is_button_pressed(int player_index, SDL_GamepadButton button) const;
 
 	/**
 	 * Get number of connected controllers
