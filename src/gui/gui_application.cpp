@@ -31,6 +31,7 @@
 #endif
 #include <GL/gl.h>
 #include <SDL3/SDL.h>
+#include <exception>
 #include <iostream>
 #include <memory>
 
@@ -63,8 +64,16 @@ bool GuiApplication::initialize() {
 		return false;
 	}
 
-	// Initialize core emulation components
-	initialize_emulation_components();
+	// Initialize core emulation components. If construction throws, the SDL and
+	// ImGui resources allocated above would otherwise leak, so clean them up
+	// before propagating the failure.
+	try {
+		initialize_emulation_components();
+	} catch (const std::exception &e) {
+		std::cerr << "Emulation component initialization failed: " << e.what() << std::endl;
+		cleanup();
+		return false;
+	}
 
 	// Initialize CRT display filter (needs GL context)
 	if (crt_filter_ && !crt_filter_->initialize()) {
