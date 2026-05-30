@@ -30,7 +30,9 @@
 			"ForEach-Object": true,
 			"Test-Path": true,
 			"git clone": true,
-			".\\vcpkg\\bootstrap-vcpkg.bat": true
+			".\\vcpkg\\bootstrap-vcpkg.bat": true,
+			"git remote": true,
+			".github/copilot-instructions.md": true
 		}
 	}
 }
