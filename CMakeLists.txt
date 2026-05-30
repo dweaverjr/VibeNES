@@ -7,9 +7,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+include(CheckIPOSupported)
+
+check_ipo_supported(RESULT VIBENES_IPO_SUPPORTED OUTPUT VIBENES_IPO_ERROR)
+if(VIBENES_IPO_SUPPORTED)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+else()
+    message(WARNING "Release IPO/LTO disabled: ${VIBENES_IPO_ERROR}")
+endif()
+
 # Enable exception handling globally (MSVC needs this explicitly)
 if(MSVC)
     add_compile_options(/EHsc)
+    add_compile_options($<$<CONFIG:Release>:/Gw>)
+    add_link_options($<$<CONFIG:Release>:/OPT:REF> $<$<CONFIG:Release>:/OPT:ICF>)
+else()
+    add_compile_options($<$<CONFIG:Release>:-ffunction-sections -fdata-sections>)
+    add_link_options($<$<CONFIG:Release>:-Wl,--gc-sections>)
 endif()
 
 # ─── Find SDL3 and ImGui via vcpkg ───────────────────────────────────────────
@@ -60,7 +74,7 @@ else()
     target_compile_options(vibes_core PRIVATE
         -Wall -Wextra -Wpedantic
         $<$<CONFIG:Debug>:-g3 -O0>
-        $<$<CONFIG:Release>:-O2 -DNDEBUG>
+        $<$<CONFIG:Release>:-O3 -DNDEBUG>
     )
 endif()
 
@@ -95,7 +109,7 @@ else()
     target_compile_options(VibeNES_GUI PRIVATE
         -Wall -Wextra -Wpedantic
         $<$<CONFIG:Debug>:-g3 -O0>
-        $<$<CONFIG:Release>:-O2 -DNDEBUG>
+        $<$<CONFIG:Release>:-O3 -DNDEBUG>
     )
     target_link_options(VibeNES_GUI PRIVATE
         $<$<CONFIG:Release>:-mwindows>
@@ -138,7 +152,7 @@ else()
     target_compile_options(VibeNES_Tests PRIVATE
         -Wall -Wextra
         $<$<CONFIG:Debug>:-g3 -O0>
-        $<$<CONFIG:Release>:-O2 -DNDEBUG>
+        $<$<CONFIG:Release>:-O3 -DNDEBUG>
     )
 endif()
 
