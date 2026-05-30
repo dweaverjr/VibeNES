@@ -72,6 +72,9 @@ class SampleRateConverter {
 	void set_rate_adjustment(float factor);
 
   private:
+	// Compute a safe input/output ratio, falling back to 1:1 on non-positive rates.
+	static float compute_ratio(float input_rate, float output_rate);
+
 	float base_ratio_;		// Base downsampling ratio (input_rate / output_rate)
 	float effective_ratio_; // Adjusted ratio used for actual resampling
 	float accumulator_;		// Fractional sample position tracker

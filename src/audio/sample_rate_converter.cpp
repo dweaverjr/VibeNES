@@ -4,8 +4,18 @@
 namespace nes {
 
 SampleRateConverter::SampleRateConverter(float input_rate, float output_rate)
-	: base_ratio_(input_rate / output_rate), effective_ratio_(input_rate / output_rate), accumulator_(0.0f), sum_(0.0f),
-	  count_(0), has_output_(false), output_sample_(0.0f) {
+	: base_ratio_(compute_ratio(input_rate, output_rate)), effective_ratio_(base_ratio_), accumulator_(0.0f),
+	  sum_(0.0f), count_(0), has_output_(false), output_sample_(0.0f) {
+}
+
+float SampleRateConverter::compute_ratio(float input_rate, float output_rate) {
+	// Guard against a non-positive output rate, which would otherwise produce
+	// inf/NaN and propagate corrupt timing through the whole audio path.
+	// Fall back to a 1:1 ratio (no resampling) for invalid inputs.
+	if (input_rate <= 0.0f || output_rate <= 0.0f) {
+		return 1.0f;
+	}
+	return input_rate / output_rate;
 }
 
 void SampleRateConverter::input_sample(float sample) {

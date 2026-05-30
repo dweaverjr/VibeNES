@@ -501,6 +501,12 @@ void APU::PulseChannel::clock_envelope() {
 			if (envelope_decay_level > 0) {
 				envelope_decay_level--;
 			} else if (!length_enabled) {
+				// Bit 5 of $4000/$4004 is a SINGLE shared flag: it is both the
+				// length-counter halt and the envelope loop. `length_enabled`
+				// is stored as the inverse of that bit, so `!length_enabled`
+				// is exactly the envelope-loop flag (NESDev: "Length counter
+				// halt / envelope loop"). When set, the decay level wraps from
+				// 0 back to 15 instead of staying at 0.
 				envelope_decay_level = 15;
 			}
 		} else {
@@ -680,6 +686,11 @@ void APU::NoiseChannel::clock_envelope() {
 			if (envelope_decay_level > 0) {
 				envelope_decay_level--;
 			} else if (!length_enabled) {
+				// Bit 5 of $400C is a SINGLE shared flag: it is both the
+				// length-counter halt and the envelope loop. `length_enabled`
+				// is stored as the inverse of that bit, so `!length_enabled`
+				// is exactly the envelope-loop flag. When set, the decay level
+				// wraps from 0 back to 15 instead of staying at 0.
 				envelope_decay_level = 15;
 			}
 		} else {
