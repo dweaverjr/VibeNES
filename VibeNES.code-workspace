@@ -37,6 +37,7 @@
 				"approve": true,
 				"matchCommandLine": true
 			}
-		}
+		},
+		"chat.disableAIFeatures": false
 	}
 }

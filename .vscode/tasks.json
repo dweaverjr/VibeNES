@@ -7,17 +7,13 @@
                 "/d",
                 "/c"
             ]
-        },
-        "env": {
-            "VCVARS": "\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat\" amd64",
-            "CMAKE": "\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe\""
         }
     },
     "tasks": [
         {
             "label": "Build Debug",
             "type": "shell",
-            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug",
+            "command": "call .vscode\\vsdev.bat && cmake --preset debug && cmake --build --preset debug",
             "group": "build",
             "problemMatcher": [
                 "$msCompile"
@@ -31,7 +27,7 @@
         {
             "label": "Build Release",
             "type": "shell",
-            "command": "%VCVARS% && %CMAKE% --preset release && %CMAKE% --build --preset release",
+            "command": "call .vscode\\vsdev.bat && cmake --preset release && cmake --build --preset release",
             "group": "build",
             "problemMatcher": [
                 "$msCompile"
@@ -45,7 +41,7 @@
         {
             "label": "Run Tests",
             "type": "shell",
-            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug && %CMAKE% -E chdir build/debug ctest --output-on-failure",
+            "command": "call .vscode\\vsdev.bat && cmake --preset debug && cmake --build --preset debug && cmake -E chdir build/debug ctest --output-on-failure",
             "group": {
                 "kind": "test",
                 "isDefault": true
@@ -62,7 +58,7 @@
         {
             "label": "Run Tests: CPU",
             "type": "shell",
-            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug && %CMAKE% -E chdir build/debug ctest -R CPU --output-on-failure",
+            "command": "call .vscode\\vsdev.bat && cmake --preset debug && cmake --build --preset debug && cmake -E chdir build/debug ctest -R CPU --output-on-failure",
             "group": "test",
             "problemMatcher": [
                 "$msCompile"
@@ -76,7 +72,7 @@
         {
             "label": "Run Tests: PPU",
             "type": "shell",
-            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug && %CMAKE% -E chdir build/debug ctest -R PPU --output-on-failure",
+            "command": "call .vscode\\vsdev.bat && cmake --preset debug && cmake --build --preset debug && cmake -E chdir build/debug ctest -R PPU --output-on-failure",
             "group": "test",
             "problemMatcher": [
                 "$msCompile"
@@ -90,7 +86,7 @@
         {
             "label": "Run Tests: by name...",
             "type": "shell",
-            "command": "%VCVARS% && %CMAKE% --preset debug && %CMAKE% --build --preset debug && .\\build\\debug\\VibeNES_Tests.exe \"${input:testFilter}\" --order rand",
+            "command": "call .vscode\\vsdev.bat && cmake --preset debug && cmake --build --preset debug && .\\build\\debug\\VibeNES_Tests.exe \"${input:testFilter}\" --order rand",
             "group": "test",
             "problemMatcher": [
                 "$msCompile"
@@ -104,7 +100,7 @@
         {
             "label": "Run VibeNES (Debug)",
             "type": "shell",
-            "command": "%VCVARS% && %CMAKE% --build --preset debug && .\\build\\debug\\VibeNES_GUI.exe",
+            "command": "call .vscode\\vsdev.bat && cmake --preset debug && cmake --build --preset debug && .\\build\\debug\\VibeNES_GUI.exe",
             "group": "build",
             "problemMatcher": [],
             "presentation": {
@@ -115,7 +111,7 @@
         {
             "label": "Run VibeNES (Release)",
             "type": "shell",
-            "command": "%VCVARS% && %CMAKE% --build --preset release && .\\build\\release\\VibeNES_GUI.exe",
+            "command": "call .vscode\\vsdev.bat && cmake --preset release && cmake --build --preset release && .\\build\\release\\VibeNES_GUI.exe",
             "group": "build",
             "problemMatcher": [],
             "presentation": {
