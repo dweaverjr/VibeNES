@@ -168,14 +168,35 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 			disp_h = 240.0f * display_scale_;
 		}
 
-		// Bilinear filtering for CRT mode or soft-pixels mode; nearest for crisp debug view
-		const bool use_linear = crt_filter_ && (crt_filter_->enabled || crt_filter_->soft_pixels);
-		glBindTexture(GL_TEXTURE_2D, main_display_texture_);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, use_linear ? GL_LINEAR : GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, use_linear ? GL_LINEAR : GL_NEAREST);
+		// When the CRT filter is enabled, render the framebuffer through the CRT
+		// shader and display the processed texture instead. Otherwise honour the
+		// soft-pixels toggle: bilinear when on, nearest-neighbour (crisp) when off.
+		//
+		// ImGui 1.92's OpenGL backend uses sampler objects, which override any
+		// per-texture glTexParameteri(GL_TEXTURE_MIN/MAG_FILTER) calls. The only
+		// reliable way to control filtering is via the backend's sampler draw
+		// callbacks, set on the window draw list around the Image.
+		unsigned int display_texture = main_display_texture_;
+		bool use_linear;
+		if (crt_filter_ && crt_filter_->enabled) {
+			display_texture =
+				crt_filter_->apply(main_display_texture_, static_cast<int>(disp_w), static_cast<int>(disp_h));
+			use_linear = true; // CRT output is already at display resolution
+		} else {
+			use_linear = crt_filter_ && crt_filter_->soft_pixels;
+		}
+
+		ImGuiPlatformIO &platform_io = ImGui::GetPlatformIO();
+		ImDrawList *draw_list = ImGui::GetWindowDrawList();
+		draw_list->AddCallback(use_linear ? platform_io.DrawCallback_SetSamplerLinear
+										  : platform_io.DrawCallback_SetSamplerNearest,
+							   nullptr);
 
 		ImVec2 display_size(disp_w, disp_h);
-		ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(main_display_texture_)), display_size);
+		ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(display_texture)), display_size);
+
+		// Restore ImGui's default sampler so the rest of the UI is unaffected.
+		draw_list->AddCallback(platform_io.DrawCallback_ResetRenderState, nullptr);
 
 		// Timing info removed - now in right panel
 	} else {

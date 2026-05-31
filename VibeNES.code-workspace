@@ -32,7 +32,11 @@
 			"git clone": true,
 			".\\vcpkg\\bootstrap-vcpkg.bat": true,
 			"git remote": true,
-			".github/copilot-instructions.md": true
+			".github/copilot-instructions.md": true,
+			"/^& \\.\\\\build\\\\debug\\\\VibeNES_GUI\\.exe 2>&1 \\| Select-Object -Last 24; Write-Host \"EXITCODE=\\$LASTEXITCODE\"$/": {
+				"approve": true,
+				"matchCommandLine": true
+			}
 		}
 	}
 }

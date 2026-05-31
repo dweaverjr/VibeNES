@@ -16,7 +16,7 @@
 #define GL_LINK_STATUS 0x8B82
 #endif
 #ifndef GL_ARRAY_BUFFER
-#define GL_ARRAY_BUFFER 0x8889
+#define GL_ARRAY_BUFFER 0x8892
 #endif
 #ifndef GL_STATIC_DRAW
 #define GL_STATIC_DRAW 0x88E4
@@ -342,9 +342,22 @@ GLuint CRTFilter::apply(GLuint input_texture, int output_width, int output_heigh
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	// Draw fullscreen quad through CRT shader
+	// Draw fullscreen quad through CRT shader.
+	// Re-bind the VBO and re-specify the vertex attributes here rather than
+	// relying solely on the stored VAO state. ImGui's GL backend rebinds the
+	// array buffer and vertex-attrib state every frame, and in a CORE profile a
+	// stale/empty array-buffer binding makes glDrawArrays dereference a
+	// client-side pointer (offset 0/8) and crash. Re-specifying guarantees a
+	// valid buffer is bound for both attributes.
 	glBindVertexArray_(vao_);
+	glBindBuffer_(GL_ARRAY_BUFFER, vbo_);
+	glVertexAttribPointer_(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+	glEnableVertexAttribArray_(0);
+	glVertexAttribPointer_(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+						   reinterpret_cast<const void *>(2 * sizeof(float)));
+	glEnableVertexAttribArray_(1);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindBuffer_(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray_(0);
 
 	// Restore input texture to nearest-neighbor filtering (ImGui/debug views expect it)

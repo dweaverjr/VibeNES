@@ -170,11 +170,18 @@ MSVC v143 (Build Tools 2022) + CMake + Ninja + vcpkg (project-local). Dependenci
 - **Build output**: `build/debug/` and `build/release/`
 
 ### Build Commands
-Use VS Code tasks (Ctrl+Shift+B for default build). All tasks use `cmd.exe`, source `vcvarsall.bat`, and use explicit MSVC cmake/ninja paths via env vars. No dependency on CMake Tools extension for building.
-- **Build Debug** (default build task)
+**ALWAYS build and test via the VS Code tasks (the `run_task` tool), NEVER by typing build commands into a terminal.** The tasks reference env vars like `%VCVARS%` and `%CMAKE%` that are ONLY defined inside the `cmd.exe` task shell — they do NOT exist in the integrated PowerShell terminal, so `run_in_terminal` calls like `%VCVARS% && %CMAKE% --build ...` will fail with "term not recognized". Do not try to reconstruct the raw cmake/ninja/vcvarsall command line by hand.
+
+Workflow for any build/test/run:
+1. Call `run_task` with the appropriate task id (e.g. `shell: Build Debug`).
+2. After it finishes, check the task OUTPUT with `get_task_output` and confirm `Exit Code: 0` / "Build Successful" before proceeding — do not rely on status alone.
+
+Available tasks (use these exact labels):
+- **Build Debug** (default build task — `shell: Build Debug`)
 - **Build Release**
 - **Run Tests** (builds debug first, then runs ctest)
-- **Run VibeNES** (builds debug first, then launches GUI)
+- **Run Tests: CPU** / **Run Tests: PPU** / **Run Tests: by name...**
+- **Run VibeNES (Debug)** / **Run VibeNES (Release)** (builds first, then launches GUI)
 - **Clean** (deletes build/debug and build/release)
 
 CMakePresets.json pins `CMAKE_MAKE_PROGRAM` to MSVC's Ninja to prevent stale PATH issues.

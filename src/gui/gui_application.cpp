@@ -322,18 +322,6 @@ void GuiApplication::render_frame() {
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-		// After drawing, restore the texture to GL_NEAREST so the debug views
-		// look crisp if the user exits fullscreen.
-		if (ppu_viewer_panel_ && crt_filter_ && (crt_filter_->enabled || crt_filter_->soft_pixels)) {
-			unsigned int tex = ppu_viewer_panel_->get_main_display_texture();
-			if (tex) {
-				glBindTexture(GL_TEXTURE_2D, tex);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-				glBindTexture(GL_TEXTURE_2D, 0);
-			}
-		}
-
 		SDL_GL_SwapWindow(window_);
 		return;
 	}
@@ -1122,25 +1110,40 @@ void GuiApplication::render_fullscreen_display() {
 		unsigned int texture_id = ppu_viewer_panel_->get_main_display_texture();
 
 		if (texture_id != 0) {
-			// Bilinear filtering for CRT mode or soft-pixels mode
-			const bool use_linear = crt_filter_ && (crt_filter_->enabled || crt_filter_->soft_pixels);
-			if (use_linear) {
-				glBindTexture(GL_TEXTURE_2D, texture_id);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			}
-
 			ImVec2 display_size(fullscreen_display_w_, fullscreen_display_h_);
 			ImVec2 display_pos(fullscreen_offset_x_, fullscreen_offset_y_);
+
+			// When the CRT filter is enabled, render the NES framebuffer through
+			// the CRT shader (scanlines, curvature, vignette, mask, brightness)
+			// into an offscreen texture and display that instead.
+			unsigned int display_texture = texture_id;
+			bool use_linear;
+			if (crt_filter_ && crt_filter_->enabled) {
+				display_texture = crt_filter_->apply(texture_id, static_cast<int>(fullscreen_display_w_),
+													 static_cast<int>(fullscreen_display_h_));
+				use_linear = true; // CRT output is already at display resolution
+			} else {
+				// Soft-pixels mode uses bilinear sampling; otherwise crisp nearest.
+				use_linear = crt_filter_ && crt_filter_->soft_pixels;
+			}
 
 			// Set cursor position for centering
 			ImGui::SetCursorPos(display_pos);
 
-			ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(texture_id)), display_size);
-			// Note: GL_LINEAR is intentionally NOT restored here.
-			// ImGui::Image() is deferred — the actual GL draw happens in
-			// ImGui_ImplOpenGL3_RenderDrawData(), so the filter must still be
-			// GL_LINEAR at that point.  Restore to GL_NEAREST after the swap.
+			// ImGui 1.92's GL backend uses sampler objects, which override any
+			// per-texture glTexParameteri(GL_TEXTURE_MIN/MAG_FILTER). Control the
+			// sampler through the backend's draw callbacks instead so the toggle
+			// actually takes effect.
+			ImGuiPlatformIO &platform_io = ImGui::GetPlatformIO();
+			ImDrawList *draw_list = ImGui::GetWindowDrawList();
+			draw_list->AddCallback(use_linear ? platform_io.DrawCallback_SetSamplerLinear
+											  : platform_io.DrawCallback_SetSamplerNearest,
+								   nullptr);
+
+			ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(display_texture)), display_size);
+
+			// Restore the default sampler for the rest of the UI.
+			draw_list->AddCallback(platform_io.DrawCallback_ResetRenderState, nullptr);
 		}
 	}
 	ImGui::End();
