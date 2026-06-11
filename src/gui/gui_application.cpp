@@ -243,6 +243,10 @@ void GuiApplication::run() {
 }
 
 void GuiApplication::handle_events() {
+	if (gamepad_manager_) {
+		gamepad_manager_->update();
+	}
+
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		// Check for window close events FIRST (before any other processing)

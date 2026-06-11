@@ -48,9 +48,12 @@ void GamepadManager::shutdown() {
 }
 
 void GamepadManager::update() {
-	// This method is intentionally minimal
-	// Controller connect/disconnect events are handled in handle_sdl_event()
-	// Button states are queried on-demand via is_button_pressed()
+	if (!initialized_) {
+		return;
+	}
+
+	// Keep button state snapshots fresh even when no input events are queued.
+	SDL_UpdateGamepads();
 }
 
 bool GamepadManager::handle_sdl_event(const SDL_Event &event) {
@@ -117,6 +120,13 @@ void GamepadManager::scan_for_controllers() {
 }
 
 void GamepadManager::add_controller(SDL_JoystickID instance_id) {
+	// Ignore duplicate add notifications for a controller that is already open.
+	for (const auto &info : controllers_) {
+		if (info.connected && info.instance_id == instance_id) {
+			return;
+		}
+	}
+
 	// Find first available slot
 	int slot = -1;
 	for (size_t i = 0; i < controllers_.size(); i++) {
