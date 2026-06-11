@@ -40,9 +40,26 @@ class Cartridge final : public Component {
 	// Mapper notifications (for MMC3 scanline counter, etc.)
 	void ppu_a12_toggle() const;
 
-	// IRQ support (for MMC3, MMC5, etc.)
-	bool is_irq_pending() const;
-	void clear_irq() const;
+	// IRQ support (for MMC3, MMC5, etc.). Inline + non-virtual: polled every
+	// CPU cycle by the bus, so this must collapse to a couple of loads.
+	bool is_irq_pending() const noexcept {
+		return mapper_ && mapper_->is_irq_pending();
+	}
+	void clear_irq() const noexcept {
+		if (mapper_) {
+			mapper_->clear_irq();
+		}
+	}
+
+	// Per-cycle mapper notification, inline with cached early-out (only MMC1
+	// opts in). Called from the bus hot path instead of the virtual tick().
+	void notify_cpu_cycles(int count) noexcept {
+		if (mapper_wants_cycle_notify_) {
+			for (int i = 0; i < count; ++i) {
+				mapper_->notify_cpu_cycle();
+			}
+		}
+	}
 
 	// ROM information
 	const RomData &get_rom_data() const noexcept {
@@ -67,6 +84,9 @@ class Cartridge final : public Component {
   private:
 	std::unique_ptr<Mapper> mapper_;
 	RomData rom_data_;
+	// Cached at load: whether mapper_ needs per-cycle notify_cpu_cycle() calls
+	// (only MMC1). Lets tick() early-out instead of a virtual call per CPU cycle.
+	bool mapper_wants_cycle_notify_ = false;
 };
 
 } // namespace nes

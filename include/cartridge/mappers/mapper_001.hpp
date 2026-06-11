@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cartridge/mappers/mapper.hpp"
+#include <array>
 #include <vector>
 
 namespace nes {
@@ -48,6 +49,9 @@ class Mapper001 final : public Mapper {
 	void notify_cpu_cycle() override {
 		++cpu_cycle_counter_;
 	}
+	bool wants_cpu_cycle_notifications() const noexcept override {
+		return true;
+	}
 
 	// Save state serialization
 	void serialize_state(std::vector<uint8_t> &buffer) const override;
@@ -84,6 +88,12 @@ class Mapper001 final : public Mapper {
 
 	std::size_t get_prg_bank_offset(Address address) const;
 	std::size_t get_chr_bank_offset(Address address) const;
+
+	// Cached bank pointers: PRG in 8KB slots ($8000-$FFFF), CHR in 1KB slots
+	// ($0000-$1FFF). Rebuilt only when banking registers change.
+	std::array<const Byte *, 4> prg_map_{};
+	std::array<const Byte *, 8> chr_map_{};
+	void update_bank_maps();
 
 	// Control register bit extraction
 	Byte get_mirroring_mode() const {

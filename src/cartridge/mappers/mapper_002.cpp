@@ -33,6 +33,26 @@ Mapper002::Mapper002(std::vector<Byte> prg_rom, std::vector<Byte> chr_rom, Mirro
 		}
 		std::cout << "[Mapper002] Using CHR RAM initialized from ROM" << std::endl;
 	}
+
+	update_bank_maps();
+}
+
+void Mapper002::update_bank_maps() {
+	// $8000-$BFFF: switchable 16KB bank; $C000-$FFFF: fixed last 16KB bank.
+	// Resolved into 8KB slots, rebuilt only on bank select writes.
+	const std::size_t switch_base = static_cast<std::size_t>(selected_bank_) * 16384;
+	const std::size_t fixed_base = static_cast<std::size_t>(num_banks_ - 1) * 16384;
+	const std::size_t bases[4] = {switch_base, switch_base + 0x2000, fixed_base, fixed_base + 0x2000};
+	for (std::size_t slot = 0; slot < prg_map_.size(); ++slot) {
+		prg_map_[slot] =
+			(bases[slot] + 0x2000 <= prg_rom_.size()) ? prg_rom_.data() + bases[slot] : OPEN_BUS_PAGE.data();
+	}
+
+	// CHR: fixed 8KB RAM in 1KB slots
+	for (std::size_t slot = 0; slot < chr_map_.size(); ++slot) {
+		std::size_t offset = slot * 1024;
+		chr_map_[slot] = (offset + 1024 <= chr_ram_.size()) ? chr_ram_.data() + offset : OPEN_BUS_PAGE.data();
+	}
 }
 
 Byte Mapper002::cpu_read(Address address) const {
@@ -40,27 +60,8 @@ Byte Mapper002::cpu_read(Address address) const {
 		return 0xFF; // Open bus
 	}
 
-	std::size_t rom_address;
-
-	// Address range: $8000-$FFFF
-	if (address >= 0x8000 && address <= 0xBFFF) {
-		// $8000-$BFFF: Switchable 16KB bank
-		std::size_t bank_offset = static_cast<std::size_t>(selected_bank_) * 16384;
-		rom_address = bank_offset + (address - 0x8000);
-	} else {
-		// $C000-$FFFF: Fixed to last 16KB bank
-		std::size_t last_bank_offset = static_cast<std::size_t>(num_banks_ - 1) * 16384;
-		rom_address = last_bank_offset + (address - 0xC000);
-	}
-
-	if (rom_address >= prg_rom_.size()) {
-		std::cerr << "[Mapper002] ERROR: rom_address " << std::hex << rom_address << " >= prg_rom_.size() "
-				  << prg_rom_.size() << " (address=$" << address << ", bank=" << static_cast<int>(selected_bank_)
-				  << ", num_banks=" << static_cast<int>(num_banks_) << ")" << std::dec << std::endl;
-		return 0xFF; // Beyond ROM bounds
-	}
-
-	return prg_rom_[rom_address];
+	// Cached 8KB bank pointers
+	return prg_map_[(address >> 13) & 0x03][address & 0x1FFF];
 }
 
 void Mapper002::cpu_write(Address address, Byte value) {
@@ -81,6 +82,7 @@ void Mapper002::cpu_write(Address address, Byte value) {
 	// Any write to $8000-$FFFF selects PRG bank
 	// Use mask to handle different ROM sizes (typically 3-4 bits)
 	selected_bank_ = effective_value & get_bank_mask();
+	update_bank_maps();
 }
 
 Byte Mapper002::ppu_read(Address address) const {
@@ -88,11 +90,8 @@ Byte Mapper002::ppu_read(Address address) const {
 		return 0xFF; // Outside CHR range
 	}
 
-	if (address >= chr_ram_.size()) {
-		return 0xFF; // Beyond CHR RAM bounds
-	}
-
-	return chr_ram_[address];
+	// Cached 1KB bank pointers
+	return chr_map_[address >> 10][address & 0x03FF];
 }
 
 void Mapper002::ppu_write(Address address, Byte value) {
@@ -111,6 +110,7 @@ void Mapper002::ppu_write(Address address, Byte value) {
 void Mapper002::reset() {
 	// Reset to first bank
 	selected_bank_ = 0;
+	update_bank_maps();
 }
 
 void Mapper002::serialize_state(std::vector<Byte> &buffer) const {
@@ -129,6 +129,7 @@ void Mapper002::deserialize_state(const std::vector<Byte> &buffer, size_t &offse
 
 	// Deserialize selected bank
 	selected_bank_ = buffer[offset++];
+	update_bank_maps();
 }
 
 } // namespace nes

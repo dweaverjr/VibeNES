@@ -75,7 +75,10 @@ void APU::reset() {
 }
 
 void APU::tick(CpuCycle cycles) {
-	int cycle_count = static_cast<int>(cycles.count());
+	step_cpu_cycles(static_cast<int>(cycles.count()));
+}
+
+void APU::step_cpu_cycles(int cycle_count) {
 	for (int i = 0; i < cycle_count; i++) {
 		cycle_count_++;
 
@@ -238,7 +241,11 @@ void APU::clock_half_frame() {
 void APU::update_irq_line() {
 	irq_line_asserted_ = (frame_irq_flag_ || dmc_irq_flag_);
 
-	if (cpu_) {
+	// Drive the CPU line directly only in standalone configurations (unit
+	// tests wire APU→CPU without a bus). When a bus is connected, it is the
+	// single authority for the combined IRQ level (mapper + APU sources);
+	// driving from here too would desync the bus's transition tracking.
+	if (cpu_ && !bus_) {
 		if (irq_line_asserted_) {
 			cpu_->trigger_irq();
 		} else {
@@ -435,6 +442,14 @@ float APU::get_audio_sample() {
 	uint8_t noise_out = noise_.get_output();
 	uint8_t dmc_out = dmc_.get_output();
 
+	// Memoized mixing: channel outputs hold steady for many CPU cycles
+	// between waveform steps, so skip the divisions when unchanged.
+	// Identical float math when recomputed — bit-exact results.
+	if (pulse1_out == mix_last_p1_ && pulse2_out == mix_last_p2_ && triangle_out == mix_last_tri_ &&
+		noise_out == mix_last_noise_ && dmc_out == mix_last_dmc_) {
+		return mix_last_out_;
+	}
+
 	// NES APU uses non-linear mixing to prevent overflow
 	// Formula from NESDev wiki: https://www.nesdev.org/wiki/APU_Mixer
 	//
@@ -463,6 +478,14 @@ float APU::get_audio_sample() {
 
 	// Combine both outputs
 	float mixed = pulse_output + tnd_output;
+
+	// Update memoization cache
+	mix_last_p1_ = pulse1_out;
+	mix_last_p2_ = pulse2_out;
+	mix_last_tri_ = triangle_out;
+	mix_last_noise_ = noise_out;
+	mix_last_dmc_ = dmc_out;
+	mix_last_out_ = mixed;
 
 	// NES DAC non-linear mixing naturally produces output in [0, ~1.0] range.
 	// The hardware filter chain (applied in tick()) removes DC bias and

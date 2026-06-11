@@ -25,14 +25,15 @@ enum class ScanlinePhase {
 /// NES PPU (Picture Processing Unit) 2C02
 /// Generates video output at 256x240 resolution, 60Hz refresh rate
 /// Runs at 3x CPU clock speed (5.37 MHz)
-class PPU : public Component {
+class PPU final : public Component {
   public:
 	PPU();
 	~PPU() override = default;
 
 	// Component interface implementation
 	void tick(CpuCycle cycles) override;
-	void tick_single_dot(); // Advance PPU by exactly 1 dot - for testing
+	void tick_single_dot();	  // Advance PPU by exactly 1 dot - for testing
+	void tick_dots(int dots); // Non-virtual hot path: advance exactly N dots
 	void reset() override;
 	void power_on() override;
 	const char *get_name() const noexcept override {
@@ -153,6 +154,10 @@ class PPU : public Component {
 	uint64_t frame_counter_;	// Total frames rendered
 	bool frame_ready_;			// Flag indicating new frame is ready
 
+	// Cached scanline phase — recomputed only when current_scanline_ changes
+	// instead of a compare chain every dot in tick_internal()
+	ScanlinePhase cached_phase_ = ScanlinePhase::VISIBLE;
+
 	// PPU registers ($2000-$2007)
 	uint8_t control_register_; // $2000 PPUCTRL
 	uint8_t mask_register_;	   // $2001 PPUMASK
@@ -206,6 +211,13 @@ class PPU : public Component {
 	// Frame buffer (256x240 pixels, 32-bit RGBA)
 	std::array<uint32_t, 256 * 240> frame_buffer_;
 
+	// Palette → final RGBA lookup table. Folds palette RAM contents, grayscale
+	// mode, and color emphasis into one indexed load per pixel. Rebuilt lazily
+	// when palette RAM or PPUMASK changes (dirty flag).
+	std::array<uint32_t, 32> palette_rgba_lut_{};
+	bool palette_lut_dirty_ = true;
+	void rebuild_palette_lut();
+
 	// Background shift registers (2-tile lookahead like real hardware)
 	struct BackgroundShiftRegisters {
 		uint16_t pattern_low_shift;	   // Low bit plane shift register
@@ -245,6 +257,16 @@ class PPU : public Component {
 	bool sprite_0_on_next_scanline_;						 // True if sprite 0 is on next scanline (evaluation)
 	bool sprite_0_hit_detected_;							 // Prevents multiple sprite 0 hits per frame
 	uint8_t sprite_0_hit_delay_;							 // Delay counter before latching sprite 0 flag
+
+	// Pre-rasterized sprite pixels for the current scanline, rebuilt once at
+	// each scanline boundary. Replaces the per-pixel scan over all 8 sprite
+	// slots (up to ~29M iterations/sec) with a single byte lookup.
+	// Entry layout: bits 0-4 = sprite palette index (0 = transparent),
+	// bit 5 = priority (behind background), bit 6 = sprite 0.
+	static constexpr uint8_t SPRITE_LINE_PALETTE_MASK = 0x1F;
+	static constexpr uint8_t SPRITE_LINE_PRIORITY_BIT = 0x20;
+	static constexpr uint8_t SPRITE_LINE_SPRITE0_BIT = 0x40;
+	std::array<uint8_t, 256> sprite_line_buffer_{};
 
 	// Hardware-accurate sprite evaluation state machine
 	enum class SpriteEvalState : uint8_t {
@@ -292,13 +314,13 @@ class PPU : public Component {
 	// OAM operations
 	void clear_secondary_oam();
 	void perform_sprite_evaluation_cycle();
-	void prepare_scanline_sprites();   // Convert secondary OAM to scanline sprites with pattern data
-	void perform_sprite_fetch_cycle(); // Per-cycle sprite pattern fetch during cycles 257-320
+	void prepare_scanline_sprites();	 // Convert secondary OAM to scanline sprites with pattern data
+	void perform_sprite_fetch_cycle();	 // Per-cycle sprite pattern fetch during cycles 257-320
+	void rasterize_sprite_line_buffer(); // Rasterize current scanline sprites into sprite_line_buffer_
 
 	// Hardware timing features
 	void handle_odd_frame_skip();
 	void handle_vblank_timing();
-	void handle_rendering_disable_mid_scanline();
 	void advance_to_cycle(uint16_t target_cycle);
 
 	// Bus conflicts and corruption

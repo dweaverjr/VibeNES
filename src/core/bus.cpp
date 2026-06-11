@@ -34,55 +34,52 @@ void SystemBus::tick(CpuCycle cycles) {
 		cartridge_->tick(cycles);
 	}
 
-	// Centralized IRQ line management (same logic as tick_single_cpu_cycle)
-	if (cpu_) {
-		bool any_irq = false;
-		if (cartridge_ && cartridge_->is_irq_pending())
-			any_irq = true;
-		if (apu_ && (apu_->is_frame_irq_pending() || apu_->is_dmc_irq_pending()))
-			any_irq = true;
+	// Centralized IRQ line management
+	update_irq_line();
+}
 
-		if (any_irq) {
-			cpu_->trigger_irq();
-		} else {
-			cpu_->clear_irq_line();
+// Combined IRQ level from all sources (mapper + APU frame + APU DMC),
+// pushed to the CPU only on transitions. All source checks are inline
+// non-virtual bool loads — this runs every CPU cycle.
+void SystemBus::update_irq_line() {
+	const bool any_irq = (cartridge_raw_ && cartridge_raw_->is_irq_pending()) ||
+						 (apu_raw_ && (apu_raw_->is_frame_irq_pending() || apu_raw_->is_dmc_irq_pending()));
+
+	if (static_cast<int8_t>(any_irq) != last_irq_line_) {
+		last_irq_line_ = static_cast<int8_t>(any_irq);
+		if (cpu_raw_) {
+			if (any_irq) {
+				cpu_raw_->trigger_irq();
+			} else {
+				cpu_raw_->clear_irq_line();
+			}
 		}
 	}
 }
 
 void SystemBus::tick_single_cpu_cycle() {
+	// Per-cycle hot path: non-virtual stepping through cached raw pointers.
 	// Advance PPU by exactly 3 dots (1 CPU cycle = 3 PPU dots)
-	if (ppu_) {
-		ppu_->tick(cpu_cycles(3));
+	if (ppu_raw_) {
+		ppu_raw_->tick_dots(3);
 	}
 
 	// Advance APU by exactly 1 CPU cycle
-	if (apu_) {
-		apu_->tick(cpu_cycles(1));
+	if (apu_raw_) {
+		apu_raw_->step_cpu_cycles(1);
 	}
 
-	// Advance cartridge (for mapper timing, e.g. MMC1 cycle tracking)
-	if (cartridge_) {
-		cartridge_->tick(cpu_cycles(1));
+	// Advance cartridge (for mapper timing, e.g. MMC1 cycle tracking) —
+	// inline early-out unless the mapper opted into cycle notifications
+	if (cartridge_raw_) {
+		cartridge_raw_->notify_cpu_cycles(1);
 	}
 
 	// Centralized IRQ line management: compute OR of all IRQ sources.
 	// The CPU IRQ line must be deasserted when no source is pending,
 	// otherwise the line stays latched high and causes infinite IRQ loops
 	// after the game acknowledges the interrupt (e.g., MMC3 $E000 write).
-	if (cpu_) {
-		bool any_irq = false;
-		if (cartridge_ && cartridge_->is_irq_pending())
-			any_irq = true;
-		if (apu_ && (apu_->is_frame_irq_pending() || apu_->is_dmc_irq_pending()))
-			any_irq = true;
-
-		if (any_irq) {
-			cpu_->trigger_irq();
-		} else {
-			cpu_->clear_irq_line();
-		}
-	}
+	update_irq_line();
 }
 
 void SystemBus::reset() {
@@ -110,6 +107,7 @@ void SystemBus::reset() {
 	test_high_memory_.fill(0x00);
 	test_high_memory_valid_.fill(false);
 	last_bus_value_ = 0xFF;
+	last_irq_line_ = -1; // Force IRQ line re-sync after reset
 }
 
 void SystemBus::power_on() {
@@ -134,6 +132,7 @@ void SystemBus::power_on() {
 	test_high_memory_.fill(0x00);
 	test_high_memory_valid_.fill(false);
 	last_bus_value_ = 0xFF;
+	last_irq_line_ = -1; // Force IRQ line re-sync after power-on
 }
 
 const char *SystemBus::get_name() const noexcept {
@@ -141,44 +140,48 @@ const char *SystemBus::get_name() const noexcept {
 }
 
 Byte SystemBus::read(Address address) const {
-	// RAM: $0000-$1FFF (includes mirroring)
-	if (is_ram_address(address)) {
+	// Jump-table dispatch on the top 4 address bits. The previous sequential
+	// range-check chain made the hottest region ($8000+ opcode fetches) pay
+	// for every earlier range test; a switch compiles to a single indexed jump.
+	switch (address >> 12) {
+	case 0x0:
+	case 0x1:
+		// RAM: $0000-$1FFF (includes mirroring)
 		if (ram_) {
 			last_bus_value_ = ram_->read(address);
-			return last_bus_value_;
 		}
-	}
+		return last_bus_value_; // Open bus when RAM not connected
 
-	// PPU: $2000-$3FFF (includes register mirroring)
-	if (is_ppu_address(address)) {
+	case 0x2:
+	case 0x3:
+		// PPU: $2000-$3FFF (includes register mirroring)
 		if (ppu_) {
 			last_bus_value_ = ppu_->read_register(address);
-			return last_bus_value_;
 		}
-		return last_bus_value_; // Open bus
-	}
+		return last_bus_value_; // Open bus when PPU not connected
 
-	// APU/IO: $4000-$4015 (excluding $4017 which is controller 2 for reads)
-	if (is_apu_read_address(address)) {
-		if (apu_) {
-			last_bus_value_ = apu_->read(address);
-			return last_bus_value_;
+	case 0x4:
+		// APU/IO: $4000-$4015 (excluding $4016/$4017 which are controllers)
+		if (address <= 0x4015) {
+			if (apu_) {
+				last_bus_value_ = apu_->read(address);
+			}
+			return last_bus_value_; // Open bus
 		}
-		return last_bus_value_; // Open bus
-	}
-
-	// Controllers: $4016 (controller 1), $4017 (controller 2 read)
-	if (is_controller_address(address)) {
-		if (controllers_) {
-			last_bus_value_ = controllers_->read(address);
-			return last_bus_value_;
+		// Controllers: $4016 (controller 1), $4017 (controller 2 read)
+		if (address <= 0x4017) {
+			if (controllers_) {
+				last_bus_value_ = controllers_->read(address);
+			}
+			return last_bus_value_; // Open bus
 		}
-		return last_bus_value_; // Open bus
-	}
+		if (address < 0x4020) {
+			return last_bus_value_; // $4018-$401F unmapped - open bus
+		}
+		[[fallthrough]];
 
-	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
-	// BUT: Check test memory first for addresses $8000+ when cartridge has no ROM
-	if (is_cartridge_address(address)) {
+	default:
+		// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
 		// If a cartridge is loaded, always defer to mapper-provided memory first
 		if (cartridge_ && cartridge_->is_loaded()) {
 			last_bus_value_ = cartridge_->cpu_read(address);
@@ -203,9 +206,6 @@ Byte SystemBus::read(Address address) const {
 		// No cartridge data available and no mirror value—return open bus (last_bus_value_)
 		return last_bus_value_;
 	}
-
-	// Unmapped region - open bus behavior
-	return last_bus_value_;
 }
 
 Byte SystemBus::peek(Address address) const {
@@ -266,48 +266,52 @@ Byte SystemBus::peek(Address address) const {
 void SystemBus::write(Address address, Byte value) {
 	last_bus_value_ = value; // Bus remembers last written value
 
-	// RAM: $0000-$1FFF (includes mirroring)
-	if (is_ram_address(address)) {
+	// Jump-table dispatch on the top 4 address bits (see read()).
+	switch (address >> 12) {
+	case 0x0:
+	case 0x1:
+		// RAM: $0000-$1FFF (includes mirroring)
 		if (ram_) {
 			ram_->write(address, value);
-			return;
 		}
-	}
+		return;
 
-	// PPU: $2000-$3FFF (includes register mirroring)
-	if (is_ppu_address(address)) {
+	case 0x2:
+	case 0x3:
+		// PPU: $2000-$3FFF (includes register mirroring)
 		if (ppu_) {
 			ppu_->write_register(address, value);
 		}
 		return;
-	}
 
-	// OAM DMA: $4014 (sprite DMA transfer) - Check before APU!
-	if (address == 0x4014) {
-		perform_oam_dma(value);
-		return;
-	}
-
-	// APU/IO: $4000-$4015, $4017 (writes go to APU frame counter)
-	if (is_apu_address(address)) {
-		if (apu_) {
-			apu_->write(address, value);
+	case 0x4:
+		// OAM DMA: $4014 (sprite DMA transfer) - Check before APU!
+		if (address == 0x4014) {
+			perform_oam_dma(value);
+			return;
 		}
-		return;
-	}
-
-	// Controllers: $4016 (controller 1 strobe/data), $4017 handled by APU for writes
-	if (is_controller_address(address)) {
-		if (controllers_) {
-			// Controller write only uses the strobe bit (bit 0) from value, address doesn't matter
-			controllers_->write(value);
+		// APU/IO: $4000-$4015, $4017 (writes go to APU frame counter)
+		if (address <= 0x4015 || address == 0x4017) {
+			if (apu_) {
+				apu_->write(address, value);
+			}
+			return;
 		}
-		return;
-	}
+		// Controllers: $4016 (controller 1 strobe/data)
+		if (address == 0x4016) {
+			if (controllers_) {
+				// Controller write only uses the strobe bit (bit 0) from value
+				controllers_->write(value);
+			}
+			return;
+		}
+		if (address < 0x4020) {
+			return; // $4018-$401F unmapped - ignore write
+		}
+		[[fallthrough]];
 
-	// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
-	// BUT: For test purposes, prioritize test memory for $8000+ addresses
-	if (is_cartridge_address(address)) {
+	default:
+		// Cartridge space: $4020-$FFFF (expansion, SRAM, PRG ROM)
 		// Writes go to the active cartridge when a ROM is loaded (handles PRG RAM / mapper regs)
 		if (cartridge_ && cartridge_->is_loaded()) {
 			cartridge_->cpu_write(address, value);
@@ -319,14 +323,11 @@ void SystemBus::write(Address address, Byte value) {
 			Address index = address - 0x8000;
 			test_high_memory_[index] = value;
 			test_high_memory_valid_[index] = true;
-			return;
 		}
 
 		// Otherwise nothing is mapped—ignore write
 		return;
 	}
-
-	// Unmapped region - ignore write
 }
 
 void SystemBus::connect_ram(std::shared_ptr<Ram> ram) {
@@ -335,10 +336,13 @@ void SystemBus::connect_ram(std::shared_ptr<Ram> ram) {
 
 void SystemBus::connect_ppu(std::shared_ptr<PPU> ppu) {
 	ppu_ = std::move(ppu);
+	ppu_raw_ = ppu_.get();
 }
 
 void SystemBus::connect_apu(std::shared_ptr<APU> apu) {
 	apu_ = std::move(apu);
+	apu_raw_ = apu_.get();
+	last_irq_line_ = -1; // New IRQ source — force line re-sync
 	// Connect CPU to APU for IRQ handling if both are available
 	if (cpu_ && apu_) {
 		apu_->connect_cpu(cpu_.get());
@@ -367,10 +371,14 @@ void SystemBus::connect_controllers(std::shared_ptr<Controller> controllers) {
 
 void SystemBus::connect_cartridge(std::shared_ptr<Cartridge> cartridge) {
 	cartridge_ = std::move(cartridge);
+	cartridge_raw_ = cartridge_.get();
+	last_irq_line_ = -1; // New IRQ source — force line re-sync
 }
 
 void SystemBus::connect_cpu(std::shared_ptr<CPU6502> cpu) {
 	cpu_ = std::move(cpu);
+	cpu_raw_ = cpu_.get();
+	last_irq_line_ = -1; // Force initial line sync to the new CPU
 	// Connect CPU to APU for IRQ handling if both are available
 	if (cpu_ && apu_) {
 		apu_->connect_cpu(cpu_.get());
@@ -534,6 +542,8 @@ void SystemBus::deserialize_state(const std::vector<uint8_t> &buffer, size_t &of
 		oam_dma_page_ = buffer[offset++];
 		last_bus_value_ = buffer[offset++];
 	}
+
+	last_irq_line_ = -1; // Restored state — force IRQ line re-sync
 }
 
 } // namespace nes

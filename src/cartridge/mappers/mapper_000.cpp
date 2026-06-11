@@ -5,7 +5,25 @@ namespace nes {
 
 Mapper000::Mapper000(std::vector<Byte> prg_rom, std::vector<Byte> chr_rom, Mirroring mirroring)
 	: prg_rom_(std::move(prg_rom)), chr_rom_(std::move(chr_rom)), mirroring_(mirroring) {
-	// Mapper initialized successfully
+	update_bank_maps();
+}
+
+void Mapper000::update_bank_maps() {
+	// PRG: 4 slots of 8KB covering $8000-$FFFF. 16KB ROMs mirror into both halves.
+	const bool mirror_16kb = is_16kb_prg();
+	for (std::size_t slot = 0; slot < prg_map_.size(); ++slot) {
+		std::size_t offset = slot * 0x2000;
+		if (mirror_16kb) {
+			offset &= 0x3FFF;
+		}
+		prg_map_[slot] = (offset + 0x2000 <= prg_rom_.size()) ? prg_rom_.data() + offset : OPEN_BUS_PAGE.data();
+	}
+
+	// CHR: 8 slots of 1KB covering $0000-$1FFF (no banking on NROM).
+	for (std::size_t slot = 0; slot < chr_map_.size(); ++slot) {
+		std::size_t offset = slot * 1024;
+		chr_map_[slot] = (offset + 1024 <= chr_rom_.size()) ? chr_rom_.data() + offset : OPEN_BUS_PAGE.data();
+	}
 }
 
 Byte Mapper000::cpu_read(Address address) const {
@@ -13,22 +31,8 @@ Byte Mapper000::cpu_read(Address address) const {
 		return 0xFF; // Open bus
 	}
 
-	// Map to PRG ROM space
-	Address rom_address = address - 0x8000;
-
-	if (is_16kb_prg()) {
-		// 16KB ROM: Mirror the 16KB ROM in both halves
-		// $8000-$BFFF and $C000-$FFFF both map to the same 16KB
-		rom_address &= 0x3FFF; // Mask to 16KB
-	}
-	// For 32KB ROM, use address as-is (0x0000-0x7FFF)
-
-	if (rom_address >= prg_rom_.size()) {
-		return 0xFF; // Beyond ROM bounds
-	}
-
-	Byte value = prg_rom_[rom_address];
-	return value;
+	// Cached 8KB bank pointers — no per-byte offset math or bounds checks
+	return prg_map_[(address >> 13) & 0x03][address & 0x1FFF];
 }
 
 void Mapper000::cpu_write(Address address, Byte value) {
@@ -42,11 +46,8 @@ Byte Mapper000::ppu_read(Address address) const {
 		return 0xFF; // Outside CHR range
 	}
 
-	if (address >= chr_rom_.size()) {
-		return 0xFF; // Beyond CHR ROM bounds
-	}
-
-	return chr_rom_[address];
+	// Cached 1KB bank pointers
+	return chr_map_[address >> 10][address & 0x03FF];
 }
 void Mapper000::ppu_write(Address address, Byte value) {
 	// NROM uses CHR ROM (read-only), writes are ignored
@@ -55,7 +56,8 @@ void Mapper000::ppu_write(Address address, Byte value) {
 }
 
 void Mapper000::reset() {
-	// NROM has no state to reset
+	// NROM has no banking state; rebuild the (static) maps for consistency
+	update_bank_maps();
 }
 
 // Save state serialization

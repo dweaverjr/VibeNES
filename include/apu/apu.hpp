@@ -17,13 +17,16 @@ class CPU6502;
  * NES APU (Audio Processing Unit) 2A03
  * Handles audio generation and timing-critical frame counter IRQs
  */
-class APU : public Component {
+class APU final : public Component {
   public:
 	APU();
 	~APU() override = default;
 
 	// Component interface
 	void tick(CpuCycle cycles) override;
+
+	// Non-virtual per-cycle stepping for the bus hot path (tick forwards here)
+	void step_cpu_cycles(int cycle_count);
 	void reset() override;
 	void power_on() override;
 	const char *get_name() const noexcept override {
@@ -245,6 +248,13 @@ class APU : public Component {
 	// Audio output
 	SampleRateConverter sample_rate_converter_;
 	bool audio_enabled_;
+
+	// Mixer memoization: channel outputs change far less often than every CPU
+	// cycle, so cache the last input tuple and its mixed result. Keyed purely
+	// on inputs — no invalidation needed (formula is deterministic).
+	uint8_t mix_last_p1_ = 0xFF, mix_last_p2_ = 0xFF, mix_last_tri_ = 0xFF, mix_last_noise_ = 0xFF,
+			mix_last_dmc_ = 0xFF;
+	float mix_last_out_ = 0.0f;
 
 	// Dynamic rate control: periodically nudge the resampling ratio based on
 	// audio buffer fill level.  Keeps the buffer near a target level, preventing

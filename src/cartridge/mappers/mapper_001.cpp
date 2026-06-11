@@ -26,6 +26,8 @@ Mapper001::Mapper001(std::vector<Byte> prg_rom, std::vector<Byte> chr_mem, Mirro
 		chr_mem_.resize(8192, 0x00);
 		chr_is_ram_ = true;
 	}
+
+	update_bank_maps();
 }
 
 void Mapper001::reset() {
@@ -44,6 +46,22 @@ void Mapper001::reset() {
 	if (has_prg_ram_) {
 		std::fill(prg_ram_.begin(), prg_ram_.end(), 0x00);
 	}
+
+	update_bank_maps();
+}
+
+void Mapper001::update_bank_maps() {
+	// Re-resolve each fixed-size slot through the existing bank-offset logic.
+	// Called only when banking registers change, so reads stay a single
+	// pointer lookup with no per-byte offset math or bounds checks.
+	for (std::size_t slot = 0; slot < prg_map_.size(); ++slot) {
+		std::size_t offset = get_prg_bank_offset(static_cast<Address>(0x8000 + slot * 0x2000));
+		prg_map_[slot] = (offset + 0x2000 <= prg_rom_.size()) ? prg_rom_.data() + offset : OPEN_BUS_PAGE.data();
+	}
+	for (std::size_t slot = 0; slot < chr_map_.size(); ++slot) {
+		std::size_t offset = get_chr_bank_offset(static_cast<Address>(slot * 1024));
+		chr_map_[slot] = (offset + 1024 <= chr_mem_.size()) ? chr_mem_.data() + offset : OPEN_BUS_PAGE.data();
+	}
 }
 
 Byte Mapper001::cpu_read(Address address) const {
@@ -57,10 +75,8 @@ Byte Mapper001::cpu_read(Address address) const {
 
 	// PRG ROM: $8000-$FFFF
 	if (address >= 0x8000) {
-		std::size_t rom_offset = get_prg_bank_offset(address);
-		if (rom_offset < prg_rom_.size()) {
-			return prg_rom_[rom_offset];
-		}
+		// Cached 8KB bank pointers
+		return prg_map_[(address >> 13) & 0x03][address & 0x1FFF];
 	}
 
 	return 0xFF; // Open bus
@@ -95,12 +111,8 @@ Byte Mapper001::ppu_read(Address address) const {
 		return 0xFF;
 	}
 
-	std::size_t chr_offset = get_chr_bank_offset(address);
-	if (chr_offset < chr_mem_.size()) {
-		return chr_mem_[chr_offset];
-	}
-
-	return 0xFF;
+	// Cached 1KB bank pointers
+	return chr_map_[address >> 10][address & 0x03FF];
 }
 
 void Mapper001::ppu_write(Address address, Byte value) {
@@ -123,6 +135,7 @@ void Mapper001::write_shift_register(Address address, Byte value) {
 		shift_register_ = 0x10; // Reset to bit 4 set
 		shift_count_ = 0;
 		control_register_ |= 0x0C; // Set bits 2-3 (fixes last bank)
+		update_bank_maps();
 		return;
 	}
 
@@ -157,6 +170,8 @@ void Mapper001::load_register(Address address) {
 		prg_bank_ = register_value & 0x0F;				 // Bottom 4 bits = bank number
 		prg_ram_enabled_ = (register_value & 0x10) == 0; // Bit 4 = 0 enables RAM
 	}
+
+	update_bank_maps();
 }
 
 std::size_t Mapper001::get_prg_bank_offset(Address address) const {
@@ -279,6 +294,8 @@ void Mapper001::deserialize_state(const std::vector<uint8_t> &buffer, size_t &of
 	chr_bank_1_ = buffer[offset++];
 	prg_bank_ = buffer[offset++];
 	prg_ram_enabled_ = buffer[offset++] != 0;
+
+	update_bank_maps();
 }
 
 } // namespace nes

@@ -113,10 +113,15 @@ void PPU::power_on() {
 	sprite_eval_buffer_ = 0;
 	secondary_oam_index_ = 0;
 	sprite_overflow_detected_ = false;
+	sprite_line_buffer_.fill(0);
 
 	// Initialize background shift registers to prevent artifacts
 	clear_shift_registers();
 	tile_fetch_state_ = {};
+
+	// Derived caches
+	cached_phase_ = get_current_phase();
+	palette_lut_dirty_ = true;
 
 	// Initialize memory
 	memory_.power_on();
@@ -159,6 +164,10 @@ void PPU::reset() {
 	current_cycle_ = 0;
 	frame_ready_ = false;
 
+	// Derived caches
+	cached_phase_ = get_current_phase();
+	palette_lut_dirty_ = true;
+
 	// Clear VBlank (and leave other status bits untouched per typical reset behavior expectations)
 	clear_vblank_flag();
 }
@@ -185,6 +194,13 @@ void PPU::tick_single_dot() {
 	tick_internal();
 }
 
+void PPU::tick_dots(int dots) {
+	// Non-virtual hot path used by the bus (3 dots per CPU cycle)
+	for (int i = 0; i < dots; ++i) {
+		tick_internal();
+	}
+}
+
 void PPU::tick_internal() {
 	// NOTE: OAM DMA is now driven by the CPU (execute_oam_dma) with per-cycle
 	// interleaving via consume_cycle(). PPU continues normal rendering here.
@@ -197,11 +213,12 @@ void PPU::tick_internal() {
 		}
 	}
 
-	// Handle hardware timing features (except VBlank which needs to be after cycle increment)
-	handle_rendering_disable_mid_scanline();
+	// NOTE: mid-scanline rendering-disable detection moved to write_ppumask()
+	// — the enable state can only change via $2001 writes, so checking it
+	// every dot was wasted work.
 
-	// Process current scanline and cycle
-	switch (get_current_phase()) {
+	// Process current scanline and cycle (phase cached per scanline)
+	switch (cached_phase_) {
 	case ScanlinePhase::VISIBLE:
 		process_visible_scanline();
 		break;
@@ -238,6 +255,9 @@ void PPU::tick_internal() {
 			sprite_count_current_scanline_ = sprite_count_next_scanline_;
 			sprite_0_on_scanline_ = sprite_0_on_next_scanline_;
 			scanline_sprites_current_ = scanline_sprites_next_;
+			// Pre-rasterize the swapped sprite data so per-pixel rendering is a
+			// single buffer lookup instead of an 8-sprite scan.
+			rasterize_sprite_line_buffer();
 		}
 
 		current_cycle_ = 0;
@@ -251,6 +271,9 @@ void PPU::tick_internal() {
 			// Toggle odd frame flag
 			odd_frame_ = !odd_frame_;
 		}
+
+		// Scanline changed — refresh the cached phase
+		cached_phase_ = get_current_phase();
 	}
 }
 
@@ -440,8 +463,10 @@ void PPU::process_visible_scanline() {
 				// VRAM address points into palette RAM — use that palette entry directly
 				backdrop_index = static_cast<uint8_t>(vram_address_ & 0x1F);
 			}
-			uint32_t color = get_palette_color(backdrop_index);
-			color = apply_color_emphasis(color);
+			if (palette_lut_dirty_) {
+				rebuild_palette_lut();
+			}
+			uint32_t color = palette_rgba_lut_[backdrop_index];
 			size_t pixel_index = current_scanline_ * 256 + pixel_x;
 			frame_buffer_[pixel_index] = color;
 		}
@@ -696,7 +721,20 @@ void PPU::write_ppuctrl(uint8_t value) {
 }
 
 void PPU::write_ppumask(uint8_t value) {
+	const bool was_enabled = (mask_register_ & 0x18) != 0;
 	mask_register_ = value;
+	const bool now_enabled = (mask_register_ & 0x18) != 0;
+
+	// Mid-scanline rendering-disable detection (moved here from the per-dot
+	// path — rendering enable can only change via $2001 writes)
+	if (was_enabled && !now_enabled && current_scanline_ < PPUTiming::VISIBLE_SCANLINES &&
+		current_cycle_ < PPUTiming::VISIBLE_PIXELS) {
+		rendering_disabled_mid_scanline_ = true;
+	}
+	was_rendering_enabled_ = now_enabled;
+
+	// Grayscale (bit 0) and emphasis (bits 5-7) feed the palette LUT
+	palette_lut_dirty_ = true;
 }
 
 void PPU::write_oamaddr(uint8_t value) {
@@ -833,6 +871,9 @@ void PPU::write_ppu_memory(uint16_t address, uint8_t value) {
 
 		// Write to the target palette location
 		memory_.write_palette(pal_index, value);
+
+		// Palette RAM changed — RGBA LUT must be rebuilt
+		palette_lut_dirty_ = true;
 
 		// NES palette mirroring: sprite universal colors at $3F10/$3F14/$3F18/$3F1C
 		// redirect to background universals at $3F00/$3F04/$3F08/$3F0C (handled above).
@@ -1059,6 +1100,16 @@ uint32_t PPU::get_palette_color(uint8_t palette_index) {
 	return NESPalette::get_rgba_color(color_index);
 }
 
+void PPU::rebuild_palette_lut() {
+	// Fold palette RAM + grayscale + emphasis into one RGBA per palette index.
+	// Uses the exact per-pixel path (get_palette_color + apply_color_emphasis)
+	// so results are bit-identical to the unbatched computation.
+	for (uint8_t i = 0; i < 32; ++i) {
+		palette_rgba_lut_[i] = apply_color_emphasis(get_palette_color(i));
+	}
+	palette_lut_dirty_ = false;
+}
+
 // =============================================================================
 // Helper Functions for Refactored Rendering
 // =============================================================================
@@ -1068,77 +1119,69 @@ uint32_t PPU::get_palette_color(uint8_t palette_index) {
 // =============================================================================
 
 uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority, bool &sprite0_candidate) {
-	// Only render sprites during visible pixels (cycles 1-255)
-	if (current_cycle_ >= 256) {
-		sprite_priority = false;
-		return 0; // No sprites rendered outside visible area
-	}
+	sprite_priority = false; // Default: sprite in front
 
-	if (current_cycle_ == 0) {
-		return 0; // Visible pixels start at cycle 1
+	// Only render sprites during visible pixels (cycles 1-255)
+	if (current_cycle_ == 0 || current_cycle_ >= 256) {
+		return 0; // No sprites rendered outside visible area
 	}
 
 	uint8_t current_x = static_cast<uint8_t>(current_cycle_ - 1);
 
-	// Check for left-edge clipping first
+	// Check for left-edge clipping first (mask can change mid-scanline, so
+	// this stays per-pixel rather than baked into the line buffer)
 	if (current_x < 8 && !(mask_register_ & PPUConstants::PPUMASK_SHOW_SPRITES_LEFT_MASK)) {
-		sprite_priority = false;
 		return 0; // Sprites clipped in leftmost 8 pixels
 	}
 
-	sprite_priority = false; // Default: sprite in front
-
-	// Check all sprites on current scanline (front to back priority)
-	// NES hardware scans sprites 0-7 in order, with lower indices having higher priority
-	for (int i = 0; i < sprite_count_current_scanline_; i++) {
-		const ScanlineSprite &sprite = scanline_sprites_current_[i]; // Read from CURRENT buffer
-
-		// Check if current pixel is within sprite bounds
-		// Sprites are clipped at screen edges (no wraparound)
-		uint8_t sprite_x_start = sprite.sprite_data.x_position;
-
-		// Check if current pixel is at or after sprite X position
-		if (current_x < sprite_x_start) {
-			continue; // Pixel is before sprite starts
-		}
-
-		// Calculate sprite-relative X position
-		uint8_t sprite_x = current_x - sprite.sprite_data.x_position;
-
-		// Clip at 8 pixels wide (pixel-level clipping)
-		if (sprite_x >= 8) {
-			continue; // Pixel is beyond sprite width
-		}
-
-		// Handle horizontal flip
-		if (sprite.sprite_data.attributes.flip_horizontal) {
-			sprite_x = 7 - sprite_x;
-		}
-
-		// Get pixel from sprite pattern data
-		uint8_t bit_shift = 7 - sprite_x;
-		uint8_t low_bit = (sprite.pattern_data_low >> bit_shift) & 0x01;
-		uint8_t high_bit = (sprite.pattern_data_high >> bit_shift) & 0x01;
-		uint8_t pixel_value = (high_bit << 1) | low_bit;
-
-		// If pixel is transparent, continue to next sprite
-		if (pixel_value == 0) {
-			continue;
-		}
-
-		// Get sprite priority and palette
-		sprite_priority = sprite.sprite_data.attributes.priority;
-		uint8_t palette_index = 0x10 + (sprite.sprite_data.attributes.palette * 4) + pixel_value;
-
-		// Check for sprite 0 hit
-		if (sprite.is_sprite_0 && pixel_value != 0) {
-			sprite0_candidate = true;
-		}
-
-		return palette_index;
+	// Single lookup into the pre-rasterized line buffer (built once per
+	// scanline at the sprite buffer swap)
+	const uint8_t entry = sprite_line_buffer_[current_x];
+	if (entry == 0) {
+		return 0; // No sprite pixel (transparent)
 	}
 
-	return 0; // No sprite pixel (transparent)
+	sprite_priority = (entry & SPRITE_LINE_PRIORITY_BIT) != 0;
+	if (entry & SPRITE_LINE_SPRITE0_BIT) {
+		sprite0_candidate = true;
+	}
+	return entry & SPRITE_LINE_PALETTE_MASK;
+}
+
+void PPU::rasterize_sprite_line_buffer() {
+	sprite_line_buffer_.fill(0);
+
+	// Iterate sprites in reverse slot order so lower-index sprites overwrite
+	// higher ones — hardware gives priority to the lowest-index opaque sprite.
+	for (int i = static_cast<int>(sprite_count_current_scanline_) - 1; i >= 0; --i) {
+		const ScanlineSprite &sprite = scanline_sprites_current_[i];
+
+		if (sprite.pattern_data_low == 0 && sprite.pattern_data_high == 0) {
+			continue; // Fully transparent row — nothing to rasterize
+		}
+
+		const uint8_t palette_base = static_cast<uint8_t>(0x10 + (sprite.sprite_data.attributes.palette * 4));
+		const uint8_t flags =
+			static_cast<uint8_t>((sprite.sprite_data.attributes.priority ? SPRITE_LINE_PRIORITY_BIT : 0) |
+								 (sprite.is_sprite_0 ? SPRITE_LINE_SPRITE0_BIT : 0));
+		const bool flip_horizontal = sprite.sprite_data.attributes.flip_horizontal;
+		const int x_start = sprite.sprite_data.x_position;
+
+		// Sprites are clipped at the right screen edge (no wraparound)
+		for (int px = 0; px < 8 && (x_start + px) < 256; ++px) {
+			const uint8_t sprite_x = static_cast<uint8_t>(flip_horizontal ? (7 - px) : px);
+			const uint8_t bit_shift = static_cast<uint8_t>(7 - sprite_x);
+			const uint8_t low_bit = (sprite.pattern_data_low >> bit_shift) & 0x01;
+			const uint8_t high_bit = (sprite.pattern_data_high >> bit_shift) & 0x01;
+			const uint8_t pixel_value = static_cast<uint8_t>((high_bit << 1) | low_bit);
+
+			if (pixel_value == 0) {
+				continue; // Transparent pixel — lower-priority sprite shows through
+			}
+
+			sprite_line_buffer_[x_start + px] = static_cast<uint8_t>((palette_base + pixel_value) | flags);
+		}
+	}
 }
 
 uint8_t PPU::fetch_sprite_pattern_data_raw(uint8_t tile_index, uint8_t fine_y, bool sprite_table) {
@@ -1232,14 +1275,12 @@ void PPU::render_combined_pixel(uint8_t bg_pixel, uint8_t sprite_pixel, bool spr
 	// Use the new pixel multiplexer for hardware-accurate priority resolution
 	uint8_t final_pixel = multiplex_background_sprite_pixels(bg_pixel, sprite_pixel, sprite_priority);
 
-	// If no pixel at all, use backdrop color
-	if (final_pixel == 0) {
-		final_pixel = 0; // Backdrop color (palette index 0)
+	// Palette LUT folds palette RAM + grayscale + emphasis into one load
+	// (transparent final_pixel 0 = backdrop entry $3F00)
+	if (palette_lut_dirty_) {
+		rebuild_palette_lut();
 	}
-
-	// Get color and apply emphasis
-	uint32_t color = get_palette_color(final_pixel);
-	color = apply_color_emphasis(color);
+	uint32_t color = palette_rgba_lut_[final_pixel & 0x1F];
 
 	// Render to frame buffer
 	size_t pixel_index = y_pos * 256 + x_pos;
@@ -1801,21 +1842,9 @@ void PPU::handle_vblank_timing() {
 	}
 }
 
-void PPU::handle_rendering_disable_mid_scanline() {
-	// Track when rendering is disabled mid-scanline for proper timing
-	bool is_rendering = is_rendering_enabled();
-
-	if (was_rendering_enabled_ && !is_rendering && current_scanline_ < PPUTiming::VISIBLE_SCANLINES &&
-		current_cycle_ < PPUTiming::VISIBLE_PIXELS) {
-
-		rendering_disabled_mid_scanline_ = true;
-
-		// When rendering is disabled mid-scanline, the PPU stops
-		// updating VRAM address and shift registers
-	}
-
-	was_rendering_enabled_ = is_rendering;
-}
+// NOTE: mid-scanline rendering-disable detection lives in write_ppumask()
+// (rendering enable can only change via $2001 writes — checking per dot
+// was pure overhead).
 
 // =============================================================================
 // Bus Management and Memory Handling
@@ -2493,6 +2522,11 @@ void PPU::deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) 
 
 	// PPU Memory (VRAM, palette RAM)
 	memory_.deserialize_state(buffer, offset);
+
+	// Rebuild derived caches from the restored state (not serialized)
+	cached_phase_ = get_current_phase();
+	palette_lut_dirty_ = true;
+	rasterize_sprite_line_buffer();
 }
 
 } // namespace nes

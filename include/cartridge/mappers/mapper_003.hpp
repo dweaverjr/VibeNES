@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cartridge/mappers/mapper.hpp"
+#include <array>
 #include <vector>
 
 namespace nes {
@@ -52,6 +53,12 @@ class Mapper003 final : public Mapper {
 	Mirroring mirroring_;			 // Nametable mirroring mode
 	std::uint8_t selected_chr_bank_; // Currently selected CHR bank
 	std::uint8_t num_chr_banks_;	 // Total number of 8KB CHR banks
+
+	// Cached bank pointers: PRG in 8KB slots ($8000-$FFFF), CHR in 1KB slots.
+	// Rebuilt only on bank select writes.
+	std::array<const Byte *, 4> prg_map_{};
+	std::array<const Byte *, 8> chr_map_{};
+	void update_bank_maps();
 
 	// PRG ROM can be 16KB (mirrored) or 32KB
 	bool is_16kb_prg() const noexcept {

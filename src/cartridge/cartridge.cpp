@@ -5,12 +5,9 @@
 namespace nes {
 
 void Cartridge::tick(CpuCycle cycles) {
-	// Notify mapper of elapsed CPU cycles for timing-sensitive behavior
-	if (mapper_) {
-		for (int64_t i = 0; i < cycles.count(); ++i) {
-			mapper_->notify_cpu_cycle();
-		}
-	}
+	// Per-cycle mapper notification — inline early-out version shared with
+	// the bus hot path.
+	notify_cpu_cycles(static_cast<int>(cycles.count()));
 }
 
 void Cartridge::reset() {
@@ -44,6 +41,7 @@ bool Cartridge::load_rom(const std::string &filepath) {
 		rom_data_ = {}; // Clear invalid data
 		return false;
 	}
+	mapper_wants_cycle_notify_ = mapper_->wants_cpu_cycle_notifications();
 
 	return true;
 }
@@ -65,6 +63,7 @@ bool Cartridge::load_from_rom_data(const RomData &rom_data) {
 		rom_data_ = {}; // Clear invalid data
 		return false;
 	}
+	mapper_wants_cycle_notify_ = mapper_->wants_cpu_cycle_notifications();
 
 	return true;
 }
@@ -72,6 +71,7 @@ bool Cartridge::load_from_rom_data(const RomData &rom_data) {
 void Cartridge::unload_rom() {
 	mapper_.reset();
 	rom_data_ = {};
+	mapper_wants_cycle_notify_ = false;
 }
 
 Byte Cartridge::cpu_read(Address address) const {
@@ -129,18 +129,7 @@ void Cartridge::ppu_a12_toggle() const {
 	}
 }
 
-bool Cartridge::is_irq_pending() const {
-	if (!mapper_) {
-		return false;
-	}
-	return mapper_->is_irq_pending();
-}
-
-void Cartridge::clear_irq() const {
-	if (mapper_) {
-		mapper_->clear_irq();
-	}
-}
+// is_irq_pending() / clear_irq() are inline in the header (per-cycle hot path)
 
 // Save state serialization
 void Cartridge::serialize_state(std::vector<uint8_t> &buffer) const {

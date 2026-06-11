@@ -73,13 +73,8 @@ class Mapper004 final : public Mapper {
 	// PPU A12 line monitoring for IRQ timing
 	void ppu_a12_toggle() override;
 
-	// IRQ support
-	bool is_irq_pending() const override {
-		return irq_pending_;
-	}
-	void clear_irq() override {
-		irq_pending_ = false;
-	}
+	// IRQ support: uses the non-virtual is_irq_pending()/clear_irq() from the
+	// Mapper base, which read/clear the shared irq_pending_ member.
 
 	// Save state support
 	void serialize_state(std::vector<Byte> &buffer) const override;
@@ -104,11 +99,17 @@ class Mapper004 final : public Mapper {
 	Byte irq_counter_; // Current IRQ counter
 	bool irq_reload_;  // $C001: IRQ reload flag
 	bool irq_enabled_; // $E001: IRQ enable flag
-	bool irq_pending_; // Internal IRQ pending flag
+	// (irq_pending_ lives in the Mapper base class)
 
 	// Helper functions
 	std::size_t get_prg_bank_offset(Address address) const;
 	std::size_t get_chr_bank_offset(Address address) const;
+
+	// Cached bank pointers: PRG in 8KB slots ($8000-$FFFF), CHR in 1KB slots
+	// ($0000-$1FFF). Rebuilt only when bank select/data registers change.
+	std::array<const Byte *, 4> prg_map_{};
+	std::array<const Byte *, 8> chr_map_{};
+	void update_bank_maps();
 
 	// Bank configuration helpers
 	bool get_prg_bank_mode() const {

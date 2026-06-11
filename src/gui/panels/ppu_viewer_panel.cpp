@@ -303,8 +303,16 @@ void PPUViewerPanel::render_pattern_tables(nes::PPU *ppu, nes::Cartridge *cartri
 				ImVec2 display_size(display_width, display_height);
 				ImGui::Text("Pattern Table %d (128x128, scaled to %.0fx%.0f):", selected_pattern_table_, display_width,
 							display_height);
+
+				// Keep pattern tiles pixel-crisp even when the main display uses soft/CRT filtering.
+				ImGuiPlatformIO &platform_io = ImGui::GetPlatformIO();
+				ImDrawList *draw_list = ImGui::GetWindowDrawList();
+				draw_list->AddCallback(platform_io.DrawCallback_SetSamplerNearest, nullptr);
+
 				ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(pattern_table_texture_)), display_size, uv0,
 							 uv1);
+
+				draw_list->AddCallback(platform_io.DrawCallback_ResetRenderState, nullptr);
 			} else {
 				ImGui::Text("Pattern table texture not initialized");
 			}

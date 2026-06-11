@@ -84,6 +84,18 @@ class SystemBus final : public Component {
 	std::shared_ptr<Cartridge> cartridge_;
 	std::shared_ptr<CPU6502> cpu_;
 
+	// Raw pointer caches for the per-cycle hot path (tick_single_cpu_cycle).
+	// Set at connect time; lifetime owned by the shared_ptrs above.
+	PPU *ppu_raw_ = nullptr;
+	APU *apu_raw_ = nullptr;
+	Cartridge *cartridge_raw_ = nullptr;
+	CPU6502 *cpu_raw_ = nullptr;
+
+	// Last combined IRQ level pushed to the CPU (-1 = unknown, force sync).
+	// CPU line calls happen only on transitions instead of every cycle.
+	mutable int8_t last_irq_line_ = -1;
+	void update_irq_line();
+
 	// Audio backend
 	std::unique_ptr<AudioBackend> audio_backend_;
 
