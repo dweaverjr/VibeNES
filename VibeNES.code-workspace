@@ -5,6 +5,10 @@
 		}
 	],
 	"settings": {
+		"C_Cpp.default.intelliSenseMode": "windows-msvc-x64",
+		"C_Cpp.default.compilerPath": "cl.exe",
+		"C_Cpp.default.compileCommands": "${workspaceFolder}/build/debug/compile_commands.json",
+		"C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
 		"debug.console.fontSize": 12,
 		"files.associations": {
 			"*.nes": "binary",
