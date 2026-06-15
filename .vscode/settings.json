@@ -48,6 +48,8 @@
   // MSVC environment that vsdev.bat sets up, and would prompt for a kit/preset.
   // IntelliSense is served from the compile_commands.json left by the last task build.
   "cmake.configureOnOpen": false,
+  // Do NOT auto-configure on CMakeLists edits for same reason; use tasks instead.
+  "cmake.configureOnEdit": false,
   "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}",
   "cmake.useCMakePresets": "always",
   // Disable CMake Tools' own build/debug buttons so they don't conflict with tasks

@@ -2,6 +2,7 @@
 #include "apu/apu.hpp"
 #include "cartridge/cartridge.hpp"
 #include "core/bus.hpp"
+#include "core/user_paths.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "gui/crt_filter.hpp"
 #include "gui/style/retro_theme.hpp"
@@ -146,6 +147,12 @@ bool GuiApplication::initialize_imgui() {
 }
 
 void GuiApplication::initialize_emulation_components() {
+	// On installed builds, import packaged roms/saves to user-writable locations once.
+	nes::migrate_packaged_data_to_user_dirs_once();
+	if (rom_loader_panel_) {
+		rom_loader_panel_->reset_to_default_directory();
+	}
+
 	// Create components in dependency order
 	bus_ = std::make_shared<nes::SystemBus>();
 
@@ -203,9 +210,10 @@ void GuiApplication::initialize_emulation_components() {
 	// Trigger a reset now that we have a proper reset vector
 	cpu_->trigger_reset();
 
-	// Create save state manager
+	// Create save state manager — use platform-appropriate save directory
 	save_state_manager_ =
 		std::make_unique<nes::SaveStateManager>(cpu_.get(), ppu_.get(), apu.get(), bus_.get(), cartridge_.get());
+	save_state_manager_->set_save_directory(nes::get_saves_directory());
 
 	// Pass CRT filter to PPU viewer panel for windowed mode rendering
 	if (ppu_viewer_panel_ && crt_filter_) {

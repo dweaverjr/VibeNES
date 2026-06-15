@@ -4,6 +4,7 @@
 #include "core/bus.hpp"
 #include "cpu/cpu_6502.hpp"
 #include "ppu/ppu.hpp"
+#include <cctype>
 #include <chrono>
 #include <cstring>
 #include <fstream>
@@ -84,15 +85,33 @@ std::filesystem::path SaveStateManager::get_slot_path(int slot) const {
 	// Create filename based on ROM name and slot number
 	std::string rom_name = "default";
 	if (cartridge_ && cartridge_->is_loaded()) {
-		// Get ROM filename without extension
-		rom_name = cartridge_->get_rom_filename();
-		// Remove .nes extension if present
-		if (rom_name.size() > 4 && rom_name.substr(rom_name.size() - 4) == ".nes") {
-			rom_name = rom_name.substr(0, rom_name.size() - 4);
+		// Use only the file leaf name so slot paths are stable across machines.
+		rom_name = std::filesystem::path(cartridge_->get_rom_filename()).filename().string();
+
+		// Remove extension case-insensitively (.nes / .NES / mixed).
+		const auto ext = std::filesystem::path(rom_name).extension().string();
+		std::string ext_lower = ext;
+		for (char &c : ext_lower) {
+			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		}
+		if (ext_lower == ".nes") {
+			rom_name = std::filesystem::path(rom_name).stem().string();
 		}
 	}
 
-	return save_directory_ / (rom_name + "_slot" + std::to_string(slot) + ".vns");
+	const auto filename = rom_name + "_slot" + std::to_string(slot) + ".vns";
+	const auto primary_path = save_directory_ / filename;
+	if (std::filesystem::exists(primary_path)) {
+		return primary_path;
+	}
+
+	// Backward compatibility: older layouts stored slots under saves/roms/.
+	const auto legacy_path = save_directory_ / "roms" / filename;
+	if (std::filesystem::exists(legacy_path)) {
+		return legacy_path;
+	}
+
+	return primary_path;
 }
 
 bool SaveStateManager::slot_exists(int slot) const {

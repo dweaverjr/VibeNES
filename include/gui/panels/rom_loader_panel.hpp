@@ -21,6 +21,7 @@ class RomLoaderPanel {
 
 	// Render the panel
 	void render(nes::Cartridge *cartridge);
+	void reset_to_default_directory();
 
 	// Set callback for when ROM is successfully loaded
 	void set_rom_loaded_callback(std::function<void()> callback) {

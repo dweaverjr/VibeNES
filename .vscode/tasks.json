@@ -127,6 +127,20 @@
                 "reveal": "always"
             },
             "detail": "Remove all build directories"
+        },
+        {
+            "label": "Package Release",
+            "type": "shell",
+            "command": "call .vscode\\vsdev.bat && cmake --preset release && cmake --build --preset release && cmake -E chdir build/release cpack -C Release --verbose",
+            "group": "build",
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "clear": true
+            },
+            "detail": "Build release + run CPack to produce ZIP (and NSIS installer if makensis is installed)"
         }
     ],
     "inputs": [

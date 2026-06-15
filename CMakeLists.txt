@@ -161,3 +161,67 @@ endif()
 include(CTest)
 include(Catch)
 catch_discover_tests(VibeNES_Tests)
+
+# ─── Install rules ────────────────────────────────────────────────────────────
+# cmake --install build/release --prefix <dest>  puts everything in <dest>.
+# CPack uses these rules to build the installer.
+
+install(TARGETS VibeNES_GUI
+    RUNTIME DESTINATION .   # exe goes in install root
+)
+
+# SDL3.dll alongside the exe
+install(FILES $<TARGET_FILE:SDL3::SDL3>
+    DESTINATION .
+)
+
+# Package ROM library and save-state data for portable migration.
+# This preserves current working setup when moving to another machine/location.
+install(DIRECTORY roms/
+    DESTINATION roms
+)
+
+install(DIRECTORY saves/
+    DESTINATION saves
+)
+
+# ─── CPack (Windows ZIP + NSIS installer) ────────────────────────────────────
+set(CPACK_PACKAGE_NAME              "VibeNES")
+set(CPACK_PACKAGE_VENDOR            "VibeNES")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cycle-accurate NES emulator")
+set(CPACK_PACKAGE_VERSION           "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "VibeNES")
+set(CPACK_RESOURCE_FILE_LICENSE     "${CMAKE_SOURCE_DIR}/LICENSE")
+
+# Output filename: VibeNES-0.1.0-win64
+set(CPACK_PACKAGE_FILE_NAME         "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-win64")
+
+# ── ZIP: simple portable archive ────────────────────────────────────────────
+set(CPACK_GENERATOR "ZIP")
+
+# ── NSIS: Add NSIS to the list only when makensis is available ───────────────
+find_program(MAKENSIS_EXECUTABLE makensis)
+if(MAKENSIS_EXECUTABLE)
+    list(APPEND CPACK_GENERATOR "NSIS")
+
+    set(CPACK_NSIS_DISPLAY_NAME         "VibeNES")
+    set(CPACK_NSIS_PACKAGE_NAME         "VibeNES")
+    set(CPACK_NSIS_INSTALL_ROOT         "$PROGRAMFILES64")
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_MODIFY_PATH          OFF)
+
+    # Desktop + Start Menu shortcuts pointing at VibeNES_GUI.exe in install root
+    set(CPACK_NSIS_CREATE_ICONS_EXTRA
+        "CreateShortcut '$DESKTOP\\\\VibeNES.lnk' '$INSTDIR\\\\VibeNES_GUI.exe'"
+    )
+    set(CPACK_NSIS_DELETE_ICONS_EXTRA
+        "Delete '$DESKTOP\\\\VibeNES.lnk'"
+    )
+
+    # After install: open the roms folder so the user knows where to put ROMs
+    set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
+        "ExecShell 'open' '$INSTDIR\\\\roms'"
+    )
+endif()
+
+include(CPack)

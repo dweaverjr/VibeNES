@@ -1,5 +1,6 @@
 #include "gui/panels/rom_loader_panel.hpp"
 #include "cartridge/cartridge.hpp"
+#include "core/user_paths.hpp"
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
@@ -32,6 +33,11 @@ void RomLoaderPanel::render(nes::Cartridge *cartridge) {
 
 	// Load button
 	render_load_button(cartridge);
+}
+
+void RomLoaderPanel::reset_to_default_directory() {
+	selected_file_.clear();
+	find_default_rom_directory();
 }
 
 void RomLoaderPanel::render_file_browser(nes::Cartridge *cartridge) {
@@ -207,21 +213,8 @@ std::string RomLoaderPanel::get_file_extension(const std::string &filename) cons
 }
 
 void RomLoaderPanel::find_default_rom_directory() {
-	// Try multiple possible ROM locations (prefer project root roms/ dir)
-	std::vector<std::string> possible_paths = {
-		"./roms", // Project root roms directory
-		".",	  // Current directory
-	};
-
-	for (const auto &path : possible_paths) {
-		if (std::filesystem::exists(path) && std::filesystem::is_directory(path)) {
-			current_directory_ = path;
-			return;
-		}
-	}
-
-	// Default to roms/ if nothing exists
-	current_directory_ = "./roms";
+	auto roms_dir = nes::get_roms_directory();
+	current_directory_ = roms_dir.string();
 }
 
 } // namespace nes::gui
