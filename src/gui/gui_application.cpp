@@ -1073,10 +1073,12 @@ void GuiApplication::calculate_fullscreen_layout() {
 	const float screen_w = static_cast<float>(display_mode->w);
 	const float screen_h = static_cast<float>(display_mode->h);
 
-	// NES display dimensions accounting for NTSC pixel aspect ratio
+	// NES display dimensions accounting for NTSC pixel aspect ratio.
+	// Height uses the (possibly cropped) active-image height so the visible
+	// picture is what gets centered and scaled to fit the screen.
 	const bool use_par = crt_filter_ && crt_filter_->enabled && crt_filter_->aspect_correction;
 	const float nes_w = use_par ? 256.0f * CRTFilter::NTSC_PAR : 256.0f;
-	const float nes_h = 240.0f;
+	const float nes_h = ppu_viewer_panel_ ? ppu_viewer_panel_->get_source_height_pixels() : 240.0f;
 
 	// Calculate maximum scale that fits the screen
 	const float scale_x = screen_w / nes_w;
@@ -1122,7 +1124,15 @@ void GuiApplication::render_fullscreen_display() {
 		unsigned int texture_id = ppu_viewer_panel_->get_main_display_texture();
 
 		if (texture_id != 0) {
-			ImVec2 display_size(fullscreen_display_w_, fullscreen_display_h_);
+			// fullscreen_display_h_ is the cropped (shown) height. The CRT filter
+			// renders the FULL 256x240 frame, so compute the full-height target
+			// separately and apply the vertical overscan crop via UV at draw time.
+			const float full_w = fullscreen_display_w_;
+			const float full_h = 240.0f * fullscreen_scale_;
+			const ImVec2 uv0(0.0f, ppu_viewer_panel_->get_uv_top());
+			const ImVec2 uv1(1.0f, ppu_viewer_panel_->get_uv_bottom());
+
+			ImVec2 display_size(full_w, full_h * (uv1.y - uv0.y));
 			ImVec2 display_pos(fullscreen_offset_x_, fullscreen_offset_y_);
 
 			// When the CRT filter is enabled, render the NES framebuffer through
@@ -1131,8 +1141,7 @@ void GuiApplication::render_fullscreen_display() {
 			unsigned int display_texture = texture_id;
 			bool use_linear;
 			if (crt_filter_ && crt_filter_->enabled) {
-				display_texture = crt_filter_->apply(texture_id, static_cast<int>(fullscreen_display_w_),
-													 static_cast<int>(fullscreen_display_h_));
+				display_texture = crt_filter_->apply(texture_id, static_cast<int>(full_w), static_cast<int>(full_h));
 				use_linear = true; // CRT output is already at display resolution
 			} else {
 				// Soft-pixels mode uses bilinear sampling; otherwise crisp nearest.
@@ -1152,7 +1161,7 @@ void GuiApplication::render_fullscreen_display() {
 											  : platform_io.DrawCallback_SetSamplerNearest,
 								   nullptr);
 
-			ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(display_texture)), display_size);
+			ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(display_texture)), display_size, uv0, uv1);
 
 			// Restore the default sampler for the rest of the UI.
 			draw_list->AddCallback(platform_io.DrawCallback_ResetRenderState, nullptr);

@@ -1121,8 +1121,10 @@ void PPU::rebuild_palette_lut() {
 uint8_t PPU::get_sprite_pixel_at_current_position(bool &sprite_priority, bool &sprite0_candidate) {
 	sprite_priority = false; // Default: sprite in front
 
-	// Only render sprites during visible pixels (cycles 1-255)
-	if (current_cycle_ == 0 || current_cycle_ >= 256) {
+	// Sprites are output for every visible pixel: cycles 1-256 => pixel_x 0-255.
+	// (Using >= 256 here previously dropped the final column x=255, which made
+	// sprite-based screen-edge bars appear shifted one pixel left.)
+	if (current_cycle_ == 0 || current_cycle_ > 256) {
 		return 0; // No sprites rendered outside visible area
 	}
 
@@ -1247,6 +1249,13 @@ bool PPU::check_sprite_0_hit(uint8_t bg_pixel, uint8_t sprite_pixel, uint8_t x_p
 
 	if (x_pos == 0) {
 		return false; // No hit at x=0
+	}
+
+	// Hardware quirk: sprite 0 hit is never flagged at x=255, even though the
+	// sprite pixel itself IS rendered there. (Pixel pipeline disables the hit
+	// comparison on the last dot.)
+	if (x_pos == 255) {
+		return false;
 	}
 
 	if (!is_background_enabled() || !is_sprites_enabled()) {

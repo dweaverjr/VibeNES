@@ -119,6 +119,9 @@ void PPUViewerPanel::render_display_controls() {
 	if (ImGui::RadioButton("Scanline Step", display_mode_ == PPUDisplayMode::SCANLINE_STEP)) {
 		display_mode_ = PPUDisplayMode::SCANLINE_STEP;
 	}
+
+	ImGui::SameLine();
+	ImGui::Checkbox("Crop Overscan (8px T/B)", &crop_vertical_overscan_);
 }
 
 void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
@@ -159,7 +162,9 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 
 	// Display the texture
 	if (main_display_texture_ != 0) {
-		// Calculate display size accounting for CRT aspect ratio correction
+		// Full (uncropped) display size. The CRT filter always renders the full
+		// 256x240 frame; the vertical overscan crop is applied at draw time via
+		// UV coordinates + a shorter quad so nothing is squished.
 		float disp_w, disp_h;
 		if (crt_filter_) {
 			crt_filter_->get_display_size(256.0f, 240.0f, display_scale_, disp_w, disp_h);
@@ -167,6 +172,11 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 			disp_w = 256.0f * display_scale_;
 			disp_h = 240.0f * display_scale_;
 		}
+
+		// Vertical overscan crop: hide top/bottom 8 scanlines (256x224 active image).
+		const ImVec2 uv0(0.0f, get_uv_top());
+		const ImVec2 uv1(1.0f, get_uv_bottom());
+		const float shown_h = disp_h * (uv1.y - uv0.y);
 
 		// When the CRT filter is enabled, render the framebuffer through the CRT
 		// shader and display the processed texture instead. Otherwise honour the
@@ -192,8 +202,8 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 										  : platform_io.DrawCallback_SetSamplerNearest,
 							   nullptr);
 
-		ImVec2 display_size(disp_w, disp_h);
-		ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(display_texture)), display_size);
+		ImVec2 display_size(disp_w, shown_h);
+		ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(display_texture)), display_size, uv0, uv1);
 
 		// Restore ImGui's default sampler so the rest of the UI is unaffected.
 		draw_list->AddCallback(platform_io.DrawCallback_ResetRenderState, nullptr);

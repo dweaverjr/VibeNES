@@ -82,6 +82,26 @@ class PPUViewerPanel {
 	// Update texture without rendering UI (for fullscreen mode)
 	void update_display_texture_only(nes::PPU *ppu);
 
+	// Vertical overscan crop (hide top/bottom 8 scanlines, like a CRT).
+	// NTSC active image is 256x224. Horizontal width is left FULL on purpose:
+	// horizontal overscan varies per TV and many games draw real content (and
+	// side borders) at the screen edges, so cropping it would hide game pixels.
+	bool is_vertical_overscan_crop_enabled() const {
+		return crop_vertical_overscan_;
+	}
+	void set_vertical_overscan_crop(bool enabled) {
+		crop_vertical_overscan_ = enabled;
+	}
+	float get_uv_top() const {
+		return crop_vertical_overscan_ ? (static_cast<float>(VERTICAL_OVERSCAN_CROP_LINES) / 240.0f) : 0.0f;
+	}
+	float get_uv_bottom() const {
+		return crop_vertical_overscan_ ? (1.0f - static_cast<float>(VERTICAL_OVERSCAN_CROP_LINES) / 240.0f) : 1.0f;
+	}
+	float get_source_height_pixels() const {
+		return crop_vertical_overscan_ ? (240.0f - 2.0f * VERTICAL_OVERSCAN_CROP_LINES) : 240.0f;
+	}
+
 	// Set CRT filter for display processing (non-owning pointer)
 	void set_crt_filter(CRTFilter *filter) {
 		crt_filter_ = filter;
@@ -101,11 +121,13 @@ class PPUViewerPanel {
 	std::unique_ptr<uint32_t[]> nametable_buffer_;
 
 	// Panel state
-	int selected_pattern_table_; // 0 or 1
-	int selected_nametable_;	 // 0-3
-	int selected_palette_;		 // 0-7
-	float display_scale_;		 // Display scaling factor
-	bool pattern_table_dirty_;	 // Flag to track when to regenerate pattern table
+	int selected_pattern_table_;		 // 0 or 1
+	int selected_nametable_;			 // 0-3
+	int selected_palette_;				 // 0-7
+	float display_scale_;				 // Display scaling factor
+	bool pattern_table_dirty_;			 // Flag to track when to regenerate pattern table
+	bool crop_vertical_overscan_ = true; // Hide top/bottom 8 scanlines (CRT overscan)
+	static constexpr int VERTICAL_OVERSCAN_CROP_LINES = 8;
 
 	// Rendering methods
 	void render_display_controls();
