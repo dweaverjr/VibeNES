@@ -2,34 +2,43 @@
 
 A cycle-accurate Nintendo Entertainment System (NES) emulator written in modern C++23. Features per-cycle CPU/PPU/APU interleaving, 5 mapper implementations, a full debug GUI, and 242 passing tests.
 
-## Features
+## Quick Start — Play a Game
 
-- **Cycle-accurate emulation** — Per-cycle CPU/PPU/APU interleaving via fat `consume_cycle()`. Each CPU cycle advances the PPU by 3 dots and the APU by 1 cycle.
-- **Complete 6502 CPU** — All 256 opcodes (legal + illegal: 247 explicit + 9 catch-all NOPs), hardware-accurate startup, penultimate-cycle interrupt polling (CLI delay, SEI window), OAM DMA halt (513 cycles), DMC DMA cycle stealing (~4 CPU stall cycles).
-- **PPU rendering pipeline** — Dot-based rendering (341 dots × 262 scanlines), background + sprite evaluation, sprite 0 hit, scrolling, palette mirroring.
-- **APU with all 5 channels** — Pulse ×2, Triangle, Noise, DMC. Frame counter (4-step/5-step modes), non-linear mixing, length counters, envelopes, sweep units, level-triggered IRQ. SDL3 audio output with sample-rate conversion.
-- **5 cartridge mappers** — NROM (0), MMC1 (1), UxROM (2), CNROM (3), MMC3 (4) with bus-conflict emulation and MMC3 A12 IRQ filtering.
-- **Save states** — Nine slots plus quick save/load. Serialize/deserialize with CRC32 ROM verification across all components.
-- **Battery-backed saves (`.sav`)** — Native cartridge-battery emulation for MMC1/MMC3 carts flagged in the iNES header: SRAM is restored on load, preserved across reset, and written back on power-off (with a periodic crash-safety flush). Stored separately from save states.
-- **Game controller input** — SDL3 gamepad support for Players 1 & 2 with runtime hot-plug detection.
-- **Debug GUI** — SDL3 + ImGui interface: CPU state, disassembler, RAM/memory viewer, ROM loader, PPU viewer (NES display, pattern tables, palettes, registers & timing), and audio controls. Retro theme, fullscreen mode, and an optional CRT filter (scanlines, curvature, vignette, NTSC aspect correction).
-- **Modern C++23** — `std::expected`, concepts, `std::span`, `constexpr`, strong types, RAII, no raw pointers.
+> **You need a game controller.** Gameplay is gamepad-only; the keyboard drives emulator hotkeys, not the NES controller.
 
-## Controls
+1. **Plug in a gamepad** (any SDL3-compatible controller) before or after launch — hot-plug is supported.
+2. **Launch** `VibeNES_GUI.exe`.
+3. **Load a ROM** — in the **ROM LOADER** panel (top-left):
+   - Click a `.nes` file in the list to select it.
+   - Click **Load ROM**.
+4. **Start it** — in the **CPU STATE** panel (left), click **Run**. The game renders in the **NES DISPLAY** panel (top-center).
+5. **Play** with your controller:
 
-Gameplay requires a game controller (SDL3 gamepad). Keyboard keys drive emulator functions only.
+   | NES button | Gamepad |
+   |------------|---------|
+   | D-pad | D-pad |
+   | A | A (south) |
+   | B | X (west) |
+   | Start | Start |
+   | Select | Back / Select |
 
-### NES controller (gamepad)
+That's it — load, run, play.
 
-| NES button | Gamepad |
-|------------|---------|
-| D-pad | D-pad |
-| A | A (south) |
-| B | X (west) |
-| Start | Start |
-| Select | Back / Select |
+### Once a game is running
 
-Two controllers are supported (Player 1 and Player 2) with hot-plugging.
+- 🖥️ **Fullscreen:** press **F11** (or **Alt+Enter**) any time. **Esc** exits fullscreen.
+- 💾 **Save state:** press **F1**–**F9** to save to slot 1–9. **Ctrl+F5** = quick save.
+- 📂 **Load state:** press **Shift+F1**–**Shift+F9** to load slot 1–9. **Ctrl+F8** = quick load.
+
+### The rest of the UI (at a glance)
+
+The surrounding panels are debug tools — optional for just playing:
+
+- **CPU STATE / DISASSEMBLER** — Run/step the CPU, view registers, flags, and live disassembly.
+- **RAM VIEWER** — Inspect memory (Zero Page, Stack, PPU/APU/ROM regions).
+- **PATTERN TABLES / PPU PALETTES / PPU INFO** — CHR tiles, palette RAM, and PPU register/timing state.
+- **NES DISPLAY** — The game screen; toggle **Frame Complete** vs **Real Time** rendering modes.
+- **AUDIO CONTROL** — Enable/disable audio, set volume, mute.
 
 ### Emulator hotkeys
 
@@ -195,7 +204,6 @@ cmake -E chdir build/debug ctest --output-on-failure
 
 - **Gameplay input is gamepad-only** — NES controllers map to SDL3 game controllers; there is no keyboard mapping for in-game input (the keyboard drives emulator hotkeys only).
 - **Minor PPU rendering issues** — Some edge-case rendering bugs remain (e.g. obscure mid-scanline register-write corner cases).
-- **Bus-conflict emulation is simplified** — Mapper 2/3 bus conflicts read from the currently selected bank rather than the bank fixed at the written address.
 
 ## License
 

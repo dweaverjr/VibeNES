@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(VibeNES VERSION 0.1.0 LANGUAGES CXX)
+project(VibeNES VERSION 1.0.0 LANGUAGES CXX)
 
 # ─── C++23 Standard ──────────────────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 23)
@@ -176,14 +176,25 @@ install(FILES $<TARGET_FILE:SDL3::SDL3>
     DESTINATION .
 )
 
+# README + license in the install root for end users.
+install(FILES
+    "${CMAKE_SOURCE_DIR}/README.md"
+    "${CMAKE_SOURCE_DIR}/LICENSE"
+    DESTINATION .
+)
+
 # Package ROM library and save-state data for portable migration.
 # This preserves current working setup when moving to another machine/location.
 install(DIRECTORY roms/
     DESTINATION roms
 )
 
+# Ship an empty saves/ directory. The legacy saves/roms/ layout is intentionally
+# excluded: the app now writes slots directly to saves/, so bundling the old
+# saves/roms/ copies would scatter saves across two locations.
 install(DIRECTORY saves/
     DESTINATION saves
+    PATTERN "roms" EXCLUDE
 )
 
 # ─── CPack (Windows ZIP + NSIS installer) ────────────────────────────────────
@@ -194,7 +205,7 @@ set(CPACK_PACKAGE_VERSION           "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "VibeNES")
 set(CPACK_RESOURCE_FILE_LICENSE     "${CMAKE_SOURCE_DIR}/LICENSE")
 
-# Output filename: VibeNES-0.1.0-win64
+# Output filename: VibeNES-1.0.0-win64
 set(CPACK_PACKAGE_FILE_NAME         "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-win64")
 
 # ── ZIP: simple portable archive ────────────────────────────────────────────

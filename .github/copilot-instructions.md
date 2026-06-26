@@ -34,7 +34,7 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 | Bus/Memory | ✅ Complete | Full NES memory map, mirroring, open bus, dual-purpose registers |
 | Mapper 0 (NROM) | ✅ Complete | 16KB/32KB PRG ROM |
 | Mapper 1 (MMC1) | ✅ Complete | Consecutive-write filter for RMW instructions (was bug #9) |
-| Mapper 2 (UxROM) | ✅ Complete | Includes (simplified) bus conflict emulation |
+| Mapper 2 (UxROM) | ✅ Complete | Bus conflict emulation (ANDs against ROM byte at written address) |
 | Mapper 3 (CNROM) | ✅ Complete | CHR ROM bank switching, bus conflict emulation, 16KB/32KB PRG |
 | Mapper 4 (MMC3) | ✅ Complete | Banking, per-cycle sprite pattern fetches (257-320), A12 low-time filter, proper IRQ line deassertion. Crystalis playable. |
 | Cartridge/ROM | ✅ Complete | iNES loading, mapper factory, GUI file browser |
@@ -69,8 +69,7 @@ You are helping develop a cycle-accurate NES emulator in C++23. You are an exper
 14. ~~**Frame 0 hack**~~ — **FIXED (Phase 4)**: Removed workaround that cleared fine_x/fine_y on frame 0.  PPU now honours whatever scroll/VRAM state software has configured from the very first frame.
 
 ### Remaining latent issues (from code review 2026-05-29)
-- **Bus-conflict emulation simplification** (mapper_002 / mapper_003): reads from the currently selected bank rather than the bank fixed at the written address. Documented trade-off.
-- **Minor PPU edge-case rendering quirks**: some obscure mid-scanline register-write corner cases. Dead/disabled timing helpers (`handle_sprite_overflow_bug`, `read_oamdata_during_rendering`, `handle_ppustatus_race_condition`) are present but unwired.
+- **Minor PPU edge-case rendering quirks**: some obscure mid-scanline register-write corner cases remain.
 - Save-state read helpers are now bounds-checked (throw on overrun) and the PPU sprite-attribute unpack uses `std::bit_cast` (no strict-aliasing UB).
 
 ## Architecture Notes
@@ -217,7 +216,7 @@ ImGui is resolved from vcpkg (`find_package(imgui CONFIG REQUIRED)` → `imgui::
 - **Code-review follow-ups (2026-05-29)**: save-state read helpers bounds-checked; PPU sprite-attribute unpack uses `std::bit_cast`; APU IRQ now level-triggered (bug #10); README/instructions refreshed for SDL3 and correct dependency versions.
 - **Games tested**: Super Mario Bros., Crystalis, Guardian Legend.
 - **Dependencies**: SDL3 + Catch2 + ImGui (sdl3-binding) all via vcpkg, x64-windows.
-- **Remaining**: Add input tests. Add test ROM infrastructure. Address simplified bus-conflict emulation and unwired PPU timing helpers as accuracy work continues.
+- **Remaining**: Add input tests. Add test ROM infrastructure. Address remaining minor PPU edge-case rendering quirks as accuracy work continues.
 
 ### MMC3 Fixes (Mar 1, 2026)
 Four bugs fixed to make MMC3 games (Crystalis) playable:
