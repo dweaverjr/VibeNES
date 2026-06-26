@@ -5,10 +5,11 @@
 namespace nes {
 
 Mapper001::Mapper001(std::vector<Byte> prg_rom, std::vector<Byte> chr_mem, Mirroring mirroring, bool has_prg_ram,
-					 bool chr_is_ram)
+					 bool chr_is_ram, bool battery_backed)
 	: prg_rom_(std::move(prg_rom)), chr_mem_(std::move(chr_mem)), initial_mirroring_(mirroring),
-	  has_prg_ram_(has_prg_ram), chr_is_ram_(chr_is_ram), shift_register_(0x10), // Initialize with bit 4 set
-	  shift_count_(0), control_register_(0x0C),									 // Default: last bank fixed, 8KB CHR
+	  has_prg_ram_(has_prg_ram), chr_is_ram_(chr_is_ram), battery_backed_(battery_backed),
+	  shift_register_(0x10),					// Initialize with bit 4 set
+	  shift_count_(0), control_register_(0x0C), // Default: last bank fixed, 8KB CHR
 	  chr_bank_0_(0), chr_bank_1_(0), prg_bank_(0), prg_ram_enabled_(true), cpu_cycle_counter_(0),
 	  last_write_cycle_(0) {
 
@@ -42,10 +43,10 @@ void Mapper001::reset() {
 	cpu_cycle_counter_ = 0;
 	last_write_cycle_ = 0;
 
-	// Clear PRG RAM
-	if (has_prg_ram_) {
-		std::fill(prg_ram_.begin(), prg_ram_.end(), 0x00);
-	}
+	// NOTE: Battery-backed PRG-RAM is intentionally NOT cleared on reset. On real
+	// hardware the reset button only pulses the CPU reset line; cartridge save RAM
+	// retains its contents (that's the whole point of the battery). Cold-boot
+	// zeroing happens once in the constructor; the .sav is restored on ROM load.
 
 	update_bank_maps();
 }
@@ -87,6 +88,7 @@ void Mapper001::cpu_write(Address address, Byte value) {
 	if (address >= 0x6000 && address < 0x8000) {
 		if (has_prg_ram_ && prg_ram_enabled_) {
 			prg_ram_[address - 0x6000] = value;
+			prg_ram_dirty_ = true;
 		}
 		return;
 	}

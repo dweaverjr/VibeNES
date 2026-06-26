@@ -2,6 +2,7 @@
 
 #include "cartridge/mappers/mapper.hpp"
 #include <array>
+#include <span>
 #include <vector>
 
 namespace nes {
@@ -24,7 +25,7 @@ namespace nes {
 class Mapper001 final : public Mapper {
   public:
 	Mapper001(std::vector<Byte> prg_rom, std::vector<Byte> chr_mem, Mirroring mirroring, bool has_prg_ram = true,
-			  bool chr_is_ram = false);
+			  bool chr_is_ram = false, bool battery_backed = false);
 
 	// CPU memory access
 	Byte cpu_read(Address address) const override;
@@ -57,6 +58,28 @@ class Mapper001 final : public Mapper {
 	void serialize_state(std::vector<uint8_t> &buffer) const override;
 	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) override;
 
+	// Battery-backed PRG-RAM persistence (.sav). Active only when the cart has
+	// PRG-RAM and the iNES battery flag is set.
+	bool has_battery_ram() const noexcept override {
+		return battery_backed_ && has_prg_ram_ && !prg_ram_.empty();
+	}
+	std::span<const Byte> get_battery_ram() const noexcept override {
+		return {prg_ram_.data(), prg_ram_.size()};
+	}
+	void load_battery_ram(std::span<const Byte> data) override {
+		const std::size_t n = data.size() < prg_ram_.size() ? data.size() : prg_ram_.size();
+		for (std::size_t i = 0; i < n; ++i) {
+			prg_ram_[i] = data[i];
+		}
+		prg_ram_dirty_ = false;
+	}
+	bool is_battery_ram_dirty() const noexcept override {
+		return prg_ram_dirty_;
+	}
+	void clear_battery_ram_dirty() noexcept override {
+		prg_ram_dirty_ = false;
+	}
+
   private:
 	std::vector<Byte> prg_rom_;	  // Program ROM (up to 512KB)
 	std::vector<Byte> prg_ram_;	  // Program RAM (8KB at $6000-$7FFF)
@@ -64,6 +87,8 @@ class Mapper001 final : public Mapper {
 	Mirroring initial_mirroring_; // Initial mirroring from iNES header
 	bool has_prg_ram_;			  // Does cartridge have PRG RAM?
 	bool chr_is_ram_;			  // Is CHR memory writable RAM?
+	bool battery_backed_;		  // iNES battery flag: persist PRG RAM to .sav
+	bool prg_ram_dirty_ = false;  // PRG RAM written since last flush/restore
 
 	// MMC1 Registers
 	Byte shift_register_; // 5-bit shift register for serial writes

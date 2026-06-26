@@ -24,10 +24,11 @@ std::unique_ptr<Mapper> MapperFactory::create_mapper(const RomData &rom_data) {
 		// Used by: The Legend of Zelda, Metroid, Mega Man 2, Faxanadu, etc.
 		// Detect if CHR is RAM (no CHR ROM pages)
 		bool chr_is_ram = (rom_data.chr_rom_pages == 0);
-		// Most MMC1 games have PRG RAM, battery-backed flag indicates save RAM
+		// Most MMC1 games have PRG RAM; the iNES battery flag marks it as save RAM.
 		bool has_prg_ram = true; // MMC1 standard has 8KB PRG RAM
 
-		return std::make_unique<Mapper001>(rom_data.prg_rom, rom_data.chr_rom, mirroring, has_prg_ram, chr_is_ram);
+		return std::make_unique<Mapper001>(rom_data.prg_rom, rom_data.chr_rom, mirroring, has_prg_ram, chr_is_ram,
+										   rom_data.battery_backed_ram);
 	}
 
 	case 2:
@@ -45,10 +46,11 @@ std::unique_ptr<Mapper> MapperFactory::create_mapper(const RomData &rom_data) {
 		// Used by: Super Mario Bros 2/3, Mega Man 3-6, Willow, etc.
 		// Detect if CHR is RAM (no CHR ROM pages)
 		bool chr_is_ram = (rom_data.chr_rom_pages == 0);
-		// Most MMC3 games have PRG RAM, battery-backed flag indicates save RAM
+		// Most MMC3 games have PRG RAM; the iNES battery flag marks it as save RAM.
 		bool has_prg_ram = true; // MMC3 standard has 8KB PRG RAM
 
-		return std::make_unique<Mapper004>(rom_data.prg_rom, rom_data.chr_rom, mirroring, has_prg_ram, chr_is_ram);
+		return std::make_unique<Mapper004>(rom_data.prg_rom, rom_data.chr_rom, mirroring, has_prg_ram, chr_is_ram,
+										   rom_data.battery_backed_ram);
 	}
 
 	default:

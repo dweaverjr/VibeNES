@@ -117,6 +117,14 @@ inline std::filesystem::path get_saves_directory() {
 	return exe_dir / "saves"; // safe fallback
 }
 
+// Directory where battery-backed PRG-RAM (.sav) files are written.
+// Lives under the saves directory so it travels with save states:
+//   Portable : <exe_dir>/saves/battery
+//   Installed: SDL_GetPrefPath("VibeNES","VibeNES")/saves/battery
+inline std::filesystem::path get_battery_directory() {
+	return get_saves_directory() / "battery";
+}
+
 inline bool copy_directory_tree(const std::filesystem::path &source, const std::filesystem::path &destination) {
 	if (!std::filesystem::exists(source) || !std::filesystem::is_directory(source)) {
 		return true;

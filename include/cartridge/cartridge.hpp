@@ -3,7 +3,9 @@
 #include "cartridge/mappers/mapper.hpp"
 #include "cartridge/rom_loader.hpp"
 #include "core/component.hpp"
+#include <functional>
 #include <memory>
+#include <span>
 #include <string>
 
 namespace nes {
@@ -73,6 +75,35 @@ class Cartridge final : public Component {
 	void serialize_state(std::vector<uint8_t> &buffer) const;
 	void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset);
 
+	// --- Battery-backed PRG-RAM (persistent .sav files) ---
+	// Delegates to the mapper; only battery-flagged MMC1/MMC3 carts have it.
+	bool has_battery_ram() const noexcept {
+		return mapper_ && mapper_->has_battery_ram();
+	}
+	std::span<const Byte> get_battery_ram() const noexcept {
+		return mapper_ ? mapper_->get_battery_ram() : std::span<const Byte>{};
+	}
+	void load_battery_ram(std::span<const Byte> data) {
+		if (mapper_) {
+			mapper_->load_battery_ram(data);
+		}
+	}
+	bool is_battery_ram_dirty() const noexcept {
+		return mapper_ && mapper_->is_battery_ram_dirty();
+	}
+	void clear_battery_ram_dirty() noexcept {
+		if (mapper_) {
+			mapper_->clear_battery_ram_dirty();
+		}
+	}
+
+	// Hook invoked just before the current mapper is discarded (ROM change or
+	// unload), while the outgoing ROM's filename and PRG-RAM are still valid, so
+	// the owner can flush battery RAM for the cartridge being replaced.
+	void set_pre_swap_hook(std::function<void()> hook) {
+		pre_swap_hook_ = std::move(hook);
+	}
+
 	// Additional getters needed for save state
 	const std::vector<uint8_t> &get_prg_rom() const {
 		return rom_data_.prg_rom;
@@ -87,6 +118,8 @@ class Cartridge final : public Component {
 	// Cached at load: whether mapper_ needs per-cycle notify_cpu_cycle() calls
 	// (only MMC1). Lets tick() early-out instead of a virtual call per CPU cycle.
 	bool mapper_wants_cycle_notify_ = false;
+	// Called before an already-loaded mapper is replaced/destroyed (see above).
+	std::function<void()> pre_swap_hook_;
 };
 
 } // namespace nes

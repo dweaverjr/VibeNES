@@ -59,6 +59,7 @@ add_library(vibes_core STATIC
     src/input/gamepad_manager.cpp
     # System
     src/system/save_state.cpp
+    src/system/battery_save.cpp
 )
 target_include_directories(vibes_core PUBLIC include)
 target_link_libraries(vibes_core PUBLIC SDL3::SDL3)

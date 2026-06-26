@@ -27,6 +27,12 @@ const char *Cartridge::get_name() const noexcept {
 }
 
 bool Cartridge::load_rom(const std::string &filepath) {
+	// Flush battery RAM for the outgoing cartridge (filename + mapper still valid)
+	// before its RomData/mapper are replaced below.
+	if (pre_swap_hook_ && mapper_) {
+		pre_swap_hook_();
+	}
+
 	// Load ROM data using RomLoader
 	rom_data_ = RomLoader::load_rom(filepath);
 	if (!rom_data_.valid) {
@@ -47,6 +53,11 @@ bool Cartridge::load_rom(const std::string &filepath) {
 }
 
 bool Cartridge::load_from_rom_data(const RomData &rom_data) {
+	// Flush battery RAM for the outgoing cartridge before replacing it.
+	if (pre_swap_hook_ && mapper_) {
+		pre_swap_hook_();
+	}
+
 	// Validate ROM data
 	if (!rom_data.valid) {
 		std::cerr << "Invalid ROM data provided" << std::endl;
@@ -69,6 +80,11 @@ bool Cartridge::load_from_rom_data(const RomData &rom_data) {
 }
 
 void Cartridge::unload_rom() {
+	// Flush battery RAM before the mapper (and its PRG-RAM) is destroyed.
+	if (pre_swap_hook_ && mapper_) {
+		pre_swap_hook_();
+	}
+
 	mapper_.reset();
 	rom_data_ = {};
 	mapper_wants_cycle_notify_ = false;

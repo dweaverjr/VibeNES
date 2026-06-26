@@ -2,6 +2,8 @@
 
 #include "core/types.hpp"
 #include <array>
+#include <cstdint>
+#include <span>
 #include <vector>
 
 namespace nes {
@@ -66,6 +68,26 @@ class Mapper {
 	// Save state serialization
 	virtual void serialize_state(std::vector<uint8_t> &buffer) const = 0;
 	virtual void deserialize_state(const std::vector<uint8_t> &buffer, size_t &offset) = 0;
+
+	// --- Battery-backed PRG-RAM (persistent .sav files) ---
+	// Only cartridges with BOTH the iNES battery flag and PRG-RAM override these.
+	// This lets the host persist save RAM to disk independently of save states,
+	// emulating the on-cartridge battery so games save natively.
+	virtual bool has_battery_ram() const noexcept {
+		return false;
+	}
+	virtual std::span<const Byte> get_battery_ram() const noexcept {
+		return {};
+	}
+	virtual void load_battery_ram(std::span<const Byte> /*data*/) {
+		// Default: no battery RAM to restore
+	}
+	virtual bool is_battery_ram_dirty() const noexcept {
+		return false;
+	}
+	virtual void clear_battery_ram_dirty() noexcept {
+		// Default: nothing to clear
+	}
 
   protected:
 	// IRQ pending flag (read by the non-virtual is_irq_pending() above).
