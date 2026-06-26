@@ -10,6 +10,7 @@
 #include "input/gamepad_manager.hpp"
 #include "memory/ram.hpp"
 #include "ppu/ppu.hpp"
+#include "system/battery_save.hpp"
 #include "system/save_state.hpp"
 
 // Panel includes
@@ -215,6 +216,19 @@ void GuiApplication::initialize_emulation_components() {
 		std::make_unique<nes::SaveStateManager>(cpu_.get(), ppu_.get(), apu.get(), bus_.get(), cartridge_.get());
 	save_state_manager_->set_save_directory(nes::get_saves_directory());
 
+	// Create battery-save manager (persistent PRG-RAM / .sav files) and arrange
+	// for the outgoing cartridge's save RAM to be flushed whenever the ROM is
+	// swapped or unloaded (the pre-swap hook fires while the old mapper is alive).
+	battery_save_manager_ = std::make_unique<nes::BatterySaveManager>(cartridge_.get());
+	battery_save_manager_->set_directory(nes::get_battery_directory());
+	if (cartridge_) {
+		cartridge_->set_pre_swap_hook([this]() {
+			if (battery_save_manager_) {
+				battery_save_manager_->flush(true);
+			}
+		});
+	}
+
 	// Pass CRT filter to PPU viewer panel for windowed mode rendering
 	if (ppu_viewer_panel_ && crt_filter_) {
 		ppu_viewer_panel_->set_crt_filter(crt_filter_.get());
@@ -244,6 +258,11 @@ void GuiApplication::run() {
 		// Emulation loop - run CPU and coordinate with PPU timing using real-time delta
 		if (emulation_running_ && !emulation_paused_ && cpu_ && ppu_) {
 			process_continuous_emulation(delta_seconds);
+		}
+
+		// Persist battery-backed PRG-RAM periodically (only writes when dirty).
+		if (battery_save_manager_) {
+			battery_save_manager_->update(delta_seconds);
 		}
 
 		render_frame();
@@ -408,8 +427,11 @@ void GuiApplication::render_frame() {
 		// CENTER COLUMN - NES Display + RAM Viewer (stacked)
 		ImGui::SetCursorPos(ImVec2(center_start, 0));
 		if (ImGui::BeginChild("CenterColumn", ImVec2(CENTER_WIDTH, content_height), true)) {
-			// NES Display (top 60%)
-			const float display_h = content_height * 0.60f;
+			// NES Display — sized to fit the image exactly (header overhead ~62px)
+			// so the memory viewer below it covers any leftover space.
+			constexpr float kNESDisplayHeaderH = 62.0f;
+			const float nes_img_h = ppu_viewer_panel_ ? ppu_viewer_panel_->get_current_display_height() : 448.0f;
+			const float display_h = nes_img_h + kNESDisplayHeaderH;
 			if (ImGui::BeginChild("NESDisplay", ImVec2(CENTER_WIDTH - 10, display_h), true)) {
 				ImGui::Text("NES DISPLAY");
 				ImGui::Separator();
@@ -421,8 +443,8 @@ void GuiApplication::render_frame() {
 
 			ImGui::Spacing();
 
-			// RAM Viewer (bottom 40%)
-			const float ram_h = content_height * 0.40f - 15;
+			// RAM Viewer gets all remaining height
+			const float ram_h = content_height - display_h - 12.0f;
 			if (ImGui::BeginChild("RAMViewer", ImVec2(CENTER_WIDTH - 10, ram_h), true)) {
 				ImGui::Text("RAM VIEWER");
 				ImGui::Separator();
@@ -718,6 +740,11 @@ void GuiApplication::cleanup() {
 	// Release emulation components BEFORE SDL_Quit() so that their
 	// destructors (e.g. AudioBackend -> SDL_DestroyAudioStream) can
 	// still access the SDL subsystem safely.
+	// Flush battery-backed PRG-RAM while the cartridge is still alive.
+	if (battery_save_manager_) {
+		battery_save_manager_->flush(true);
+	}
+	battery_save_manager_.reset();
 	cpu_.reset();
 	bus_.reset();
 	ppu_.reset();
@@ -891,9 +918,9 @@ void GuiApplication::reset_system() {
 	// This resets all connected components in the proper order
 	bus_->reset();
 
-	// Pause emulation after reset so user can examine the state
-	pause_emulation();
-	emulation_running_ = false;
+	// A real NES keeps running after the reset button is pressed, so preserve
+	// the current run/pause state instead of forcing a pause. The game simply
+	// restarts from its reset vector and keeps going.
 	cycle_accumulator_ = 0.0;
 }
 
@@ -907,6 +934,13 @@ void GuiApplication::setup_callbacks() {
 			// This ensures all components start in a clean state
 			if (bus_) {
 				bus_->reset();
+			}
+
+			// Restore battery-backed PRG-RAM (.sav) for the newly loaded ROM. Must
+			// happen AFTER the reset so the mapper's power-on PRG-RAM clear doesn't
+			// wipe the restored save.
+			if (battery_save_manager_) {
+				battery_save_manager_->load_for_current_rom();
 			}
 		});
 	}

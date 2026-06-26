@@ -101,6 +101,11 @@ class PPUViewerPanel {
 	float get_source_height_pixels() const {
 		return crop_vertical_overscan_ ? (240.0f - 2.0f * VERTICAL_OVERSCAN_CROP_LINES) : 240.0f;
 	}
+	// Pixel height the Image will occupy in render_main_display (after overscan crop).
+	// Height is PAR-independent — PAR only widens the image, never changes its height.
+	float get_current_display_height() const {
+		return 240.0f * display_scale_ * (get_uv_bottom() - get_uv_top());
+	}
 
 	// Set CRT filter for display processing (non-owning pointer)
 	void set_crt_filter(CRTFilter *filter) {

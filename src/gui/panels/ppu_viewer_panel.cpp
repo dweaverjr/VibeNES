@@ -202,6 +202,13 @@ void PPUViewerPanel::render_main_display(nes::PPU *ppu) {
 										  : platform_io.DrawCallback_SetSamplerNearest,
 							   nullptr);
 
+		// Center the image horizontally within the panel
+		const float avail_w = ImGui::GetContentRegionAvail().x;
+		const float x_off = (avail_w - disp_w) * 0.5f;
+		if (x_off > 0.0f) {
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + x_off);
+		}
+
 		ImVec2 display_size(disp_w, shown_h);
 		ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(display_texture)), display_size, uv0, uv1);
 
@@ -281,26 +288,20 @@ void PPUViewerPanel::render_pattern_tables(nes::PPU *ppu, nes::Cartridge *cartri
 
 			// Detect ROM changes by checking CHR ROM size or cartridge pointer
 			bool rom_changed = (last_cartridge != cartridge) || (last_chr_size != rom_data.chr_rom.size());
+			(void)rom_changed;
 
-			// Only regenerate when settings change, ROM changes, or first time
-			static int last_pattern_table = -1;
-			static int last_palette = -1;
-			bool settings_changed =
-				(last_pattern_table != selected_pattern_table_) || (last_palette != selected_palette_);
-
-			// CHR RAM games need frequent updates since CPU can write to CHR at any time
-			bool is_chr_ram = (rom_data.chr_rom_pages == 0);
-
-			// Refresh every frame for CHR RAM, or when settings/ROM change for CHR ROM
-			if (pattern_table_dirty_ || settings_changed || rom_changed || is_chr_ram) {
-				generate_pattern_table_visualization(ppu, cartridge);
-				update_pattern_table_texture(); // Upload to OpenGL
-				pattern_table_dirty_ = false;
-				last_pattern_table = selected_pattern_table_;
-				last_palette = selected_palette_;
-				last_cartridge = cartridge;
-				last_chr_size = rom_data.chr_rom.size();
-			}
+			// Always regenerate every frame so the visualization tracks the LIVE
+			// CHR data the PPU currently sees: mapper CHR-ROM bank switches
+			// (MMC1/MMC3/CNROM/etc.) and CHR-RAM writes both change what's mapped
+			// into $0000-$1FFF without changing the ROM size or cartridge pointer.
+			// read_chr_rom() routes through the mapper's current bank, so a per-
+			// frame redraw is a true "what's mapped right now" view rather than a
+			// static snapshot that only refreshed when toggling tables/palette.
+			generate_pattern_table_visualization(ppu, cartridge);
+			update_pattern_table_texture(); // Upload to OpenGL
+			pattern_table_dirty_ = false;
+			last_cartridge = cartridge;
+			last_chr_size = rom_data.chr_rom.size();
 			if (pattern_table_texture_ != 0) {
 				// Scale display to fit available space - single pattern table is square (1:1 ratio)
 				float max_width = content_width - 20.0f;		   // Leave some margin
@@ -318,6 +319,17 @@ void PPUViewerPanel::render_pattern_tables(nes::PPU *ppu, nes::Cartridge *cartri
 				ImGuiPlatformIO &platform_io = ImGui::GetPlatformIO();
 				ImDrawList *draw_list = ImGui::GetWindowDrawList();
 				draw_list->AddCallback(platform_io.DrawCallback_SetSamplerNearest, nullptr);
+
+				// Center the image horizontally and vertically in remaining space
+				const ImVec2 pt_avail = ImGui::GetContentRegionAvail();
+				const float pt_x_off = (pt_avail.x - display_width) * 0.5f;
+				const float pt_y_off = (pt_avail.y - display_height) * 0.5f;
+				if (pt_y_off > 0.0f) {
+					ImGui::SetCursorPosY(ImGui::GetCursorPosY() + pt_y_off);
+				}
+				if (pt_x_off > 0.0f) {
+					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pt_x_off);
+				}
 
 				ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(pattern_table_texture_)), display_size, uv0,
 							 uv1);

@@ -18,6 +18,7 @@ class AudioPanel;
 class GamepadManager;
 class Controller;
 class SaveStateManager;
+class BatterySaveManager;
 } // namespace nes
 
 namespace nes::gui {
@@ -106,12 +107,15 @@ class GuiApplication {
 	std::string save_state_status_message_;
 	float save_state_status_timer_;
 
+	// Battery-backed PRG-RAM (.sav) persistence — emulates the cartridge battery.
+	std::unique_ptr<nes::BatterySaveManager> battery_save_manager_;
+
 	// Layout constants - Optimized for 1080p displays (1920x1080)
-	static constexpr int WINDOW_WIDTH = 1176;
+	static constexpr int WINDOW_WIDTH = 1256; // widened so CRT mode (256*8/7*2≈585px) fits without clipping
 	static constexpr int WINDOW_HEIGHT = 1000;
 	static constexpr float HEADER_HEIGHT = 25.0f;
 	static constexpr float LEFT_WIDTH = 310.0f;
-	static constexpr float CENTER_WIDTH = 530.0f;
+	static constexpr float CENTER_WIDTH = 610.0f;  // must hold 256*(8/7)*2≈585px + padding
 	static constexpr float RIGHT_WIDTH = 336.0f;   // Pattern/Palette/Audio panel
 	static constexpr float BOTTOM_HEIGHT = 300.0f; // For memory/disassembler row
 
